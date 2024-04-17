@@ -1,19 +1,12 @@
 import argparse
 import os
 import json
-import re
-import numpy as np
-import torch
-import joblib
-import pandas as pd
-from collections import namedtuple
 
 ruta_utils = '/scratch/jsanchoz/ML4BM-Lab/DeepRBP/utils'
 os.environ['PYTHONPATH'] = ruta_utils + ':' + os.environ.get('PYTHONPATH', '')
 print('utils')
 
 from utils import Utils as utils 
-from utils import Plots as plots
 from utils.Config import Config
 from calculate_deeplift_values import main as calculate_deeplift_values
 
@@ -40,7 +33,7 @@ def main_explain(args, config_obj, path_train_files, path_data, tumor2tissue, pa
     df_sum_scores_GxRBP_list = result.df_sum_scores_GxRBP_list
     deep_studies_list = result.deep_studies_list
     print('[explainability] 3) DeepLIFT ... -> DONE')
-    
+
  
 if __name__ == '__main__':
   parser = argparse.ArgumentParser(description='Explainability parameters')

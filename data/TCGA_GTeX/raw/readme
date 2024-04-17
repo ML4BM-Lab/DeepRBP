@@ -1,0 +1,8 @@
+## Generate TCGA and GTeX data
+- The files needed to train and validate the DeepRBP Prediction Model and the Explainability Module with TCGA and GTeX data are accessible executing the script ./dowload_script.sh
+
+**TcgaTargetGtex_rsem_isoform_tpm.gz_**: contains the expression data of the transcripts in tpm values, log2(x+0.001) transformed, with TCGA, GTeX, and TARGET combined in gencode 23.
+
+**_TcgaTargetGtex_rsem_gene_tpm.gz_**: contains the expression data of the genes in tpm values, log2(x+0.001) transformed, with TCGA, GTeX, and TARGET combined in gencode 23. 
+
+**_TcgaTargetGTEX_phenotype.txt_**: contains the detailed category and tissue of each sample.  

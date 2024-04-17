@@ -2,11 +2,11 @@ import argparse
 import pandas as pd
 import os
 import torch
-from utils.Utils import load_model, generate_data, evaluate_model, prepare_data, check_data_exists, get_significant_samples
+from utils.Utils import load_model, generate_data, evaluate_model, process_data, check_data_exists, get_significant_samples
 from utils.Plots import plot_boxplot_with_annotations
 from calculate_deeplift_values import perform_deeplift_pipeline
 
-def main(readme, path_data, experiment, rbp_interest, getBM, path_model, path_result):  
+def main(path_data, experiment, rbp_interest, getBM, path_model, path_result):  
     print('[main] 1) Create Data \n')
     print('[main] 1.1) Check if Data is already created ... \n')
     generate_data_flag = check_data_exists(path_data, experiment)
@@ -14,13 +14,13 @@ def main(readme, path_data, experiment, rbp_interest, getBM, path_model, path_re
     
     condition1 = experiment+'_control'
     condition2 = f'{experiment}_{rbp_interest}_kd'
-    df_filereport = pd.read_csv(path_data+f'/{readme}.txt', delimiter='\t')
+    df_filereport = pd.read_csv(path_data+f'/info_samples.txt', delimiter='\t')
     
     if generate_data_flag:
         generate_data(df_filereport, condition1, condition2, path_data, path_model)
     
     print('[main] 2) Get data processed (real control and kd data) ... -> DONE \n')
-    data_control, data_kd = prepare_data(path_model, f'{path_data}/datasets', condition1, condition2)
+    data_control, data_kd = process_data(path_model, f'{path_data}/datasets', condition1, condition2)
     df_rbps_control = data_control.df_scaled_rbps
     df_labels_control = data_control.df_labels
     df_gns_control = data_control.df_gns
@@ -60,12 +60,11 @@ def main(readme, path_data, experiment, rbp_interest, getBM, path_model, path_re
   
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='DeepRBP explain in real kds parameters')
-    parser.add_argument('--readme_txt', type=str, default='filereport_read_run_PRJEB39343_tsv', help='readme with sample experiment description')
-    parser.add_argument('--path_data', type=str, default='/scratch/jsanchoz/validation_real_kds/prjeb39343_gencode_23', help='Path to data')
-    parser.add_argument('--experiment', type=str, default='HFE', help='Name of the experiment')
-    parser.add_argument('--rbp_interest', type=str, default='MBNL1', help='Name of the RBP of interest')
-    parser.add_argument('--path_model', type=str, default='/scratch/jsanchoz/ML4BM-Lab/DeepRBP/data/trained_models/model_1024N_2HL_8f', help='Path to model')
-    parser.add_argument('--path_result', type=str, default='/scratch/jsanchoz/ML4BM-Lab/DeepRBP/results', help='Path to result')
+    parser.add_argument('--path_data', type=str, help='Path to data')
+    parser.add_argument('--experiment', type=str, help='Name of the experiment')
+    parser.add_argument('--rbp_interest', type=str, help='Name of the RBP of interest')
+    parser.add_argument('--path_model', type=str, help='Path to model')
+    parser.add_argument('--path_result', type=str, help='Path to result')
     args = parser.parse_args()
 
     # Load the getBM set
@@ -73,6 +72,6 @@ if __name__ == '__main__':
     # Reorder getBM (in the last model version the data is returned with the transcript values sorted)
     getBM = getBM.sort_values(by='Transcript_ID').reset_index(drop=True)
     # Call main
-    main(readme=args.readme_txt, path_data=args.path_data, experiment=args.experiment, rbp_interest=args.rbp_interest, getBM=getBM, path_model=args.path_model, path_result=args.path_result)
+    main(path_data=args.path_data, experiment=args.experiment, rbp_interest=args.rbp_interest, getBM=getBM, path_model=args.path_model, path_result=args.path_result)
 
  
