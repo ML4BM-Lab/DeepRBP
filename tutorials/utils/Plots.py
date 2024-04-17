@@ -19,7 +19,6 @@ from sklearn.metrics import auc
 from statsmodels.stats.multitest import multipletests
 from statannotations.Annotator import Annotator
 
-
 def check_create_new_directory(path):
     """ 
     Function that checks if a directory is created and if not create the new directory
@@ -57,6 +56,7 @@ def plot_real_vs_pred(config, i, pred,labels, spear_cor, pear_cor, path, source,
     plt.legend([f'spear_cor: {spear_cor:.3f}, pear_cor: {pear_cor:.3f}'],
                loc='center', borderaxespad=0.,fontsize=10)
     plt.savefig(f'{path}/real_vs_pred_{i}_in_{source_pred}_trained_with_{source}_{timestamp_str}.png')
+    plt.show()
     plt.close()
 
 def plot_expression_ratio_histogram(path_getBM, df_trans_pred, df_trans_label, df_gn, tumor_name, path_save, source, source_pred): # modified 31/08
@@ -138,6 +138,7 @@ def plot_expression_ratio_histogram(path_getBM, df_trans_pred, df_trans_label, d
     plt.legend(['Mean: ' + str(round(mean_ratio_label, 3)) + '\nSTD: ' + str(round(std_ratio_label, 3))])
     plt.tight_layout()
     plt.savefig(f'{path_save}/histogram_ratio_{tumor_name}_in{source_pred}_trained_with_{source}_{timestamp_str}.png')
+    plt.show()
     plt.close()
 
 def create_custom_legend_analyze_postar(df_melted):
@@ -185,6 +186,7 @@ def plot_analyze_postar_matrix(df_count_rbps_per_gen, df_count_genes_per_rbp, pa
     ax2.get_legend().get_title().set_fontsize('10')  
     ax2.set_title("Number of Genes for per RBPs in all Postar")
     plt.savefig(f"{path_save}/analyze_all_genes_postar_matrix.png")
+    plt.show()
     plt.close()
 
 def plot_ktop_rbp_genes(df_list, actual_values_list, x_col, y_col_list, hue, title_list, path_save, plot_type='boxplot'):
@@ -262,6 +264,7 @@ def plot_ktop_rbp_genes(df_list, actual_values_list, x_col, y_col_list, hue, tit
             ax.legend_.remove()
     plt.tight_layout()
     plt.savefig(f"{path_save}/{title_list[0].replace(' ', '_').replace('-', '_')}.png", transparent=False)
+    plt.show()
     plt.close()
 
 
@@ -374,6 +377,7 @@ def plot_one_ktop_rbp_with_thresholds(df_scores, rbp_name, optimal_thresholds_df
     plt.tight_layout()
     sns.despine() 
     plt.savefig(f"{path_save}/scores_of_{rbp_name}_for_postar_classes_with_thresholds.png", transparent=True)
+    plt.show()
     plt.close()
 
 
@@ -417,6 +421,7 @@ def plot_distributions_and_roc(filtered_df, rbp, optimal_threshold, fpr, tpr, op
     plt.grid(False)
     plt.tight_layout()
     plt.savefig(f'{path_save}/figure_{rbp}.png', transparent=True)
+    plt.show()
     plt.close()
 
 

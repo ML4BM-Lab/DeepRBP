@@ -10,9 +10,10 @@ import os
 import sys
 from tqdm import tqdm
 import warnings
+warnings.filterwarnings('ignore')
 
-ruta_utils = '/scratch/jsanchoz/ML4BM-Lab/DeepRBP/utils'
-os.environ['PYTHONPATH'] = ruta_utils + ':' + os.environ.get('PYTHONPATH', '')
+#ruta_utils = '/scratch/jsanchoz/ML4BM-Lab/DeepRBP/utils'
+#os.environ['PYTHONPATH'] = ruta_utils + ':' + os.environ.get('PYTHONPATH', '')
 from utils import Utils as utils 
 from utils import Plots as plots
 
@@ -121,7 +122,7 @@ def reduce_batch_dimension(list_batch, name_trans, name_rbps, method):
             num_samples = tensor.size()[0] 
             with np.errstate(divide='ignore', invalid='ignore'):
                 # Calculate t-statistic and assign zero to values where std is zero.
-                scores = np.where(std != 0, mean / std, 0) # OLD VERSION
+                #scores = np.where(std != 0, mean / std, 0) OLD VERSION
                 scores = np.where(std != 0, mean / (std / np.sqrt(num_samples)), 0) 
             df_deeplift_TxRBP.iloc[i,:] = scores
 
@@ -232,18 +233,14 @@ def match_scores_and_validation_data(df_val_GxRBP, df_score_GxRBP, score_method,
     df_score_GxRBP = df_score_GxRBP.sort_index(axis=0).sort_index(axis=1)
     df_val_nan_included_GxRBP = df_val_nan_included_GxRBP.sort_index(axis=0).sort_index(axis=1)
     print('[match_scores_and_validation_data] Reorder the rows and cols of the dataframes ... -> DONE')
-    print(f'[match_scores_and_validation_data] {score_method} df genes order: \n\n {df_score_GxRBP.index}')
-    print(f'[match_scores_and_validation_data] Postar df genes order: \n\n {df_val_nan_included_GxRBP.index}')
-    print(f'[match_scores_and_validation_data] {score_method} df rbps order: \n\n {df_score_GxRBP.columns}')
-    print(f'[match_scores_and_validation_data] Postar df rbps order: \n\n {df_val_nan_included_GxRBP.columns}')
     ## Save the score files and return score dataframe and modified postar
     if path_save:
         print(f"[match_scores_and_validation_data] You're saving the files")
         ### Save the final dataframes
         df_score_GxRBP.to_csv(f'{path_save}/df_{score_method}_GxRBPs.csv')
-        print(f'[match_scores_and_validation_data] Save the final dataframes in {path_save}')
+        print(f'[match_scores_and_validation_data] Save the final dataframes in {path_save}\n')
     else:
-        print(f"[match_scores_and_validation_data] You're NOT saving any file")  
+        print(f"[match_scores_and_validation_data] You're NOT saving any file\n")  
     return df_score_GxRBP, df_val_nan_included_GxRBP
   
 def main(df_scaled_test, test_labels, test_gn, model, path_save, df_val_GxRBP, path_data):

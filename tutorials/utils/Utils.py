@@ -19,8 +19,9 @@ from collections import namedtuple
 from sklearn.metrics import roc_curve, auc
 
 #ruta_utils = '/scratch/jsanchoz/ML4BM-Lab/DeepRBP/utils'
-#os.environ['PYTHONPATH'] = ruta_utils + ':' + os.environ.get('PYTHONPATH', '')
-#from utils import Plots as plots
+ruta_utils = './../utils'
+os.environ['PYTHONPATH'] = ruta_utils + ':' + os.environ.get('PYTHONPATH', '')
+from utils import Plots as plots
 #from utils.Config import Config
 #ruta_modelsNN = '/scratch/jsanchoz/ML4BM-Lab/DeepRBP/modelsNN'
 #os.environ['PYTHONPATH'] = ruta_modelsNN + ':' + os.environ.get('PYTHONPATH', '')
@@ -695,7 +696,7 @@ def prepare_inputs_explainability(tumor_type, source_explain, config, path_data,
     Inputs = namedtuple('Inputs', ['df_scaled_test', 'test_labels', 'test_gn', 'device'])
     return Inputs(df_scaled_test, test_labels, test_gn, device)
 
-def read_postar3_data(path_data, select_tumor_type, tumor2tissue, select_cell_line=None):
+def read_postar3_data(path_data, select_tumor_type, tumor2tissue):
     """
     Read the Postar3 data for the selected tissue.
 
@@ -703,7 +704,6 @@ def read_postar3_data(path_data, select_tumor_type, tumor2tissue, select_cell_li
         path_data (str): Path to the directory containing the data.
         select_tumor_type (str): The selected tumor type for explainability.
         tumor2tissue (dict): Dictionary mapping tumor types to tissues.
-        select_cell_line (str, optional): The selected cell line.
 
     Returns:
         pandas.DataFrame: DataFrame containing the Postar3 data.
@@ -711,21 +711,9 @@ def read_postar3_data(path_data, select_tumor_type, tumor2tissue, select_cell_li
     ## Read the GxRBP Validation data for the selected tissue
     matching_postar_file = tumor2tissue.get(select_tumor_type)
     print('[explainability][read_validation_data] The selected tissue test used to do the explainability is:', select_tumor_type)
-    if isinstance(matching_postar_file, list):
-        print('[explainability][read_validation_data] For this tissue you have available this Postar data:', matching_postar_file)
-        if select_cell_line is not None:
-            matching_postar_file = next((element for element in matching_postar_file if select_cell_line in element), None)
-            if matching_postar_file is not None:
-                print('[explainability][read_validation_data] Selected cell line:', matching_postar_file) 
-            else:
-                raise ValueError(f'[explainability][read_validation_data] Error: Selected cell line "{select_cell_line}" not found in available cell lines.') 
-        else:
-            raise ValueError('[explainability][read_validation_data] Error: Cell line is None. Please provide a valid cell line.')
-    else:
-        print('[explainability][read_validation_data] For this tissue you have just this Postar data available:', matching_postar_file)
-  
+    print('[explainability][read_validation_data] For this tissue you have just this Postar data available:', matching_postar_file)
     print('[explainability][read_validation_data] Loading Postar data ...')
-    tissue_path = f"{path_data}/validation_regulation/gencode_23/create_exRBP/result/{matching_postar_file}.csv"
+    tissue_path = f"{path_data}/postar3/create_gxRBP/results/{matching_postar_file}.csv"
     df_val_GxRBP = pd.read_csv(tissue_path, index_col=0)
     return df_val_GxRBP
 
@@ -738,6 +726,7 @@ def analyze_postar_matrix(df_val_GxRBP, path_save):
         path_save (str): The path to save the results.
     """
     df_val_GxRBP_filtered = df_val_GxRBP.copy()
+    
     # Number of RBPs per Gene
     df_count_rbps_per_gen = pd.DataFrame()
     df_count_rbps_per_gen['Class 0'] = df_val_GxRBP_filtered.apply(lambda x: (x == 0).sum(), axis=1)
@@ -745,6 +734,7 @@ def analyze_postar_matrix(df_val_GxRBP, path_save):
     df_count_rbps_per_gen['Class NaN'] = df_val_GxRBP_filtered.apply(lambda x: x.isna().sum(), axis=1)
     df_count_rbps_per_gen['Genes'] = df_count_rbps_per_gen.index
     df_count_rbps_per_gen = df_count_rbps_per_gen.reset_index(drop=True)
+
     # Number of genes per RBP
     df_count_genes_per_rbp = pd.DataFrame()
     df_count_genes_per_rbp['Class 0'] = df_val_GxRBP_filtered.apply(lambda x: (x == 0).sum(), axis=0)
@@ -783,12 +773,7 @@ def analyze_results_per_rbp_or_gene(df_score_GxRBP, df_val_nan_included_GxRBP, p
     """
     
     path = '/'.join(path_save.rsplit('/')[0:9])
-    # try:
     df_count_genes_per_rbp = pd.read_csv(f'{path}/Postar/df_count_genes_per_rbp_nan_included_all_Postar.csv', index_col=0)
-    # except FileNotFoundError:
-        # path = '/'.join(path_save.rsplit('/')[0:10])
-        # df_count_genes_per_rbp = pd.read_csv(f'{path}/Postar/df_count_genes_per_rbp_nan_included_all_Postar.csv', index_col=0)
-
     list_rbps_postar = df_count_genes_per_rbp.sort_values(by='Class 1', ascending=False)['RBPs'].values.tolist()
     num_trans_per_gene = getBM.Gene_ID.value_counts()
     
@@ -1002,7 +987,7 @@ def process_and_save_expression_data(path_exp, id_samples, condition, path_data)
     # 1. Merge each sample
     print(f'[process_and_save_expression_data] 1. Merging the samples ... ')
     for sample in id_samples:
-        print(f'[process_and_save_expression_data] We are processing the sample: {sample} from tissue: {condition}')
+        print(f'[process_and_save_expression_data] We are processing the sample: {sample} from tissue: {condition}\n')
         # Obtain data for the current sample
         df_trans_tpm, df_trans_counts, df_genes_tpm = create_vec_exp_matrix_from_abundance(path_exp, sample)
         
@@ -1017,7 +1002,7 @@ def process_and_save_expression_data(path_exp, id_samples, condition, path_data)
             df_trans_tpm_cumulative = pd.merge(df_trans_tpm_cumulative, df_trans_tpm, on='sample', how='outer')
             df_trans_counts_cumulative = pd.merge(df_trans_counts_cumulative, df_trans_counts, on='sample', how='outer')
             df_genes_tpm_cumulative = pd.merge(df_genes_tpm_cumulative, df_genes_tpm, on='sample', how='outer')
-    print(f'[process_and_save_expression_data] 1. Merging the samples ... -> DONE')
+    print(f'[process_and_save_expression_data] 1. Merging the samples ... -> DONE\n')
     
     # 2. Data Cleaning and aggregation of different loci
     # Give to different loci the same gen_id and trans_id 
@@ -1027,15 +1012,14 @@ def process_and_save_expression_data(path_exp, id_samples, condition, path_data)
     df_trans_tpm_cumulative = df_trans_tpm_cumulative.iloc[:, 1:].groupby(df_trans_tpm_cumulative['sample']).sum()
     df_trans_counts_cumulative = df_trans_counts_cumulative.iloc[:, 1:].groupby(df_trans_counts_cumulative['sample']).sum()
     df_genes_tpm_cumulative = df_genes_tpm_cumulative.iloc[:, 1:].groupby(df_genes_tpm_cumulative['sample']).sum()      
-    print('[process_and_save_expression_data] 2. Data Cleaning and aggregation of different loci ... -> DONE')
+    print('[process_and_save_expression_data] 2. Data Cleaning and aggregation of different loci ... -> DONE\n')
     
     # 3. Log2 transformation of Transcript data
     df_trans_log2p_tpm_cumulative = np.log2(df_trans_tpm_cumulative + 1)
-    print('[process_and_save_expression_data] 3. Log2 transformation of Transcript data ... -> DONE')
+    print('[process_and_save_expression_data] 3. Log2 transformation of Transcript data ... -> DONE\n')
     
     # 4. Obtaining RBP expression dataframe in log2(tpm+1)
     getBM = pd.read_csv(f'{path_data}/extra/getBM_total.csv')
-    print(getBM)
     df_RBPs = pd.read_excel(f'{path_data}/selected_genes_rbps/Table_S2_list_RBPs_eyras.xlsx', skiprows=2) # List of splicing genes
     ids_RBPs = getBM[getBM['Gene_name'].isin(df_RBPs['HGNC symbol'].tolist())]['Gene_ID'].unique().tolist()
     df_rbp_tpm_cumulative = df_genes_tpm_cumulative.loc[ids_RBPs,:]
@@ -1043,25 +1027,22 @@ def process_and_save_expression_data(path_exp, id_samples, condition, path_data)
     gene_id_name_map = {row['Gene_ID']: row['Gene_name'] for index, row in getBM[getBM.Gene_ID.isin(ids_RBPs)].drop_duplicates(subset='Gene_name').iterrows()} # Change the colnames of rbp set by gene_name
     df_rbp_log2p_tpm_cumulative = df_rbp_log2p_tpm_cumulative.loc[gene_id_name_map.keys(), :] #the are 4 rbp_ids that have the same rbp_name
     df_rbp_log2p_tpm_cumulative = df_rbp_log2p_tpm_cumulative.rename(index=gene_id_name_map)
-    print('[process_and_save_expression_data] 4. Obtaining RBP expression dataframe in log2(tpm+1) ... -> DONE')
+    print('[process_and_save_expression_data] 4. Obtaining RBP expression dataframe in log2(tpm+1) ... -> DONE\n')
     
     # 5. Gene selection depending on model used (cancer genes or protein coding genes) and get the dataset with the gene expression for each transcript
     getBM_mini = pd.read_csv(f'{path_data}/extra/getBM_reduced.csv', index_col=0)
-    print(getBM_mini)
     list_transcripts = list(getBM_mini.Transcript_ID)
-    print(len(list_transcripts))
     list_genes = list(getBM_mini.Gene_ID)
-    print(len(list_genes))
     df_trans_log2p_tpm_cumulative = df_trans_log2p_tpm_cumulative.loc[list_transcripts, :] # Get the dataset with the expression of the transcripts
     df_gn_each_iso_tpm_cumulative = df_genes_tpm_cumulative.loc[list_genes,:] # Get the dataset with the gene expression for each transcript
-    print('[process_and_save_expression_data] 5. Gene selection depending on model used and get the dataset with the gene expression for each transcript ... -> DONE')
+    print('[process_and_save_expression_data] 5. Gene selection depending on model used and get the dataset with the gene expression for each transcript ... -> DONE\n')
     
     # 6. Transpose DataFrames
     df_rbp_log2p_tpm_cumulative = df_rbp_log2p_tpm_cumulative.T
     df_trans_log2p_tpm_cumulative = df_trans_log2p_tpm_cumulative.T
     df_gn_each_iso_tpm_cumulative = df_gn_each_iso_tpm_cumulative.T
     df_gn_each_iso_tpm_cumulative.columns = list_transcripts # We put to the gene_expr_each_iso dataframe the colnames of the transcripts they are related to
-    print('[process_and_save_expression_data] 6. Transpose DataFrames ... -> DONE')
+    print('[process_and_save_expression_data] 6. Transpose DataFrames ... -> DONE\n')
     
     # 7. Save created files in folder
     path = f'{path_exp}/datasets/{condition}'
@@ -1124,7 +1105,7 @@ def identify_samples_from_tissue(df_filereport, condition):
     else:
         print(f"Condition not known: {condition}")
         id_samples = []
-    print(f'[identify_samples_from_tissue] The samples related to this condition are: {id_samples}')
+    print(f'[identify_samples_from_tissue] The samples related to this condition are: {id_samples}\n')
     return id_samples
 
 def generate_data(df_filereport, condition1, condition2, path_exp, path_data):

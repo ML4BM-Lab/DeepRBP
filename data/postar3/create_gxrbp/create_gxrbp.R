@@ -24,14 +24,16 @@ tissues <- c("Liver", "Myeloid", "Kidney_embryo")
 # Path to eventsFound.txt with the information of all the events
 pathtoeventstable <- paste0(path,"/EventsFound_gencode23.txt")
 
+EventsFound <- read.delim(file=pathtoeventstable, stringsAsFactors=FALSE)
+EventsFound$EventID <- paste0(EventsFound$GeneName, "_", EventsFound$EventNumber)
+
 # 2.2) <- EventsRegions <- : las regiones de los eventos
 load(paste0(path,"/Events_Regions_gc23_400nt.RData")) #GRseq3
 
 for(tissue in tissues){
   print(tissue)
   
-  # 2.4) <- Postar3 del tissue seleccionado: informaci�n de los RBPs que se han pegado en ciertas posiciones del 
-  # genoma para unos experimentos
+  # 2.4) <- Postar3 of the selected tissue: information of the RBPs that have been attatched in some positions of the genome 
   # Table with peaks of POSTAR
   human_txt <- read_delim(paste0(path,"/results/human_",tissue, ".txt"), 
                           delim = ",", escape_double = FALSE, 
@@ -118,7 +120,7 @@ for(tissue in tissues){
   if (!dir.exists(path_save)) {
     dir.create(path_save, recursive = TRUE)
   }
-  write.csv(GxS, file = paste0(path_save,'/',tissue,'_GxS.csv'))
+  write.csv(GxS, file = paste0(path_save,'/',tissue,'_GxRBP.csv'))
   
   rm(human_txt, POSTAR, POSTAR_L, mySF, ExS, peaks, peaks_GR, Overlaps, EvMatch)
 }
