@@ -41,9 +41,9 @@ conda activate DeepRBP
 ```
 
 ## Datasets information
+In this project, we have used several databases. On one hand, we have used a cohort that contains, among others, samples from TCGA and GTEx. The samples from the former have been used to train the DeepRBP predictor that learns transcript abundances, and the samples from GTEx have been used to evaluate how well the predictive model generalizes.
 
-...
-
+On the other hand, the DeepRBP explainer has been validated using TCGA samples from a tumor type to calculate the GxRBP scores and a binary matrix with shape GxRBP indicating whether the evidence in POSTAR3 experiments indicates regulation or not. Finally, the DeepRBP explainer has been tested in real knockdown experiments. Below, you are instructed on how to download these data.
 
 ### Downloading the datasets
 To download TCGA and GTeX data you have to run the *download_script.sh*.
@@ -52,36 +52,26 @@ To download TCGA and GTeX data you have to run the *download_script.sh*.
 cd DeepRBP
 bash data/TCGA_GTeX/raw/download_script.sh
 ```
-The scripts use the command *wget* to perform the download. 
-To install *wget* on macOS run:
- ```bash
-brew install wget
-```
-To install *wget* on Ubuntu or CentOS run:
- ```bash
-sudo apt-get install wget
-```
 To download the Postar3 human database containing information on CLIP experiments you have to run the *download_script.sh*
 ```bash
 cd DeepRBP
 bash data/postar3/input_data/download_script.sh
 ```
-To obtain the raw data with abundances for real knockdown experiments data, *./tutorials/tutorial_0* contains a .Rmd file that explains how to download the fastq files, run kallisto and voom-limma for a given experiment.
+To download real knockdown experiments raw data, *./tutorials/tutorial_0* contains a .Rmd file that explains how to download the fastq files, run kallisto and voom-limma for a given experiment.
 
-### Get processed data
+### Generate TCGA and GTeX data (ESTO PUEDE IR EN UN TUTORIAL).
 To process the TCGA and GTeX raw data you have to run the *create_data.sh*
 ```bash
 cd DeepRBP
 bash create_data.sh
 ```
-
 After running the shell script, a folder named *splitted_datasets* will be generated in the directory *./data/TCGA_GTeX*. This folder contains processed samples from both TCGA and GTeX datasets, divided by tumor type or tissue. 
 
 Within the TCGA dataset, samples are divided for each tumor type, allocating 80% for training and 20% for testing. Each of these tumor type folders contains:
 
-**_.gn_expr_each_iso_tpm.csv_**:  Gene expression in TPM for each transcript with shape n_samples x n_transcripts.
-**_.RBPs_log2p_tpm.csv_**: RBP expression in log2(TPM+1) with shape n_samples x n_rbps
-**_.trans_log2p_tpm.csv_**: Transcripts expression in log2(TPM+1) with shape n_samples x n_transcripts
+- **_.gn_expr_each_iso_tpm.csv_**:  Gene expression in TPM for each transcript with shape n_samples x n_transcripts.
+- **_.RBPs_log2p_tpm.csv_**: RBP expression in log2(TPM+1) with shape n_samples x n_rbps
+- **_.trans_log2p_tpm.csv_**: Transcripts expression in log2(TPM+1) with shape n_samples x n_transcripts
 
 During the data generation process, the tables located in *./data/selected_genes_rbps* are utilized to choose the RBPs and genes under consideration for this study.
 
