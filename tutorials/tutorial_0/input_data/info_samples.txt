@@ -1,6 +1,0 @@
-SRR10045016	tdp43_ko
-SRR10045017	tdp43_ko
-SRR10045018	tdp43_ko
-SRR10045019	Rescued_tdp43_ko
-SRR10045020	Rescued_tdp43_ko
-SRR10045021	Rescued_tdp43_ko

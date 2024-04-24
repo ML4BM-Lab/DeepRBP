@@ -1,0 +1,1 @@
+{"max_node": 1024, "num_hidden_layers": 2, "learning_rate": 0.001, "batch_size": 8, "epochs": 1000, "same_num_nodes": true, "node_divition_factor": 8, "activation_layer": "relu", "optimizer": "adamW", "source_train": "TCGA", "train_tumor_types": "all", "test_tumor_types": "all"}

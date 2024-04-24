@@ -1,0 +1,156 @@
+---
+title: "tutorial_preprocess"
+output: html_document
+date: "2024-04-15"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 1.- Download fastq files
+
+Fastq files can be downloaded from https://www.ebi.ac.uk/ena/browser/view/PRJNA562297. This dataset belongs to the GSE136366 experiment, in which TDP43 was knockdown.
+
+The following code chunk so how to download the data using axel command. There are more way to download the data, such as fastq-dum, aspera, etc:
+
+The code is designed to download fastq files and store them in the input_data directory:
+
+```{r,eval=FALSE}
+
+axel -a -n9 ftp://ftp.sra.ebi.ac.uk:/vol1/fastq/SRR100/017/SRR10045017/SRR10045017_1.fastq.gz -o ./tutorial_0/input_data/SRR10045017
+axel -a -n9 ftp://ftp.sra.ebi.ac.uk:/vol1/fastq/SRR100/017/SRR10045017/SRR10045017_2.fastq.gz -o ./tutorial_0/input_data/SRR10045017
+axel -a -n9 ftp://ftp.sra.ebi.ac.uk:/vol1/fastq/SRR100/021/SRR10045021/SRR10045021_1.fastq.gz -o ./tutorial_0/input_data/SRR10045021
+axel -a -n9 ftp://ftp.sra.ebi.ac.uk:/vol1/fastq/SRR100/021/SRR10045021/SRR10045021_2.fastq.gz -o ./tutorial_0/input_data/SRR10045021
+axel -a -n9 ftp://ftp.sra.ebi.ac.uk:/vol1/fastq/SRR100/018/SRR10045018/SRR10045018_1.fastq.gz -o ./tutorial_0/input_data/SRR10045018
+axel -a -n9 ftp://ftp.sra.ebi.ac.uk:/vol1/fastq/SRR100/018/SRR10045018/SRR10045018_2.fastq.gz -o ./tutorial_0/input_data/SRR10045018
+axel -a -n9 ftp://ftp.sra.ebi.ac.uk:/vol1/fastq/SRR100/016/SRR10045016/SRR10045016_1.fastq.gz -o ./tutorial_0/input_data/SRR10045016
+axel -a -n9 ftp://ftp.sra.ebi.ac.uk:/vol1/fastq/SRR100/016/SRR10045016/SRR10045016_2.fastq.gz -o ./tutorial_0/input_data/SRR10045016
+axel -a -n9 ftp://ftp.sra.ebi.ac.uk:/vol1/fastq/SRR100/019/SRR10045019/SRR10045019_1.fastq.gz -o ./tutorial_0/input_data/SRR10045019
+axel -a -n9 ftp://ftp.sra.ebi.ac.uk:/vol1/fastq/SRR100/019/SRR10045019/SRR10045019_2.fastq.gz -o ./tutorial_0/input_data/SRR10045019
+axel -a -n9 ftp://ftp.sra.ebi.ac.uk:/vol1/fastq/SRR100/020/SRR10045020/SRR10045020_1.fastq.gz -o ./tutorial_0/input_data/SRR10045020
+axel -a -n9 ftp://ftp.sra.ebi.ac.uk:/vol1/fastq/SRR100/020/SRR10045020/SRR10045020_2.fastq.gz -o ./tutorial_0/input_data/SRR10045020
+
+```
+
+
+# 2.- Run kallisto
+
+Once the data is downloaded, the next step is to run kallisto. 
+
+To run the kallisto `quant` command, we need to create a index file from gencode23. The index file can be created using the command `kallisto index`. We used GenCode23 as reference transcriptome. The reference transcriptome can be downloaded from: https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_23/gencode.v23.transcripts.fa.gz
+
+
+```{r,eval=FALSE}
+kallisto index --index ./tutorial_0/input_data/gencode.v23.transcripts.idx <path to reference transciptome>/gencode.v23.transcripts.fa
+```
+
+
+The following code chunk shows how to run kallisto:
+
+
+```{r, eval=FALSE}
+
+kallisto quant -i ./tutorial_0/input_data/gencode.v23.transcripts.idx -o ./tutorial_0/input_data/kallisto_output/SRR10045016 -b 100 -t 2 ./tutorial_0/input_data/SRR10045016/SRR10045016_1.fastq.gz ./tutorial_0/input_data/SRR10045016/SRR10045016_2.fastq.gz
+kallisto quant -i ./tutorial_0/input_data/gencode.v23.transcripts.idx -o ./tutorial_0/input_data/kallisto_output/SRR10045017 -b 100 -t 2 ./tutorial_0/input_data/SRR10045017/SRR10045017_1.fastq.gz ./tutorial_0/input_data/SRR10045017/SRR10045017_2.fastq.gz
+kallisto quant -i ./tutorial_0/input_data/gencode.v23.transcripts.idx -o ./tutorial_0/input_data/kallisto_output/SRR10045018 -b 100 -t 2 ./tutorial_0/input_data/SRR10045018/SRR10045018_1.fastq.gz ./tutorial_0/input_data/SRR10045018/SRR10045018_2.fastq.gz
+kallisto quant -i ./tutorial_0/input_data/gencode.v23.transcripts.idx -o ./tutorial_0/input_data/kallisto_output/SRR10045019 -b 100 -t 2 ./tutorial_0/input_data/SRR10045019/SRR10045019_1.fastq.gz ./tutorial_0/input_data/SRR10045019/SRR10045019_2.fastq.gz
+kallisto quant -i ./tutorial_0/input_data/gencode.v23.transcripts.idx -o ./tutorial_0/input_data/kallisto_output/SRR10045020 -b 100 -t 2 ./tutorial_0/input_data/SRR10045020/SRR10045020_1.fastq.gz ./tutorial_0/input_data/SRR10045020/SRR10045020_2.fastq.gz
+kallisto quant -i ./tutorial_0/input_data/gencode.v23.transcripts.idx -o ./tutorial_0/input_data/kallisto_output/SRR10045021 -b 100 -t 2 ./tutorial_0/input_data/SRR10045021/SRR10045021_1.fastq.gz ./tutorial_0/input_data/SRR10045021/SRR10045021_2.fastq.gz
+
+
+```
+
+
+The Kallisto output shall be stored in "input_data_/kallisto_output". 
+
+
+# 3.- Run voom-limma
+
+The following codes show how to execute the voom-limma methodology. The aim of this process is to obtain differentially expressed transcripts between the two conditions.
+
+First we load the following variables: path, which indicates the directory where the kallisto output is located; experiment, to determine the name of the experiment; and rbp_interest, to indicate that RBP has been knocked out. We also load the variable getBM, which has the information of which transcript belongs to each gene.
+
+```{r, eval=FALSE}
+path <- './tutorial_0/input_data/kallisto_output/'
+experiment <- 'GSE136366' 
+rbp_interest <- 'TDP43'
+
+getBM <- read.table('./tutorial_0/input_data/getBM_total.csv', header = TRUE, sep = ",")
+```
+
+
+We then loaded the expression of the transcripts for each sample. On the one hand we load for the control samples and on the other hand for the knockout samples:
+
+```{r,eval=FALSE}
+#load info of the samples:
+info_sample <- read.table(file="./tutorial_0/input_data/info_samples.txt",sep="\t")
+
+#load control
+index_control <- which(info_sample$V2=="Rescued_tdp43_ko")
+sample_names_control <- info_sample$V1[index_control]
+data_control <- read.csv(file=paste0(path,sample_names_control[1],"/abundance.tsv"),sep="\t",colClasses=c("character","NULL","NULL","NULL","numeric"))
+for(jjx in 2:length(index_control)){
+    data_control <- cbind(data_control,
+                    read.csv(file=paste0(path,sample_names_control[jjx],"/abundance.tsv"),sep="\t",colClasses=c("NULL","NULL","NULL","NULL","numeric"))
+    )
+}
+transcripts_names <- data_control[, 1]
+expression_matrix_control <- as.matrix(data_control[, -1])
+colnames(expression_matrix_control) <- sample_names_control
+
+
+#load kd
+index_kd <- which(info_sample$V2=="tdp43_ko")
+sample_names_kd <- info_sample$V1[index_kd]
+data_kd <- read.csv(file=paste0(path,sample_names_kd[1],"/abundance.tsv"),sep="\t",colClasses=c("character","NULL","NULL","NULL","numeric"))
+for(jjx in 2:length(index_kd)){
+    data_kd <- cbind(data_kd,
+                    read.csv(file=paste0(path,sample_names_kd[jjx],"/abundance.tsv"),sep="\t",colClasses=c("NULL","NULL","NULL","NULL","numeric"))
+    )
+}
+expression_matrix_kd <- as.matrix(data_kd[, -1])
+colnames(expression_matrix_kd) <- sample_names_kd
+all_sample_names <- c(sample_names_control, sample_names_kd)
+```
+
+
+In order to apply voom-limma, we have to define the design and contrast matrices of the experiment. Note that the first 3 samples correspond to the control samples and the last 3 to the knockout samples:
+
+```{r,eval=FALSE}
+X <- model.matrix(~ 0 + factor(c(rep(c("control"), each=length(sample_names_control)), rep(c("kd"), each=length(sample_names_kd)))))
+colnames(X) <- c("control", "kd")
+
+C <- makeContrasts(control-kd, levels = X)
+```
+
+
+Finally, we can apply the voom-limma methodology:
+
+```{r,eval=FALSE}
+Expression <- cbind(expression_matrix_control, expression_matrix_kd)
+rownames(Expression) <- gsub("\\..*","",transcripts_names)
+
+y <- voom(Expression, X)
+fit <- lmFit(y, X)
+
+fit2 <- contrasts.fit(fit, C)
+fit2<- eBayes(fit2)
+
+tT1 <- topTable(fit2,coef=1, adjust="fdr", sort.by="B", number=Inf)
+tT1$Transcript_ID <- rownames(tT1)
+
+```
+
+
+We grouped the results obtained by gene. As explained in the manuscript, we will consider genes that have at least one differentially expressed transcript. The results are stored in the folder: "output_preprocess".
+
+```{r,eval=FALSE}
+
+merged_df <- merge(tT1, getBM, by="Transcript_ID")
+merged_df <- merged_df[,1:8]
+
+csv_file_path <- paste0("./tutorial_real_kd/output_preprocess/",experiment,"_",rbp_interest,"_results.csv")
+write.csv(merged_df, file = csv_file_path, row.names = TRUE)
+```
+
