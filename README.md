@@ -56,13 +56,10 @@ In create_data.sh bash script you need to change the path_deepRBP for your DeepR
 
 ```bash
 #!/bin/bash
-SCRIPT_DIR=$(dirname "$0")
+SCRIPT_DIR="$PWD"
 
-path_deepRBP="" # Change this path for the path of the DeepRBP folder
-
-export PYTHONPATH="$path_deepRBP/model:$PYTHONPATH"
+path_deepRBP="" # Change this path to your DeepRBP folder
 PATH_DATA="$path_deepRBP/data/input_create_model"
-
 echo "Ruta de PATH_DATA: $PATH_DATA"
 
 python "$SCRIPT_DIR/create_data.py" --chunksize 5000 --select_genes 'cancer_genes' --path_data "$PATH_DATA"
