@@ -4,7 +4,6 @@ channels:
   - defaults
 dependencies:
   - anyio=4.2.0
-  - appnope=0.1.2
   - argon2-cffi=21.3.0
   - argon2-cffi-bindings=21.2.0
   - asttokens=2.0.5
