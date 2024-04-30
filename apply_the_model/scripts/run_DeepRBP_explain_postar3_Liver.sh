@@ -14,7 +14,7 @@ PATH_TRAIN_FILES="$path_model/output/example"
 PATH_SAVE="$SCRIPT_DIR/../output/explain_postar"
 
 # Arguments for Python script
-TUMOR_TYPE="Liver_Hepatocellular_Carcinoma"  # Example value, replace with your desired tumor type ('Kidney_Chromophobe', 
+TUMOR_TYPE="Liver_Hepatocellular_Carcinoma"  # Example value, replace with your desired tumor type ('Kidney_Chromophobe', 'Acute_Myeloid_Leukemia')
 SOURCE_EXPLAIN="TCGA"  # Example value, replace with your source for explainability
 
 echo "PATH_DATA: $PATH_DATA"
