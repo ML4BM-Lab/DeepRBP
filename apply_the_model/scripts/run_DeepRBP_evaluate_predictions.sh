@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # Script directory
-SCRIPT_DIR=$(dirname "$0")
+SCRIPT_DIR="$PWD"
 
 # DeepRBP paths and data
-path_deepRBP="/Users/joseba/Downloads/ML4BM-Lab2/DeepRBP"
+path_deepRBP="/Users/joseba/Downloads/ML4BM-Lab2/DeepRBP" # Change path to your DeepRBP path folder
 export PYTHONPATH="$path_deepRBP/model:$PYTHONPATH"
 PATH_DATA="$path_deepRBP/data/input_create_model/processed"
 
