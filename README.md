@@ -52,7 +52,7 @@ To download and process the TCGA and GTeX data used in this project you need to 
 data/input_create_model/raw/download_script.sh
 data/input_create_model/processed/create_data.sh
 ```
-In create_data,sh bash script you need to change the path_deepRBP for your DeepRBP folder:
+In create_data.sh bash script you need to change the path_deepRBP for your DeepRBP folder:
 
 ```bash
 #!/bin/bash
