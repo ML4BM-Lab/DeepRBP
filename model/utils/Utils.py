@@ -18,21 +18,9 @@ from scipy.stats import linregress, spearmanr, pearsonr
 from collections import namedtuple
 from sklearn.metrics import roc_curve, auc
 
-#ruta_utils = '/scratch/jsanchoz/ML4BM-Lab/DeepRBP/utils'
 ruta_utils = './../utils'
 os.environ['PYTHONPATH'] = ruta_utils + ':' + os.environ.get('PYTHONPATH', '')
 from utils import Plots as plots
-#from utils.Config import Config
-#ruta_modelsNN = '/scratch/jsanchoz/ML4BM-Lab/DeepRBP/modelsNN'
-#os.environ['PYTHONPATH'] = ruta_modelsNN + ':' + os.environ.get('PYTHONPATH', '')
-#from modelsNN.modelsNN import DeepRBP
-
-#ruta_utils = '/Users/joseba/Downloads/ML4BM-Lab2/DeepRBP/utils'
-#ruta_modelsNN = '/Users/joseba/Downloads/ML4BM-Lab2/DeepRBP/modelsNN'
-#os.environ['PYTHONPATH'] = ':'.join([ruta_utils, ruta_modelsNN]) + ':' + os.environ.get('PYTHONPATH', '')
-#from utils import Plots as plots
-#from utils.Config import Config
-#from modelsNN.modelsNN import DeepRBP
 
 def check_create_new_directory(path):
     """ 
@@ -722,7 +710,8 @@ def read_postar3_data(path_data, select_tumor_type, tumor2tissue):
     print('[explainability][read_validation_data] The selected tissue test used to do the explainability is:', select_tumor_type)
     print('[explainability][read_validation_data] For this tissue you have just this Postar data available:', matching_postar_file)
     print('[explainability][read_validation_data] Loading Postar data ...')
-    tissue_path = f"{path_data}/create_gxRBP/results/{matching_postar_file}.csv"
+    tissue_path = f"{path_data}/create_gxrbp/results/{matching_postar_file}.csv"
+    tissue_path = os.path.abspath(tissue_path)
     df_val_GxRBP = pd.read_csv(tissue_path, index_col=0)
     return df_val_GxRBP
 
