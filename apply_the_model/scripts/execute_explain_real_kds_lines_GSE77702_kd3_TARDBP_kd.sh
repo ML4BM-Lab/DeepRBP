@@ -4,13 +4,13 @@
 SCRIPT_DIR=$(dirname "$0")
 
 # DeepRBP paths and data
-path_deepRBP="/Users/joseba/Downloads/ML4BM-Lab2/DeepRBP"
+path_deepRBP="/Users/joseba/Downloads/ML4BM-Lab2/DeepRBP" # change this dir to your DeepRBP path
 export PYTHONPATH="$path_deepRBP/model:$PYTHONPATH"
 
 # Paths and data
 path_model="$path_deepRBP/model"
 path_data="$path_deepRBP/data/input_create_model"
-path_train_files="$path_model/output/example/"
+path_train_files="$path_model/output/e4494b64/" # put here your model
 path_exp="$path_deepRBP/data/data_real_kds/experiments/GSE77702"
 experiment="GSE77702_kd3"
 rbp_interest="TARDBP"
