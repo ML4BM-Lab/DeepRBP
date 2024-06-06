@@ -10,7 +10,7 @@ export PYTHONPATH="$path_deepRBP/model:$PYTHONPATH"
 # Paths and data
 path_model="$path_deepRBP/model"
 path_data="$path_deepRBP/data/input_create_model"
-path_train_files="$path_model/output/example/"
+path_train_files="$path_model/output/e4494b64/" # put here your model
 path_exp="$path_deepRBP/data/data_real_kds/experiments/prjeb39343_gencode_23"
 experiment="HFE"
 rbp_interest="MBNL1"

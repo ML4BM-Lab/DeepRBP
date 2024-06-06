@@ -1,28 +1,32 @@
 #!/bin/bash
 
-#SBATCH --qos=test
-#SBATCH --job-name=run_DeepRBP_explain_postar3_Kidney
-#SBATCH --cpus-per-task=2
-#SBATCH --mem=35GB
-#SBATCH --nodes=1
-#SBATCH --mail-type=BEGIN,END
-#SBATCH --mail-user=jsanchoz@unav.es
-#SBATCH -o /scratch/jsanchoz/ML4BM-Lab/DeepRBP/logs/run_DeepRBP_explain_postar3_Kidney.log
+# Script directory
+SCRIPT_DIR="$PWD"
 
-echo ===================================
-echo ===     Load the packages       ===
-echo ===================================
-echo $(date)
+# DeepRBP paths and data
+path_deepRBP="/Users/joseba/Downloads/ML4BM-Lab2/DeepRBP" # change this directory to your DeepRBP path folder
+export PYTHONPATH="$path_deepRBP/model:$PYTHONPATH"
+PATH_DATA="$path_deepRBP/data/input_create_model/processed"
 
-module load Python
-conda activate /scratch/jsanchoz/envs/PyTorch
-module unload Python
-which python
+# Trained files paths and output folder
+path_model="$path_deepRBP/model"
+PATH_TRAIN_FILES="$path_model/output/e4494b64" # put here your model
+PATH_SAVE="$SCRIPT_DIR/../output/explain_postar"
 
-# Explainability with Deeplift and differential expression
-python /scratch/jsanchoz/ML4BM-Lab/DeepRBP/main_explain_postar3.py \
-  --tumor_type 'Kidney_Chromophobe' \
-  --source_explain 'TCGA' \
-  --model_selected '1024N_2HL_8f' \
-  --path_result '/scratch/jsanchoz/ML4BM-Lab/DeepRBP/results' \
-  --path_data '/scratch/jsanchoz/data'
+# Arguments for Python script
+TUMOR_TYPE="Kidney_Chromophobe"  # Example value, replace with your desired tumor type
+SOURCE_EXPLAIN="TCGA"  # Example value, replace with your source for explainability
+
+echo "PATH_DATA: $PATH_DATA"
+echo "PATH_TRAIN_FILES: $PATH_TRAIN_FILES"
+echo "PATH_SAVE: $PATH_SAVE"
+echo "TUMOR_TYPE: $TUMOR_TYPE"
+echo "SOURCE_EXPLAIN: $SOURCE_EXPLAIN"
+
+# Execute python script
+python "$SCRIPT_DIR/../main_explain_postar3.py" \
+    --path_save "$PATH_SAVE" \
+    --path_data "$PATH_DATA" \
+    --tumor_type "$TUMOR_TYPE" \
+    --source_explain "$SOURCE_EXPLAIN" \
+    --path_train_files "$PATH_TRAIN_FILES"

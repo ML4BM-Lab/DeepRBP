@@ -52,6 +52,19 @@ To download and process the TCGA and GTeX data used in this project you need to 
 data/input_create_model/raw/download_script.sh
 data/input_create_model/processed/create_data.sh
 ```
+In create_data.sh bash script you need to change the path_deepRBP for your DeepRBP folder:
+
+```bash
+#!/bin/bash
+SCRIPT_DIR="$PWD"
+
+path_deepRBP="" # Change this path to your DeepRBP folder
+PATH_DATA="$path_deepRBP/data/input_create_model"
+echo "Ruta de PATH_DATA: $PATH_DATA"
+
+python "$SCRIPT_DIR/create_data.py" --chunksize 5000 --select_genes 'cancer_genes' --path_data "$PATH_DATA"
+```
+
 With this data, you will be able to create a model from scratch and/or check the performance of the prediction of the transcripts, such as performing explainability.
 On the other hand, if you want to identify the RBPs that regulate a gene for your experiment, as a previous step in the next tutorial, *./data/data_real_kds/tutorial_download_kd_experiments*, we explain how to download the fastq files and run kallisto. We also explain how to use voom-limma for differential expression analysis between two conditions as further validation of the scores obtained with DeepRBP."
 
