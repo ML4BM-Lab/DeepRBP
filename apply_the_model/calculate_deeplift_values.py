@@ -53,13 +53,11 @@ def calculate_rbp_reference(df_scaled_test, select_reference):
         print('[calculate_rbp_reference] You selected the median of the RBP expression as reference')
         base_rbps_test = torch.tensor(np.median(df_scaled_test.astype(np.float64), axis=0)).float()
         base_rbps_test = torch.reshape(base_rbps_test, (1, base_rbps_test.size()[0]))
-        print('reference of the RBP expression:', base_rbps_test)
         print('[calculate_rbp_reference] Calculate the reference of the RBP expression data: median of the test data ... -> DONE')
 
     if select_reference == 'knockout':
         print('[calculate_rbp_reference] You selected the knockout RBP expression as reference')
         base_rbps_test = torch.zeros(1, len(df_scaled_test.columns))
-        print('reference of the RBP expression:', base_rbps_test)
         print('[calculate_rbp_reference] Calculate the reference of the RBP expression data: knockout of the test data ... -> DONE')
     return base_rbps_test
 
@@ -244,6 +242,11 @@ def match_scores_and_validation_data(df_val_GxRBP, df_score_GxRBP, score_method,
     return df_score_GxRBP, df_val_nan_included_GxRBP
   
 def main(df_scaled_test, test_labels, test_gn, model, path_save, df_val_GxRBP, path_data):
+
+    print(df_scaled_test)
+    print(test_labels)
+    print(model)
+
     getBM = pd.read_csv(path_data+'/../extra/getBM_reduced.csv', index_col=0)
     # Reorder getBM (in the last model version the data is returned with the transcript values sorted)
     getBM = getBM.sort_values(by='Transcript_ID').reset_index(drop=True)
@@ -263,10 +266,6 @@ def main(df_scaled_test, test_labels, test_gn, model, path_save, df_val_GxRBP, p
 
         # 1) Obtain GxRBP score matrix
         print('[main] 1) Obtain GxRBP score matrix')
-        print(path+f'/df_{study}_tstat_GxRBPs.csv')
-        print(path+f'/df_{study}_sum_scores_GxRBPs.csv')
-        print(os.path.isfile(path+f'/df_{study}_tstat_GxRBPs.csv'))
-        print(os.path.isfile(path+f'/df_{study}_sum_scores_GxRBPs.csv'))
 
         if os.path.isfile(path+f'/df_{study}_tstat_GxRBPs.csv') and os.path.isfile(path+f'/df_{study}_sum_scores_GxRBPs.csv'):
             print('[get_deeplift_scores_genes] WARNING: GxRBP scores have been already calculated ... loading the saved GxRBP matrices')

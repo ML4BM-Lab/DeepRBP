@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Script directory
-SCRIPT_DIR=$(dirname "$0")
+SCRIPT_DIR="$PWD"
 
 # DeepRBP paths and data
 path_deepRBP="/Users/joseba/Downloads/ML4BM-Lab2/DeepRBP"

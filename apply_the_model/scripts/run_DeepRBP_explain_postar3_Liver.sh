@@ -1,16 +1,16 @@
 #!/bin/bash
 
 # Script directory
-SCRIPT_DIR=$(dirname "$0")
+SCRIPT_DIR="$PWD"
 
 # DeepRBP paths and data
-path_deepRBP="/Users/joseba/Downloads/ML4BM-Lab2/DeepRBP"
+path_deepRBP="/scratch/jsanchoz/DeepRBP"
 export PYTHONPATH="$path_deepRBP/model:$PYTHONPATH"
 PATH_DATA="$path_deepRBP/data/input_create_model/processed"
 
 # Trained files paths and output folder
 path_model="$path_deepRBP/model"
-PATH_TRAIN_FILES="$path_model/output/example"
+PATH_TRAIN_FILES="$path_model/output/e4494b64"
 PATH_SAVE="$SCRIPT_DIR/../output/explain_postar"
 
 # Arguments for Python script

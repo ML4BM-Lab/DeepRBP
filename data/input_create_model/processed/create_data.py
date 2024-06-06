@@ -3,13 +3,10 @@ import timeit
 import datetime
 import argparse
 import os
+import sys
 
-# print the current working directory
-#print('Original working directory:', os.getcwd())
-# change the working directory
-#os.chdir('/Users/joseba/Downloads/ML4BM-Lab2/DeepRBP/model/utils')
-# print the updated working directory
-#print('Updated working directory:', os.getcwd())
+path_model = '../../../model'
+sys.path.append(path_model)
 
 from utils.Utils import check_create_new_directory
 import utils.Generate_Datasets as gd

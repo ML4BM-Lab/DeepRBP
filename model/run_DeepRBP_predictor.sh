@@ -2,8 +2,7 @@
 
 SCRIPT_DIR=$(dirname "$0")
 
-
-path_deepRBP="/Users/joseba/Downloads/ML4BM-Lab2/DeepRBP"
+path_deepRBP="/scratch/jsanchoz/DeepRBP"
 
 export PYTHONPATH="$path_deepRBP/model:$PYTHONPATH"
 PATH_DATA="$path_deepRBP/data/input_create_model/processed"

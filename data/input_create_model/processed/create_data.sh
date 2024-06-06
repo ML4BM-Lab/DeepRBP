@@ -1,11 +1,17 @@
 #!/bin/bash
-SCRIPT_DIR=$(dirname "$0")
+#SBATCH --job-name=create_data
+#SBATCH --qos=regular
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=4
+#SBATCH --cpus-per-task=8
+#SBATCH --time=10:00:00
+#SBATCH --mem-per-cpu=60G
+#SBATCH -o /scratch/jsanchoz/DeepRBP/logs/out1.out
 
-path_deepRBP="/Users/joseba/Downloads/ML4BM-Lab2/DeepRBP"
+SCRIPT_DIR="$PWD"
 
-export PYTHONPATH="$path_deepRBP/model:$PYTHONPATH"
+path_deepRBP="/scratch/jsanchoz/DeepRBP" # Change this path to your DeepRBP folder
 PATH_DATA="$path_deepRBP/data/input_create_model"
-
 echo "Ruta de PATH_DATA: $PATH_DATA"
 
-python "$SCRIPT_DIR/create_data.py" --chunksize 5000 --select_genes 'cancer_genes' --path_data "$PATH_DATA"
+python "$SCRIPT_DIR/create_data.py" --chunksize 1000 --select_genes 'cancer_genes' --path_data "$PATH_DATA"
