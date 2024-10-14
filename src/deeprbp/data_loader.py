@@ -9,6 +9,7 @@
 
 ############################################################################################################
 import os
+import joblib
 import pandas as pd
 import numpy as np
 import torch
@@ -144,6 +145,8 @@ class CustomDataset(Dataset):
                 file_names=['scaled_rbp_expr_log2p_tpm'],
                 save_first_only=True
             )
+            # Save used scaler, sigma, and split indices
+            self._save_scaler_and_idx(folder_name="data")   
         # Cache the data as numpy arrays for fast access
         self.rbp_expr = self.data['rbp_expr_df'].values
         self.gene_expr = self.data['gene_expr_df'].values
@@ -311,6 +314,8 @@ class CustomDataset(Dataset):
         # Check if the scaler and sigma are already set
         if self.scaler is not None and self.sigma is not None:
             print("[_perform_scaling] Warning: Scaler and sigma are already set. Skipping fitting the scaler with the training data.")
+            if self.train_idx is not None:
+                selected_train_sample_ids = self.index2id(self.id2index_mapping, self.train_idx)   
         # If the scaler is not set, we need to fit it
         elif self.scaler is None and self.sigma is None:
             if self.train_idx is None:
@@ -351,6 +356,64 @@ class CustomDataset(Dataset):
                                     scaler=self.scaler, 
                                     sigma=self.sigma)
     ###
+    def _save_scaler_and_idx(self, folder_name) -> None:
+        """
+        Save the scaler, sigma, and the split indices (train, valid, test) to files.
+        """
+        # Define file paths
+        folder_path = os.path.join(self.output_dir, folder_name)
+        scaler_file = os.path.join(folder_path, 'scaler.joblib')
+        sigma_file = os.path.join(folder_path, 'sigma.txt')
+        train_idx_file = os.path.join(folder_path, 'train_idx.txt')
+        valid_idx_file = os.path.join(folder_path, 'valid_idx.txt')
+        test_idx_file = os.path.join(folder_path, 'test_idx.txt')
+        # Save the scaler using joblib
+        if self.scaler is not None:
+            joblib.dump(self.scaler, scaler_file)
+            print(f"[_save_scaler_and_idx] Scaler saved to {scaler_file}")
+        # Save the sigma as a text file
+        if self.sigma is not None:
+            np.savetxt(sigma_file, [self.sigma])
+            print(f"[_save_scaler_and_idx] Sigma saved to {sigma_file}")
+        # Save train, valid, and test indices to text files
+        if self.train_idx is not None:
+            np.savetxt(train_idx_file, self.train_idx, fmt='%d')
+            print(f"[_save_scaler_and_idx] Train indices saved to {train_idx_file}")
+        if self.valid_idx is not None:
+            np.savetxt(valid_idx_file, self.valid_idx, fmt='%d')
+            print(f"[_save_scaler_and_idx] Validation indices saved to {valid_idx_file}")
+        if self.test_idx is not None:
+            np.savetxt(test_idx_file, self.test_idx, fmt='%d')
+            print(f"[_save_scaler_and_idx] Test indices saved to {test_idx_file}")
+    ###
+    @staticmethod
+    def load_scaler_and_idx(path_save_files: str):
+        """Loads the scaler, sigma, and dataset indices (train, valid, and test) from saved files."""
+        print('[load_scaler_and_idx] Loading the scaler, sigma and dataset indices')
+        try:
+            scaler = joblib.load(f'{path_save_files}/scaler.joblib')
+            with open(f'{path_save_files}/sigma.txt', 'r') as f:
+                sigma = np.float64(f.readline().strip())  
+            try:
+                train_idx = np.loadtxt(f'{path_save_files}/train_idx.txt', dtype=int).tolist()
+            except OSError:
+                train_idx = None
+            try:
+                valid_idx = np.loadtxt(f'{path_save_files}/valid_idx.txt', dtype=int).tolist()
+            except OSError:
+                valid_idx = None
+            try:
+                test_idx = np.loadtxt(f'{path_save_files}/test_idx.txt', dtype=int).tolist()
+            except OSError:
+                test_idx = None
+            return scaler, sigma, train_idx, valid_idx, test_idx
+        except FileNotFoundError as e:
+            print(f"[load_scaler_and_idx] File not found: {e}")
+            return None, None, None, None, None
+        except Exception as e:
+            print(f"[load_scaler_and_idx] An error occurred: {e}")
+            return None, None, None, None, None
+    ###
     def __getitem__(self, idx: int):
         """Return a sample from the dataset (RBP, gene, and trans expressions)."""
         rbp_exp = torch.tensor(self.rbp_expr[idx], dtype=torch.float32)
@@ -365,58 +428,6 @@ class CustomDataset(Dataset):
         """Return metadata for a specific sample."""
         return self.metadata.iloc[idx]
    
-################################# main code
-
-# hola joseba vas por aquí: 
-
-### Save the scaler and sigma used in Training to a file
-        # filename_scaler = os.path.join(path_save_files, 'scaler_sfs.joblib')
-        # filename_sigma = os.path.join(path_save_files, 'sigma_sfs.txt')
-        # joblib.dump(data_scale.scaler_sfs, filename_scaler)
-        # np.savetxt(filename_sigma, [data_scale.sigma_sfs])
- # Load or save the scaler and sigma used in the model training
-        # scaler_sfs = joblib.load(path_save_files+'/scaler_sfs.joblib')
-        # with open(path_save_files+'/sigma_sfs.txt', 'r') as f:
-        #     sigma_sfs = f.readline().strip()
-        # sigma_sfs = np.float128(sigma_sfs)
-
-## luego:
-# 1. Usando source_train desde el config:
-# dataset = CustomDataset(config=config, source_train='TCGA', output_dir=output_dir, save_files=True)
-# 2. Usando rutas personalizadas:
-# paths = { # esto sobre todo para volver a ejecutar un pre-scaling data ya utilizado o unos paths q no estén en la config.
-#     "rbp_path": "/custom/path/rbp.csv",
-#     "isoform_expr_path": "/custom/path/isoform.csv",
-#     "metadata_path": "/custom/path/metadata.csv",
-#     "gene_expr_path": "/custom/path/gene.csv"
-# }
-# dataset = CustomDataset(config=config, paths=paths, output_dir=output_dir, paths=paths)
-
-config = get_config()
-output_dir = config['train_prediction_model']['output_dir']
-batch_size = config['train_prediction_model']['batch_size']
-dataset = CustomDataset(config=config, source_train='TCGA', output_dir=output_dir, save_files=True)
-#dataset = CustomDataset(config=config, source_train='TCGA')
-
-dataloaders = create_dataloaders(dataset, batch_size=batch_size)
-
-# Acceder a los loaders que se hayan creado
-train_loader = dataloaders.get('train_loader', None)
-valid_loader = dataloaders.get('validation_loader', None)
-test_loader = dataloaders.get('test_loader', None)
-
-# esto ya es parte del train.py
-num_epochs = 10
-for epoch in range(num_epochs):
-    for batch_index, (rbp_exp, gene_exp, trans_exp) in enumerate(train_loader):
-        print(type(rbp_exp), type(gene_exp), type(trans_exp))  # Verificar tipos
-        print(rbp_exp, gene_exp, trans_exp)  # Inspeccionar contenido
-        print(rbp_exp.shape, gene_exp.shape, trans_exp.shape) 
-        break
-    break
-
-    
-
 
 
 
