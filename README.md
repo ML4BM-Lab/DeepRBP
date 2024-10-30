@@ -56,18 +56,32 @@ sbatch slurm/download_data.sh
 The datasets will be automatically saved to the following directory: `/data/training_module/raw`
 
 ### Data preprocessing 
+# Data Preprocessing and Model Input Preparation
 
+In this step, we will load and preprocess the raw data files: gene expression (`TcgaTargetGtex_rsem_gene_tpm.gz`), transcript expression (`TcgaTargetGtex_rsem_isoform_tpm.gz`), and phenotype metadata (`TcgaTargetGTEX_phenotype.txt`). These will be used to prepare input matrices for both TCGA and GTEX datasets. Specifically, we will generate:
 
+- **RBP expression matrix**: `RBPs_log2p_tpm.csv` (log2(tpm+1)), derived from the gene expression data, with dimensions `n_patients x num_RBPs`.
+- **Transcript expression matrix**: `trans_log2p_tpm.csv` (log2(tpm+1)), with dimensions `n_patients x num_transcripts`.
+- **Gene expression matrix**: `gn_expr_each_iso_tpm.csv` (in TPM) with dimensions `n_patients x num_transcripts`.
+- **Metadata file**: `phenotype_metadata.csv`, containing phenotype information for each sample, indicating tissue or tumor type.
 
-In this step, que procesos hacemos? con que objectivo? (cual es el output).
-Como se ejecuta? 2 opciones.
+## Process Details
+
+Among other tasks, this process includes:
+
+1. Cleaning and standardizing phenotype data.
+2. Cleaning gene and transcript expression data by removing genome version annotations and aggregating loci.
+3. Filtering out transcripts of genes with only one isoform.
+4. Selecting genes and their transcripts for modeling based on either cancer-related genes or all protein-coding genes.
+5. Filtering RNA-binding proteins (RBPs) for modeling and creating a subset RBP matrix from the gene matrix.
+6. Transforming gene expression to TPM, and RBP and transcript expression to log2(tpm+1).
+7. Transposing expression data so patients are rows and genes (or transcript IDs) are columns.
+8. Saving processed expression data and phenotype metadata as CSV files in the specified output directory.
+
+## Execution Command
+To execute this, run:
 
 ```bash
-sbatch slurm/generate_model_inputs.sh
-```
-  
-puedes ejecutar en consola de la siguiente forma: 
-
 prepare-model-inputs --raw_data_dir "/scratch/jsanchoz/DeepRBP/data/training_module/raw" \
                      --selected_genes_dir "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps" \
                      --output_dir "/scratch/jsanchoz/DeepRBP/data/training_module/processed" \
@@ -81,19 +95,48 @@ prepare-model-inputs --raw_data_dir "/scratch/jsanchoz/DeepRBP/data/training_mod
                      --cancer_genes_file "Table_S6_Cancer_gene_eyras.xlsx" \
                      --gene_census_file "Table_Cancer_Gene_Census.tsv" \
                      --rbp_genes_file "Table_S2_list_RBPs_eyras.xlsx"
+```
 
-donde cada elemento es: 
+# Command Arguments
+- **raw_data_dir (str)**: Directory containing raw data files.
+- **selected_genes_dir (str)**: Directory with lists of RNA-binding proteins (RBPs) and selected genes for modeling.
+- **output_dir (str)**: Directory for saving processed files.
+- **transcript_expression_file (str)**: Filename for transcript expression data (transcripts x n_patients) in log2(tpm+0.001).
+- **gene_expression_file (str)**: Filename for gene expression data (genes x n_patients) in log2(tpm+0.001).
+- **phenotype_data_file (str)**: Filename for phenotype data (patients x phenotype features).
+- **chunk_size (int)**: Rows to process per chunk for memory efficiency.
+- **gene_selection (bool)**: Flag to indicate gene selection; True uses cancer and alternative splicing-related genes.
+- **gene_transcript_mapping_file (str)**: Output file mapping transcript IDs/names to gene IDs/names and biotypes.
+- **splicing_genes_file (str)**: Excel file with genes implicated in alternative splicing in cancer.
+- **cancer_genes_file (str)**: Excel file listing ~900 predicted cancer-driver genes based on mutations or copy number alterations.
+- **gene_census_file (str)**: TSV file with Cancer Gene Census data.
+- **rbp_genes_file (str)**: Excel file listing RNA-binding proteins (RBPs).
+
+## HPC Execution
+Alternatively, you can submit this command on an HPC system with Slurm:
+
+```bash
+sbatch slurm/generate_model_inputs.sh
+```
+
+
+
+
+
+  
+
 
 
 # (explicar más en detalle), que entra que sale, como , porque  decir como se consiguen los RBPs, que procesos hacemos etc
 
 # filter TCGA and GTEx samples and save the gene and transcript expression matrices for each dataset. From the gene expression matrix, we create a subset containing the expression of RNA-binding proteins (RBPs) genes, which will serve as the primary input for our model.
 
-(lo que antes era create_data.sh)
+
+
+
 
 
 # nuevo organigrama !!! (puede estar aun sujeto a muchos cambios)
-
 /DeepRBP
 ├── data
 │   ├── training_module                       
@@ -126,7 +169,7 @@ donde cada elemento es:
 │   │   ├── analysis/                 # Sección dedicada a análisis y resultados
 │   │   │   ├── TCGA-Lung-Breast-2024-10-09/   # Identificador único para esta corrida
 │   │   │   │   ├── train_prediction_model/    # Resultados del módulo de entrenamiento
-│   │   │   │   │   ├── data/                  # Datos generados durante el análisis
+│   │   │   │   │   ├── data/                  # Datos generados durante el análisis   
 │   │   │   │   │   │   ├── pre-scaling/       # Resultados de expresiones antes del escalado
 │   │   │   │   │   │   │   ├── rbp_expr_log2p_tpm.csv         # Expresión de RBPs en log2(tpm+1)
 │   │   │   │   │   │   │   ├── gene_expr_tpm.csv              # Expresión de genes en tpm

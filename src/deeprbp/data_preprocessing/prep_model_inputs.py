@@ -25,7 +25,6 @@ def prepare_inputs(
     gene_census_file: str,
     rbp_genes_file: str, 
     **kwargs): # el getBM reducido puede no guardarse en un fichero sino que al cargar las clases el absoluto sea su input y en self.getBM se guarde el subset con los trans que estemos usando
-    
     """
     Loads and preprocesses gene and transcript expression data in chunks for memory efficiency. 
     Additionally, filters the gene expression matrix to create a subset containing RNA-binding proteins (RBPs), 
