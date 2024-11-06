@@ -1,0 +1,10 @@
+source_name: "GTEX"
+train_test_split: false
+train_val_split: false
+seed: 0
+batch_size: 128
+fit_scaler: false
+cuda: true
+epochs: 1000
+sample_category: "detailed_category"
+output_dir: "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_Lung-Breast_2024-11-06/train_prediction_model"

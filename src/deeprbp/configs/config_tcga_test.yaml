@@ -1,0 +1,12 @@
+source_name: "TCGA"
+train_test_split: false
+train_val_split: false
+seed: 0
+batch_size: 128
+fit_scaler: false
+cuda: true
+epochs: 1000
+select_samples:
+  - "Lung_Adenocarcinoma"
+  - "Breast_Invasive_Carcinoma"
+sample_category: "detailed_category"

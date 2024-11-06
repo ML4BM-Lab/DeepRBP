@@ -1,70 +1,140 @@
 from data_loader import CustomDataset
-from config_loader import get_config
+from config_loader import load_config
+import os
+import numpy as np
 
-### main de otro archivo ####################################
-config = get_config()
-output_dir = config['train_prediction_model']['output_dir']
-batch_size = config['train_prediction_model']['batch_size']
-train_config = {k: config[k] for k in ('train_prediction_model', 'data')}
-val_config = {k: config[k] for k in ('val_prediction_model', 'data')}
-select_tumor_types = train_config['train_prediction_model']['train_tumor_types']
+## version carlosizada
+#import DeepRBP
 
-# opcion 1.1 - (primera ejecución con el config) [PROBADO Y FUNCIONA]
-dataset = CustomDataset(
-                    config=train_config, 
-                    select_tumor_types = select_tumor_types,
-                    output_dir=output_dir, 
-                    save_files=True
-                    )
+path_configs = '/scratch/jsanchoz/DeepRBP/src/deeprbp/configs'
+config_path_tcga_train = os.path.join(path_configs, 'config_tcga_train.yaml')
+config_path_gtex = os.path.join(path_configs, 'config_gtex.yaml')
+config_path_tcga_test = os.path.join(path_configs, 'config_tcga_test.yaml')
 
-# opcion 1.2 - (primera ejecución con paths) [PROBADO Y FUNCIONA]
-paths = { # esto sobre todo para volver a ejecutar un pre-scaling data ya utilizado o unos paths q no estén en la config.
-     "rbp_path": "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/RBPs_log2p_tpm.csv",
-     "gene_expr_path": "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/gn_expr_each_iso_tpm.csv",
-     "isoform_expr_path": "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/trans_log2p_tpm.csv",
-     "metadata_path": "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/phenotype_metadata.csv"
+# Data
+paths_TCGA = {
+    "rbp_path": "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/RBPs_log2p_tpm.csv",
+    "isoform_expr_path": "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/trans_log2p_tpm.csv",
+    "metadata_path": "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/phenotype_metadata.csv",
+    "gene_expr_path": "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/gn_expr_each_iso_tpm.csv"
     }
 
-dataset = CustomDataset( 
-                    config=train_config, 
-                    select_tumor_types = select_tumor_types,
-                    paths=paths, 
+paths_TCGA_rep = {
+    "rbp_path": "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_Lung-Breast_2024-11-04/train_prediction_model/data/TCGA/pre-scaling/rbp_expr_log2p_tpm.csv",
+    "isoform_expr_path": "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_Lung-Breast_2024-11-04/train_prediction_model/data/TCGA/pre-scaling/trans_expr_log2p_tpm.csv",
+    "metadata_path": "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_Lung-Breast_2024-11-04/train_prediction_model/data/TCGA/pre-scaling/metadata_df.csv",
+    "gene_expr_path": "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_Lung-Breast_2024-11-04/train_prediction_model/data/TCGA/pre-scaling/gene_expr_tpm.csv"
+    }
+
+paths_GTEX = {
+    "rbp_path": "/scratch/jsanchoz/DeepRBP/data/training_module/processed/GTEX/RBPs_log2p_tpm.csv",
+    "isoform_expr_path": "/scratch/jsanchoz/DeepRBP/data/training_module/processed/GTEX/trans_log2p_tpm.csv",
+    "metadata_path": "/scratch/jsanchoz/DeepRBP/data/training_module/processed/GTEX/phenotype_metadata.csv",
+    "gene_expr_path": "/scratch/jsanchoz/DeepRBP/data/training_module/processed/GTEX/gn_expr_each_iso_tpm.csv"
+    }
+
+# Caso 1) config train TCGA
+config = load_config(config_path_tcga_train)
+output_dir = config['output_dir']
+batch_size = config['batch_size']
+
+dataset_1 = CustomDataset( 
+                    paths=paths_TCGA, 
+                    config=config, 
                     output_dir=output_dir,
                     save_files=True
                     )
-###
-# opcion 2 - (usar una ejecución ya creada anteriormente - reusar pre-scaling data con scaler e idx ya calculados anteriormente)  [PROBADO Y FUNCIONA]
-paths = { # esto sobre todo para volver a ejecutar un pre-scaling data ya utilizado o unos paths q no estén en la config.
-     "rbp_path": "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_Lung-Breast_2024-10-30/train_prediction_model/data/pre-scaling/rbp_expr_log2p_tpm.csv",
-     "gene_expr_path": "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_Lung-Breast_2024-10-30/train_prediction_model/data/pre-scaling/gene_expr_tpm.csv",
-     "isoform_expr_path": "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_Lung-Breast_2024-10-30/train_prediction_model/data/pre-scaling/trans_expr_log2p_tpm.csv",
-     "metadata_path": "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_Lung-Breast_2024-10-30/train_prediction_model/data/pre-scaling/metadata_df.csv"
-    }
+                    
+# Caso 2) config uso repetido de TCGA
+config = load_config(config_path_tcga_test)
+path_saved_files = '/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_Lung-Breast_2024-11-06/train_prediction_model/data/TCGA'
+scaler, sigma, train_idx, valid_idx, test_idx = CustomDataset.load_scaler_and_idx(path_saved_files)
 
-scaler, sigma, train_idx, valid_idx, test_idx = CustomDataset.load_scaler_and_idx(
-                    path_save_files='/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_Lung-Breast_2024-10-30/train_prediction_model/data'
-                    )
+dataset_2 = CustomDataset(
+        paths=paths_TCGA_rep, 
+        config=config, 
+        train_idx=train_idx,
+        valid_idx=valid_idx,
+        test_idx=test_idx,
+        scaler=scaler,
+        sigma=sigma,
+        save_files=False
+        )
 
-dataset = CustomDataset(
-                    config=train_config, 
-                    paths=paths, 
-                    output_dir=output_dir,
-                    scaler=scaler,
-                    sigma=sigma,
-                    train_idx=train_idx,
-                    valid_idx=valid_idx,
-                    test_idx=test_idx
-                    )
-
-# opcion 3 - usar un scaler hecho en TCGA para GTEX (Me faltaría este)
-# config
+# config GTEX
+config = load_config(config_path_gtex)
+path_saved_files = '/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_Lung-Breast_2024-11-06/train_prediction_model/data/TCGA'
+scaler, sigma, _, _, _ = CustomDataset.load_scaler_and_idx(path_saved_files)
 
 dataset = CustomDataset(
-                     config=config, 
-                     source_name=val_config, 
-                     scaler=scaler,
-                     sigma=sigma
-                     )
+        paths=paths_GTEX, 
+        config=config, 
+        scaler=scaler,
+        sigma=sigma,
+        save_files=True
+        )
+
+####
+
+
+
+
+
+dataset_2.rbp_names
+dataset_2.trans_names
+
+
+
+
+
+
+
+# #### #### #### #### #### #### #### #### #### #### #### #### #### #### #### #### #### ####
+# comprobaciones que he hecho en este codigo: 
+def compare_datasets_with_tolerance(dataset_1, dataset_2):
+    dataset_names = [
+        ('train_rbps', dataset_1.rbp_expr[dataset_1.train_idx, :], dataset_2.rbp_expr[dataset_2.train_idx, :]),
+        ('train_gn', dataset_1.gene_expr[dataset_1.train_idx, :], dataset_2.gene_expr[dataset_2.train_idx, :]),
+        ('train_trans', dataset_1.trans_expr[dataset_1.train_idx, :], dataset_2.trans_expr[dataset_2.train_idx, :]),
+        ('val_rbps', dataset_1.rbp_expr[dataset_1.valid_idx, :], dataset_2.rbp_expr[dataset_2.valid_idx, :]),
+        ('val_gn', dataset_1.gene_expr[dataset_1.valid_idx, :], dataset_2.gene_expr[dataset_2.valid_idx, :]),
+        ('val_trans', dataset_1.trans_expr[dataset_1.valid_idx, :], dataset_2.trans_expr[dataset_2.valid_idx, :]),
+        ('test_rbps', dataset_1.rbp_expr[dataset_1.test_idx, :], dataset_2.rbp_expr[dataset_2.test_idx, :]),
+        ('test_gn', dataset_1.gene_expr[dataset_1.test_idx, :], dataset_2.gene_expr[dataset_2.test_idx, :]),
+        ('test_trans', dataset_1.trans_expr[dataset_1.test_idx, :], dataset_2.trans_expr[dataset_2.test_idx, :])
+    ]
+    for name, data1, data2 in dataset_names:
+        if np.allclose(data1, data2, atol=1e-6):  # Usamos una tolerancia de 1e-6
+            print(f"Los datasets {name} son iguales (con tolerancia).")
+        else:
+            print(f"Los datasets {name} NO son iguales (con tolerancia).")
+
+# Llamar a la función para comparar los datasets con tolerancia
+compare_datasets_with_tolerance(dataset_1, dataset_2)
+
+def compare_and_show_differences(dataset_1, dataset_2):
+    dataset_names = [
+        ('train_rbps', dataset_1.rbp_expr[dataset_1.train_idx, :], dataset_2.rbp_expr[dataset_2.train_idx, :]),
+        ('train_gn', dataset_1.gene_expr[dataset_1.train_idx, :], dataset_2.gene_expr[dataset_2.train_idx, :]),
+        ('train_trans', dataset_1.trans_expr[dataset_1.train_idx, :], dataset_2.trans_expr[dataset_2.train_idx, :]),
+        ('val_rbps', dataset_1.rbp_expr[dataset_1.valid_idx, :], dataset_2.rbp_expr[dataset_2.valid_idx, :]),
+        ('val_gn', dataset_1.gene_expr[dataset_1.valid_idx, :], dataset_2.gene_expr[dataset_2.valid_idx, :]),
+        ('val_trans', dataset_1.trans_expr[dataset_1.valid_idx, :], dataset_2.trans_expr[dataset_2.valid_idx, :]),
+        ('test_rbps', dataset_1.rbp_expr[dataset_1.test_idx, :], dataset_2.rbp_expr[dataset_2.test_idx, :]),
+        ('test_gn', dataset_1.gene_expr[dataset_1.test_idx, :], dataset_2.gene_expr[dataset_2.test_idx, :]),
+        ('test_trans', dataset_1.trans_expr[dataset_1.test_idx, :], dataset_2.trans_expr[dataset_2.test_idx, :])
+    ]
+    for name, data1, data2 in dataset_names:
+        diff = np.abs(data1 - data2)  # Obtener las diferencias absolutas
+        if np.all(diff == 0):
+            print(f"Los datasets {name} son idénticos.")
+        else:
+            print(f"Los datasets {name} NO son iguales. Diferencias encontradas:")
+            print(diff)  # Imprimir las diferencias
+
+# Llamar a la función para mostrar las diferencias
+compare_and_show_differences(dataset_1, dataset_2)
+# #### #### #### #### #### #### #### #### #### #### #### #### #### #### #### #### #### ####
 
 dataloaders = create_dataloaders(dataset, batch_size=batch_size)
 
