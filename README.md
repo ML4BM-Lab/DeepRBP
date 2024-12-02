@@ -136,7 +136,7 @@ sbatch slurm/generate_model_inputs.sh
 
 
 
-# nuevo organigrama !!! (puede estar aun sujeto a muchos cambios)
+# nuevo organigrama !!! (puede estar aun sujeto a muchos cambios) ACTUALIZA ESTO BROTHER!!!
 /DeepRBP
 ├── data
 │   ├── training_module                       
@@ -169,29 +169,21 @@ sbatch slurm/generate_model_inputs.sh
 │   │   ├── analysis/                 # Sección dedicada a análisis y resultados
 │   │   │   ├── TCGA-Lung-Breast-2024-10-09/   # Identificador único para esta corrida
 │   │   │   │   ├── train_prediction_model/    # Resultados del módulo de entrenamiento
-│   │   │   │   │   ├── data/                  # Datos generados durante el análisis   
-│   │   │   │   │   │   ├── pre-scaling/       # Resultados de expresiones antes del escalado
-│   │   │   │   │   │   │   ├── rbp_expr_log2p_tpm.csv         # Expresión de RBPs en log2(tpm+1)
-│   │   │   │   │   │   │   ├── gene_expr_tpm.csv              # Expresión de genes en tpm
-│   │   │   │   │   │   │   ├── trans_expr_log2p_tpm.csv       # Expresión de transcritos en log2(tpm+1)
-│   │   │   │   │   │   │   └── metadata_df.csv                # Metadata de los samples, indicando el set
-│   │   │   │   │   │   
-│   │   │   │   │   │   ├── post-scaling/                      # Resultados después del escalado y división de sets
-│   │   │   │   │   │   │   ├── train_data/                    # Datos de entrenamiento escalados
-│   │   │   │   │   │   │   │   ├── scaled_train_rbp_expr_log2p_tpm.csv  # Expresión de RBPs log2(TPM+1) escalada (0-1)
-│   │   │   │   │   │   │   │   ├── train_gene_expr_tpm.csv       # Expresión de genes en TPM
-│   │   │   │   │   │   │   │   ├── train_trans_expr_log2p_tpm.csv # Expresión de transcritos log2(TPM+1)
-│   │   │   │   │   │   │   │   └── train_metadata_df.csv        # Metadata del set de entrenamiento
-│   │   │   │   │   │   │   
-│   │   │   │   │   │   │   ├── val_data/                       # Datos de validación escalados
-│   │   │   │   │   │   │   │   ├── ...
-│   │   │   │   │   │   │   
-│   │   │   │   │   │   │   ├── test_data/                      # Datos de prueba escalados
-│   │   │   │   │   │   │   │   ├── ...
-│   │   │   │   │   │   │   ├── scaler/                          # Objeto scaler utilizado para la normalización
-│   │   │   │   │   │   │   │   └── scaler.pkl                    # Archivo del scaler guardado en formato pickle
-│   │   │   │   │   │   │   
-│   │   │   │   │   │   │   └── sigma.txt                        # Valor de desviación estándar utilizado en el escalado
+
+│   │   │   │   │ data/  
+│   │   │   │   │   ├── scaler_trained/  
+│   │   │   │   │   │   │   ├── scaler.joblib 
+│   │   │   │   │   │   │   ├── sigma.npy # Valor de desviación estándar utilizado en el escalado
+
+│   │   │   │   │   ├── train_data/     
+│   │   │   │   │   │   │   ├── rbp_expr_df.csv         # Expresión de RBPs en log2(tpm+1)
+│   │   │   │   │   │   │   ├── scaled_rbp_expr_df.csv  # Expresión de RBPs scaled 0-1
+│   │   │   │   │   │   │   ├── gene_expr_df.csv        # Expresión de genes en tpm
+│   │   │   │   │   │   │   ├── trans_expr_df.csv       # Expresión de transcritos en log2(tpm+1)
+│   │   │   │   │   │   │   └── metadata_df.csv         # Metadata de los samples, indicando el set
+│   │   │   │   │   │   │
+│   │   │   │   │   ├── valid_data/   
+│   │   │   │   │   ├── test_data/   
 │   └── logs/                # Carpeta general para logs de todo el proyecto
 
 ├── notebooks  # Notebooks de análisis y pruebas
@@ -202,14 +194,14 @@ sbatch slurm/generate_model_inputs.sh
 ├── src  # Código principal del paquete DeepRBP
 │   ├── deeprbp
 │   │   ├── __init__.py  # Inicialización del paquete DeepRBP
-│   │   ├── model.py  # Definición y arquitectura del modelo de predicción (RBP-Gene) (class )
-│   │   ├── explainability.py  # Cálculo de scores de DeepLIFT para explainability
-│   │   ├── data_loader.py  # Clase para cargar, procesar y dividir los datos en train/test
-│   │   ├── config_loader.py  # Clase para cargar configuraciones desde un JSON
+│   │   ├── config_loader.py  # Clase Config y load_config para cargar configuraciones desde un YAML
+│   │   ├── main_predictor.py  # (PENDIENTE DE TRASLOCO) función main para ejecutar la pipeline de training del predictor.
+│   │   ├── model.py  # Definición de la clase modelo de predicción y explainer (PredictorModel y ExplainerModel)
+│   │   ├── processing.py  # clases de procesamiento de datos, responsable de cargar, filtrar, dividir, transformar y escalar los datos
+│   │   ├── train_predictor.py  # la clase para entrenar el modelo predictor
+│   │   ├── train_explainer.py  # la clase para entrenar el modelo explainer (EN OBRAS)
 │   │   ├── utils.py  # Funciones auxiliares
-#│   │   ├── evaluate.py  # Evaluación del modelo ??
 │   │   └── pretrained_model/  # Contiene el modelo preentrenado y sus archivos asociados 
-                                            (OJO a esto tenemos que hacer referimento en el data_loader tb luego)
 │   │       ├── config.json  # Configuración del modelo preentrenado
 │   │       ├── model.pt  # Modelo preentrenado
 │   │       ├── scaler_sfs.joblib  # Escaladores usados en el preprocesamiento

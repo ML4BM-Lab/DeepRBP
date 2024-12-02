@@ -52,15 +52,13 @@ def prepare_inputs(
     """
 
     # Load patient IDs and phenotype data
-    patient_ids = pd.read_csv(f"{raw_data_dir}/{gene_expression_file}", compression='gzip', sep='\t', nrows=1).columns.tolist()
+    #patient_ids = pd.read_csv(f"{raw_data_dir}/{gene_expression_file}", compression='gzip', sep='\t', nrows=1).columns.tolist()
     df_phenotype = pd.read_csv(f"{raw_data_dir}/{phenotype_data_file}", sep='\t', encoding='ISO-8859-1')
     df_phenotype = clean_and_format_phenotype_data(df_phenotype)
- 
+    patient_ids = df_phenotype.index.tolist()
+
     # Load the getBM data
     getBM = pd.read_csv(f"{selected_genes_dir}/{gene_transcript_mapping_file}")
-
-    # Track whether phenotype has been saved for each study
-    #phenotype_saved = {"TCGA": False, "GTEX": False} # esto creo que no va a hacer falta.
 
     # Initialize list for processed patients
     processed_patients = {"Patient_ID": [], "Chunk": []}
@@ -120,6 +118,8 @@ def clean_and_format_phenotype_data(dictionary_data: pd.DataFrame):
     Returns:
     - pd.DataFrame: A cleaned and standardized version of the input phenotype data.
     """
+    # Filtrar los samples con detailed_category no NaN
+    dictionary_data = dictionary_data[dictionary_data['detailed_category'].notna()]
     dictionary_data = dictionary_data.set_index("sample")
     dictionary_data = dictionary_data.apply(lambda x: x.str.replace("-", " "), axis=1)
     dictionary_data = dictionary_data.apply(lambda x: x.str.replace(r'[\(\)]', '_', regex=True))

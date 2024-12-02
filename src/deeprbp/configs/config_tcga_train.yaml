@@ -1,14 +1,44 @@
+# config.yaml
 source_name: "TCGA"
-train_test_split: true
-test_frac: 0.2
-train_val_split: true
-val_frac: 0.15
-seed: 0
-batch_size: 128
-fit_scaler: true
-cuda: true
-epochs: 1000
+
+# Paths for the data files
+data_paths:
+  rbp_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/RBPs_log2p_tpm.csv"
+  isoform_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/trans_log2p_tpm.csv"
+  metadata_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/phenotype_metadata.csv"
+  gene_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/gn_expr_each_iso_tpm.csv"
+
+# Model predictor configuration
+model:
+  input_size: 1348
+  output_size: 11459
+  num_hidden_layers: 2
+  max_node: 1024
+  uniform_nodes: True
+  node_shrink_factor: 2
+  activation_func: "relu"
+  learning_rate: 0.001
+  optimizer_name: "adamW"
+  cuda: true  # Set to true if you want to use GPU
+
+# Training configuration
+training:
+  epochs: 100
+  batch_size: 128
+  print_every: 10  # Print progress every N epochs
+  train_test_split: true
+  train_val_split: true
+  test_fraction: 0.2  # Fraction of data to reserve for testing
+  val_fraction: 0.15  # Fraction of training data to reserve for validation
+
+# Sample selection
+sample_category: "detailed_category"  # The column in metadata to stratify on
+#select_samples: ["all"]  # Puede ser 'all' o una lista de tipos de muestras específicas
 select_samples:
   - "Lung_Adenocarcinoma"
   - "Breast_Invasive_Carcinoma"
-sample_category: "detailed_category"
+output_dir: ""  # Se generará automáticamente si no se especifica
+seed: 0
+plot_results: False
+
+
