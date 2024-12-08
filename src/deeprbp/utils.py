@@ -1,8 +1,9 @@
 # utils.py
+import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
-from typing import List, Dict
+from typing import Tuple, List, Dict
 import os
 
 class CustomTensorDataset(Dataset):
@@ -16,7 +17,6 @@ class CustomTensorDataset(Dataset):
     def __getitem__(self, idx: int):
         return {feature: values[idx] for feature, values in self.features.items()}
        
- 
 def select_sample_ids_by_type(metadata_df: pd.DataFrame, sample_category_col: str, sample_types):
     """
     Select sample IDs from the metadata based on the provided sample types.
@@ -36,7 +36,7 @@ def select_sample_ids_by_type(metadata_df: pd.DataFrame, sample_category_col: st
 
 def filter_data_by_sample_ids(data: Dict[str, pd.DataFrame], selected_sample_ids: pd.Index) -> Dict[str, pd.DataFrame]:
     """
-    Filter the loaded data based on the selected sample IDs.
+    Filter the data based on the selected sample IDs.
 
     Args:
         data (Dict[str, pd.DataFrame]): Dictionary containing the data to be filtered.
@@ -77,3 +77,38 @@ def adjust_batch_size(dataset, batch_size):
         int: The adjusted batch size, which is the minimum of the number of samples in the dataset and the requested batch size.
     """
     return min(len(dataset), batch_size)
+
+
+### ### ### ### ### ### ### ### ### ### ### ### ###
+
+# esta función todavía no me convence mucho
+# def save_metrics_global(
+#     tuple_metrics: Tuple[Dict[str, float], Dict[str, float], Dict[str, float]],
+#     path: str,
+#     tuple_setnames: Tuple[str, str, str] = ('train', 'val', 'test')
+#     ) -> pd.DataFrame:
+#     """
+#     Saves global metrics for different sets (e.g., train, val, test) into a DataFrame.
+
+#     Args:
+#     tuple_metrics: A tuple containing dictionaries of metrics for each set (e.g., (metrics_train, metrics_val, metrics_test)).
+#     tuple_setnames: A tuple containing the names of the sets (default is ('train', 'val', 'test')).
+#     path Path where the DataFrame should be saved.
+
+#     Returns:
+#     pd.DataFrame: A DataFrame with the sets as rows and metrics as columns.
+#     """
+#     metrics_dict = {setname: metrics for setname, metrics in zip(tuple_setnames, tuple_metrics)}
+#     df = pd.DataFrame(metrics_dict).T
+#     if path:
+#         df.to_csv(f'{path}/metrics_global.csv', index=False)
+#     print(df)
+
+# # working on this one:
+# def save_metrics_per_category(
+#     tuple_metrics: Tuple[Dict[str, Dict[str, float]]],
+#     setname: str,
+#     tuple_setnames: Tuple[str, str, str] = ('train', 'val', 'test'),
+#     path: str = None
+# ) -> pd.DataFrame:
+    

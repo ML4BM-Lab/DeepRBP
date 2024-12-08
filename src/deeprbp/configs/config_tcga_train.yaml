@@ -7,6 +7,7 @@ data_paths:
   isoform_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/trans_log2p_tpm.csv"
   metadata_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/phenotype_metadata.csv"
   gene_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/gn_expr_each_iso_tpm.csv"
+  getBM_path: "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/getBM.csv" # NEW
 
 # Model predictor configuration
 model:
@@ -39,6 +40,6 @@ select_samples:
   - "Breast_Invasive_Carcinoma"
 output_dir: ""  # Se generará automáticamente si no se especifica
 seed: 0
-plot_results: False
+plot_results: True
 
 

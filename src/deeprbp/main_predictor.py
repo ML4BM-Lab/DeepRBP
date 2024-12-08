@@ -15,17 +15,15 @@ from config_loader import load_config
 from processing import DataImporter, DataSplitter, Scaler
 from model import PredictorModel
 from utils import *
+from plots import scatter_real_vs_pred, plot_expression_ratio_histogram 
+from evaluation_utils import *
 from train_predictor import TrainPredictor 
 
-### (((((POR AQUI BROTHER VAS!!! COMPARA CON EL UNTITLED-1))) ejecuta interactivamente.
-#config['source_name']
-    #config['data_paths']
-    #config['model']
-    #config['training']
-    #config['output_dir']
-    #config['training']['batch_size'] -> antes: config['batch_size']
+### Decirle a ChatGPT que use buenas prácticas de eficiencia y reduccion de codigo en este main.
 
 # Script to manage data and configuration for training
+
+# main_predictor.py 
 def main(args):
     #logging.basicConfig(level=logging.INFO) crea tu clase (LUIS)
     # Step 1: Load configuration from YAML file
@@ -90,9 +88,9 @@ def main(args):
     )  
 
     test_loader = DataLoader(
-        test_dataset, 
-        adjust_batch_size(test_dataset, config['training']['batch_size']*2), 
-        shuffle=False
+         test_dataset, 
+         adjust_batch_size(test_dataset, config['training']['batch_size']*2), 
+         shuffle=False
     )
 
     # Step 10: Initialize Model
@@ -102,185 +100,81 @@ def main(args):
         config=config
     )
 
-    # Initialize TrainPredictor
+    # Step 11: Initialize TrainPredictor
     trainer = TrainPredictor(model=model, config=config)
-
-    # Train the model
+    # Step 12: Train the model
     train_history, val_history = trainer.fit(train_loader, val_loader, epochs=config['epochs'])
+    # Step 13: Save the model and history
+    path_save_results = os.path.join(config['output_dir'], 'results')
+    trainer.save_model_and_training_history(path_save_results, 'model.pt', train_history, val_history)
+
+    # Step 14 make Predictions and calculate metrics on Training, Validation and Test (general)
+    pred_train, label_train, _ = trainer.generate_predictions(train_loader)
+    pred_val, label_val, _ = trainer.generate_predictions(val_loader)
+    pred_test, label_test, _ = trainer.generate_predictions(test_loader)
+
+    metrics_train = calculate_metrics(pred_train, label_train)
+    metrics_val = calculate_metrics(pred_val, label_val)
+    metrics_test = calculate_metrics(pred_test, label_test)
+
+    save_metrics_summary(set_names_list = ['train', 'val', 'test'], 
+                        metrics_list = [metrics_train, metrics_val, metrics_test], 
+                        output_path = f'{path_save_results}/metrics_summary_global.csv')
+                   
+    # Step 15 make Predictions and calculate metrics on Test (per category)
+    # TRAIN
+    metrics_list, set_names_list = calculate_metrics_per_category(train_data, 
+                                                                  config, 
+                                                                  trainer,
+                                                                  output_dir=path_save_results,
+                                                                  set_name='train')
+    save_metrics_summary(set_names_list, metrics_list, 
+                         output_path = f'{path_save_results}/train_metrics_summary_per_category.csv')
+    # VAL
+    metrics_list, set_names_list = calculate_metrics_per_category(valid_data, 
+                                                                  config, 
+                                                                  trainer,
+                                                                  output_dir=path_save_results,
+                                                                  set_name='val')
+    save_metrics_summary(set_names_list, metrics_list, 
+                         output_path = f'{path_save_results}/val_metrics_summary_per_category.csv')
+
+    # TEST
+    metrics_list, set_names_list = calculate_metrics_per_category(test_data, 
+                                                                  config, 
+                                                                  trainer,
+                                                                  output_dir=path_save_results,
+                                                                  set_name='test')
+    save_metrics_summary(set_names_list, metrics_list, 
+                         output_path = f'{path_save_results}/test_metrics_summary_per_category.csv')
+    ###
     
-    # Save the model and metrics
-    trainer.save_model_and_metrics(config['output_dir'], 'model.pt', train_history, val_history)
+    # Step 16: Predictions on GTEX - ME QUEDA REVISAR EL TRAIN Y EL VAL EN EL ANTERIOR CODIGO Y HACER EN GTEX Y
+   # PEDIR CONSEJO A CHAT PREMIUM DE COMO HE ORGANIZADO TODO EL CODE EN LA PIPELINE A PARTIR DE TODO EL CODE. 
+
+    ###  ###  ###  ###  ###  ###  ###  HASTA AQUI YA REVISADO.
+
+    ### ... WORKING IN PROGRESS ... 
+
+
+
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run the training pipeline.')
     parser.add_argument('--config_path', type=str, required=True, help='Path to the configuration file.')
-    
     args = parser.parse_args()
     main(args)
 
 
 
-for batch in train_loader:
-    print(batch)  # <<< Para inspeccionar qué contiene el batch
-    break
-
-    inputs, targets, gen_expr = (x.to(self.device).float() for x in batch)
-
 
 
 
 ### basura: 
-# import pandas as pd
-# import os
-# import numpy as np
-# from tqdm import tqdm  # Asegúrate de que tqdm esté instalado
-# import torch  # Necesario para guardar el modelo
-# from config_loader import load_config
-# from data_loader import CustomDataset, create_dataloaders
-# from model import TranscriptExpressionPredictor
-# from config_loader import load_config
-# from utils import get_sample_ids_by_type, filter_data_by_sample_ids, save_processed_data, load_processed_data, adjust_batch_size
-
-
-
-# # -------------------
-# # CONFIGURACIÓN
-# # -------------------
-
-## ESTO HAY QUE METERLO EN UN MAIN 
-# d) clase orquestradora: esta clase orquestaría todo el flujo de trabajo, desde cargar los datos hasta escalar y 
-# guardar. No sé aun si iría en el train_predictor.py o donde (probablmemente no la definamos ahí pero la llamaremos ahí seguro)
-paths_TCGA = {
-    "rbp_path": "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/RBPs_log2p_tpm.csv",
-    "isoform_expr_path": "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/trans_log2p_tpm.csv",
-    "metadata_path": "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/phenotype_metadata.csv",
-    "gene_expr_path": "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/gn_expr_each_iso_tpm.csv"
-    }
-    
-# Path a los archivos de configuración
-path_configs = '/scratch/jsanchoz/DeepRBP/src/deeprbp/configs'
-path_config = os.path.join(path_configs, 'config_tcga_train.yaml')
-
-# Cargar configuración [Caso 1) config train TCGA]
-config = load_config(path_config)
-output_dir = config['output_dir']
-#source_name = config['source_name']
-batch_size = config['batch_size']
-epochs = config['epochs']
-
-# # -------------------
-# # CARGA DE DATOS
-# # -------------------
-# -----------------
-data_importer = DataImporter(paths_TCGA)
-data = data_importer.load()
-
-# Usar las funciones auxiliares directamente
-selected_sample_ids = get_sample_ids_by_type(
-        data["metadata_df"], config['sample_category'], config['select_samples']
-    )
-data = filter_data_by_sample_ids(data, selected_sample_ids)
-
-# Verificamos si se necesita hacer el split
-if config["train_test_split"] or config["train_val_split"]:
-    # Si es necesario dividir los datos, instanciamos el DataSplitter
-    splitter = DataSplitter(data, config)
-    train_data, valid_data, test_data = splitter.split_data_sets()  # Llamamos a split_data_sets
-else:
-    # Si no se necesita división, simplemente usamos los datos tal cual
-    train_data, valid_data, test_data = data, None, None  # No se hace ninguna división
-
-# Ahora puedes trabajar directamente con los datasets
-print(train_data['metadata_df'])
-print(valid_data['metadata_df'])
-print(test_data['metadata_df'])
-##
-# Case 1: No existing scaler and sigma provided, fit the scaler externally
-scaler = Scaler()  # Initialize Scaler with no existing scaler/sigma
-
-# Fit the scaler using training data (e.g., train_data['rbp'])
-scaler.fit(train_data['rbp_expr_df'])
-
-# Now use the fitted scaler to transform train, validation, and test sets
-train_data['scaled_rbp_expr_df'] = scaler.transform(train_data['rbp_expr_df'])
-valid_data['scaled_rbp_expr_df'] = scaler.transform(valid_data['rbp_expr_df'])
-test_data['scaled_rbp_expr_df'] = scaler.transform(test_data['rbp_expr_df'])
-
-# Guardar el scaler, sigma
-scaler_path = os.path.join(output_dir, 'scaler')
-scaler.save(folder_path=f"{scaler_path}/scaler_data")
-# # Case 2: Existing scaler and sigma provided, no need to fit again
-# Cargar el Scaler existente
-#loaded_scaler = Scaler.load(folder_path=f"{scaler_path}/scaler")
-#train_data['scaled_rbp_expr_df'] = loaded_scaler.transform(train_data['rbp_expr_df'])
-
-# Guardar datasets procesados
-save_processed_data(train_data, os.path.join(output_dir, 'train_data'))
-save_processed_data(valid_data, os.path.join(output_dir, 'valid_data'))
-save_processed_data(test_data, os.path.join(output_dir, 'test_data'))
-#loaded_train_data = load_processed_data(path)
-
-# ahora crear el Dataset y Loader
-# Paso 1: Crear instancia de CustomTensorDataset
-train_dataset = CustomTensorDataset(train_data)  
-valid_dataset = CustomTensorDataset(valid_data) 
-test_dataset = CustomTensorDataset(test_data)    
-
-# Paso 2: Crear DataLoader
-train_loader = DataLoader(
-            train_dataset, adjust_batch_size(train_dataset, batch_size), 
-            drop_last=True, shuffle=True)
-val_loader = DataLoader(
-            valid_dataset, adjust_batch_size(valid_dataset, batch_size*2), shuffle=False)
-test_loader = DataLoader(test_dataset, 
-            adjust_batch_size(test_dataset, batch_size*2), shuffle=False)
-
-model = Model(input_size=1348, output_size=11459, config=config)
-# Semilla para reproducibilidad
-torch.manual_seed(42)
-
-output_dir = f'{dataset.output_dir}/results_training'
-device = model.device
-epochs = 100
-
-train_isoform_predictor(model=model, 
-            epochs=epochs, 
-            train_loader=train_loader, 
-            val_loader=val_loader, 
-            save_results=False, 
-            #output_dir=output_dir, 
-            model_name='model.pt', 
-            print_every=1, 
-            device=device)
-
 ##################################################################
 ##################################################################
 ##################################################################
-
-    # 7. Do predictions on test data TCGA and GTEX
-    data_test = get_data(config, path_data, set_mode='test')
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    results_tcga, results_gtex = perform_predictions_on_test_data(
-                                    config, 
-                                    data_test, 
-                                    data_scale, 
-                                    model, 
-                                    device, 
-                                    path_data, 
-                                    path_save_files=path_save_files, 
-                                    plot_results=plot_results)
-    results_tcga.to_csv("results_tcga.csv", index=False)
-    results_gtex.to_csv("results_gtex.csv", index=False)
-    print('[main] Do predictions on test data TCGA and GTEX ... -> DONE\n')
-
-
-
-
-
-
-
-
 ########################################################################################################
 
 path_configs = '/scratch/jsanchoz/DeepRBP/src/deeprbp/configs'

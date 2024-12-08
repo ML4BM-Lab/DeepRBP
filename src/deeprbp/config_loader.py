@@ -37,8 +37,8 @@ def generate_unique_id(config: Config, suffix_length: int = 3) -> str:
     timestamp = datetime.now().strftime("%Y-%m-%d")
     source_train = config.source_name
     tumor_types = '-'.join([t.split('_')[0] for t in config.select_samples])
-    # Generate a random alphanumeric suffix to ensure uniqueness
-    suffix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=suffix_length))
+    # Generate a random numeric suffix to ensure uniqueness
+    suffix = ''.join(random.choices(string.digits, k=suffix_length))
     return f"{source_train}_{tumor_types}_{timestamp}_{suffix}"
 
 def load_config(yaml_path: str) -> Config:

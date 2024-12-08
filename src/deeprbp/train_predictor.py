@@ -76,11 +76,12 @@ class TrainPredictor:
                 true_values.append(targets.cpu().numpy())
                 predictions.append(out.detach().cpu().numpy())
         true_values = np.concatenate(true_values).flatten()
-        predictions = np.concatenate(predictions).flatten()
-        return predictions, true_values
-    
-    def save_model_and_metrics(self, output_dir, model_name, train_history, val_history):
-        """Saves the model and training metrics to the specified directory."""
+        concatenated_predictions = np.concatenate(predictions)
+        flattened_predictions = concatenated_predictions.flatten()
+        return flattened_predictions, true_values, concatenated_predictions
+
+    def save_model_and_training_history(self, output_dir, model_name, train_history, val_history):
+        """Saves the model and training history to the specified directory."""
         # Save the model
         os.makedirs(output_dir, exist_ok=True)
         torch.save(self.model.state_dict(), os.path.join(output_dir, model_name))
@@ -90,5 +91,6 @@ class TrainPredictor:
             "train_loss": train_history,
             "val_loss": val_history
         })
-        metrics_df.to_csv(os.path.join(output_dir, "training_metrics.csv"), index=False)
-        print(f'Model and training metrics saved successfully in {output_dir}')
+        metrics_df.to_csv(os.path.join(output_dir, "training_history.csv"), index=False)
+        # aqui entraría guay un plot de la history
+        print(f'Model and training history saved successfully in {output_dir}')
