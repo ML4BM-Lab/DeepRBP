@@ -5,9 +5,11 @@ import seaborn as sns
 import numpy as np
 from typing import Dict, List, Union
 
+from utils import ensure_directory_exists
+
 def scatter_real_vs_pred(
     category: str,
-    config: Dict[str, Union[str, Dict]],
+    source_name: str,
     metrics: Dict[str, float],
     pred: Union[List[float], np.ndarray],
     labels: Union[List[float], np.ndarray],
@@ -21,8 +23,7 @@ def scatter_real_vs_pred(
     -----------
     category : str
         The category of the samples (e.g., cancer type or dataset name).
-    config : Dict[str, Union[str, Dict]]
-        Configuration dictionary containing metadata and source name.
+    source_name (str): Name of the data source, used for saving results.
     metrics : Dict[str, float]
         Dictionary of evaluation metrics: Spearman correlation, Pearson correlation, MSE, R².
     pred : Union[List[float], np.ndarray]
@@ -40,7 +41,7 @@ def scatter_real_vs_pred(
     plt.figure(figsize=(12, 12))
     plt.xlabel('Predicted Values', fontsize=16, fontweight='bold')
     plt.ylabel('Real Values', fontsize=16, fontweight='bold')
-    plt.title(f'Real vs Predicted: {category} ({config["source_name"]})', fontsize=18, fontweight='bold')
+    plt.title(f'Real vs Predicted: {category} ({source_name})', fontsize=18, fontweight='bold')
 
     sns.regplot(
         x=pred, y=labels,
@@ -61,12 +62,44 @@ def scatter_real_vs_pred(
     )
 
     sns.set_style("whitegrid")
-    output_path = os.path.join(output_dir, f"{category}-{config['source_name']}.png")
-    os.makedirs(output_dir, exist_ok=True) 
+    ensure_directory_exists(output_dir)
+
+    output_path = os.path.join(output_dir, f"{category}-{source_name}.png")
     plt.tight_layout()
     plt.savefig(output_path, dpi=300)
     plt.close()
     print(f"Plot saved at: {output_path}")
+
+def plot_loss_curve(train_history: List[float], val_history: List[float], 
+                    title: str = 'Training and Validation Loss', 
+                    output_dir: str = None) -> None:
+    """
+    Plots the training and validation loss curves to visualize the performance of the model over time.
+
+    Parameters:
+    - train_history (List[float]): List of training loss values for each epoch.
+    - val_history (List[float]): List of validation loss values for each epoch.
+    - title (str): Title of the plot (default is 'Training and Validation Loss').
+    - output_dir (str): Path to save the plot as a .png file.
+
+    Returns:
+    - None: The function will save the plot.
+    """
+    ensure_directory_exists(output_dir)
+    plt.style.use('seaborn-v0_8-muted')
+    plt.figure(figsize=(12, 8))
+    # Plot both training and validation loss
+    plt.plot(train_history, label='Training Loss', color='royalblue', linestyle='-', linewidth=2.5)
+    plt.plot(val_history, label='Validation Loss', color='darkorange', linestyle='--', linewidth=2.5)
+    plt.title(title, fontsize=20, fontweight='bold', pad=15)
+    plt.xlabel('Epoch', fontsize=16, labelpad=10)
+    plt.ylabel('Loss', fontsize=16, labelpad=10)
+    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.legend(fontsize=14, loc='upper right', frameon=True, shadow=True, fancybox=True)
+    plt.tight_layout(pad=2)
+    plt.savefig(os.path.join(output_dir, 'loss_curve.png'), dpi=300)
+    plt.close()
+    print(f"Plot saved to {output_dir}")
 
 def plot_transcript_to_gene_ratio_distributions(
     ratios_pred: np.ndarray,
@@ -106,7 +139,6 @@ def plot_transcript_to_gene_ratio_distributions(
     plt.text(mean_label + 0.1, plt.ylim()[1] * 0.9, f'Mean: {mean_label:.3f}\nSTD: {std_label:.3f}', color=color_label, fontsize=9)
     # Adjust layout
     plt.tight_layout()
-    # Save the figure
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    ensure_directory_exists(os.path.dirname(output_path))
     plt.savefig(output_path, dpi=300)
     plt.close()

@@ -78,37 +78,22 @@ def adjust_batch_size(dataset, batch_size):
     """
     return min(len(dataset), batch_size)
 
+def ensure_directory_exists(directory: str) -> None:
+    """
+    Ensures the given directory exists. If it doesn't, it creates it.
+
+    Parameters:
+    -----------
+    directory : str
+        Path of the directory to check/create.
+    
+    Returns:
+    --------
+    None
+    """
+    if directory and not os.path.exists(directory):
+        os.makedirs(directory, exist_ok=True)
+
 
 ### ### ### ### ### ### ### ### ### ### ### ### ###
 
-# esta función todavía no me convence mucho
-# def save_metrics_global(
-#     tuple_metrics: Tuple[Dict[str, float], Dict[str, float], Dict[str, float]],
-#     path: str,
-#     tuple_setnames: Tuple[str, str, str] = ('train', 'val', 'test')
-#     ) -> pd.DataFrame:
-#     """
-#     Saves global metrics for different sets (e.g., train, val, test) into a DataFrame.
-
-#     Args:
-#     tuple_metrics: A tuple containing dictionaries of metrics for each set (e.g., (metrics_train, metrics_val, metrics_test)).
-#     tuple_setnames: A tuple containing the names of the sets (default is ('train', 'val', 'test')).
-#     path Path where the DataFrame should be saved.
-
-#     Returns:
-#     pd.DataFrame: A DataFrame with the sets as rows and metrics as columns.
-#     """
-#     metrics_dict = {setname: metrics for setname, metrics in zip(tuple_setnames, tuple_metrics)}
-#     df = pd.DataFrame(metrics_dict).T
-#     if path:
-#         df.to_csv(f'{path}/metrics_global.csv', index=False)
-#     print(df)
-
-# # working on this one:
-# def save_metrics_per_category(
-#     tuple_metrics: Tuple[Dict[str, Dict[str, float]]],
-#     setname: str,
-#     tuple_setnames: Tuple[str, str, str] = ('train', 'val', 'test'),
-#     path: str = None
-# ) -> pd.DataFrame:
-    

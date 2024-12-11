@@ -80,17 +80,10 @@ class TrainPredictor:
         flattened_predictions = concatenated_predictions.flatten()
         return flattened_predictions, true_values, concatenated_predictions
 
-    def save_model_and_training_history(self, output_dir, model_name, train_history, val_history):
-        """Saves the model and training history to the specified directory."""
+    def save_model(self, output_dir, model_name):
+        """Saves the model to the specified directory."""
         # Save the model
         os.makedirs(output_dir, exist_ok=True)
         torch.save(self.model.state_dict(), os.path.join(output_dir, model_name))
-        # Save training metrics
-        metrics_df = pd.DataFrame({
-            "epoch": list(range(len(train_history))),
-            "train_loss": train_history,
-            "val_loss": val_history
-        })
-        metrics_df.to_csv(os.path.join(output_dir, "training_history.csv"), index=False)
-        # aqui entraría guay un plot de la history
-        print(f'Model and training history saved successfully in {output_dir}')
+        print(f'Model saved successfully in {output_dir}')
+        

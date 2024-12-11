@@ -1,4 +1,4 @@
-# config.yaml
+# config_tcga_train.yaml
 source_name: "TCGA"
 
 # Paths for the data files
@@ -31,7 +31,8 @@ training:
   train_val_split: true
   test_fraction: 0.2  # Fraction of data to reserve for testing
   val_fraction: 0.15  # Fraction of training data to reserve for validation
-
+  seed: 0
+  
 # Sample selection
 sample_category: "detailed_category"  # The column in metadata to stratify on
 #select_samples: ["all"]  # Puede ser 'all' o una lista de tipos de muestras específicas
@@ -39,7 +40,6 @@ select_samples:
   - "Lung_Adenocarcinoma"
   - "Breast_Invasive_Carcinoma"
 output_dir: ""  # Se generará automáticamente si no se especifica
-seed: 0
 plot_results: True
 
 

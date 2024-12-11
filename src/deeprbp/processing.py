@@ -53,7 +53,6 @@ class DataImporter:
         """
         Ensure the indices are consistent across all datasets.
         """
-        
         rbp_ids = self.data["rbp_expr_df"].index
         gene_ids = self.data["gene_expr_df"].index
         trans_ids = self.data["trans_expr_df"].index
@@ -115,7 +114,7 @@ class DataSplitter:
         This function handles the splitting of data into train, validation, and test sets based on the config.
         """
         train_data, valid_data, test_data = {}, {}, {}
-        if self.config["training"]["train_test_split"]:
+        if self.config["train_test_split"]:
             print("Performing train/test split...")
             self.train_idx, self.test_idx = self.split_data(data=self.data, test_size=self.config['test_fraction'])
             print("Writing set_type in metadata after train/test split")
@@ -124,7 +123,7 @@ class DataSplitter:
             train_data = filter_data_by_sample_ids(self.data, index2id(self.id2index_mapping, self.train_idx))
             test_data = filter_data_by_sample_ids(self.data, index2id(self.id2index_mapping, self.test_idx))
 
-        if self.config["training"]["train_val_split"]:
+        if self.config["train_val_split"]:
             print("Performing train/val split...")
             training_data = filter_data_by_sample_ids(self.data, index2id(self.id2index_mapping, self.train_idx)) 
             self.train_idx, self.valid_idx = self.split_data(data=training_data, test_size=self.config['val_fraction'])

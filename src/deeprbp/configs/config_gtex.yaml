@@ -1,10 +1,25 @@
+# config_gtex.yaml
 source_name: "GTEX"
-train_test_split: false
-train_val_split: false
+
+# Paths for the data files
+data_paths:
+  rbp_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/GTEX/RBPs_log2p_tpm.csv"
+  isoform_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/GTEX/trans_log2p_tpm.csv"
+  metadata_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/GTEX/phenotype_metadata.csv"
+  gene_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/GTEX/gn_expr_each_iso_tpm.csv"
+  getBM_path: "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/getBM.csv" 
+
+# Training configuration
+training:
+  train_test_split: false
+  train_val_split: false
+  test_fraction: 0
+  val_fraction: 0
+
+# Sample selection
+sample_category: "detailed_category"  # The column in metadata to stratify on
+select_samples: ["all"]  # Puede ser 'all' o una lista de tipos de muestras específicas
+output_dir: ""  # Se generará automáticamente si no se especifica
 seed: 0
-batch_size: 128
-fit_scaler: false
-cuda: true
-epochs: 1000
-sample_category: "detailed_category"
-output_dir: "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_Lung-Breast_2024-11-06/train_prediction_model"
+plot_results: True
+

@@ -2,7 +2,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Dict, Any
+from typing import Any
 
 class PredictorModel(nn.Module):
     """Create a neural network with multiple hidden layers allowing for flexible configuration of each layer's node count. 
@@ -25,9 +25,9 @@ class PredictorModel(nn.Module):
     def __init__(self, config: Any, input_size: int = None, output_size: int = None):
         super(PredictorModel, self).__init__()
         # Model configuration
-        config = config['model']
-        self.input_size = input_size if input_size is not None else model_config['input_size']
-        self.output_size = output_size if output_size is not None else model_config['output_size']
+        #config = config['model']
+        self.input_size = input_size if input_size is not None else config['input_size']
+        self.output_size = output_size if output_size is not None else config['output_size']
         self.num_hidden_layers = config.get('num_hidden_layers', 1)
         self.max_nodes = config['max_node']
         self.uniform_nodes = config['uniform_nodes']

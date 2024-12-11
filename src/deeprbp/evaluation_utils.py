@@ -91,8 +91,7 @@ def analyze_transcript_to_gene_ratios(
     genes_df: pd.DataFrame,
     category: str,
     output_dir: str,
-    config: Dict[str, Union[str, int]],
-):
+    source_name: str):
     """
     Calculates and plots histograms of the predicted and labeled transcript-to-gene expression ratios.
     Saves the histogram in the specified output directory.
@@ -107,18 +106,22 @@ def analyze_transcript_to_gene_ratios(
     pred_ratios = calculate_ratios(pred_agg, genes_filtered)
     label_ratios = calculate_ratios(label_agg, genes_filtered)
     # 4. Plot histograms
-    output_path = os.path.join(
-        output_dir, f"histogram_ratio_{category}-{config['source_name']}.png"
-    )
-    plot_transcript_to_gene_ratio_distributions(pred_ratios, label_ratios, config["source_name"], output_path)
-
+    #output_path = os.path.join(
+    #    output_dir, f"histogram_ratio_{category}-{config['source_name']}.png")
+    #plot_transcript_to_gene_ratio_distributions(pred_ratios, label_ratios, config["source_name"], output_path)
+    output_path = os.path.join(output_dir, f"histogram_ratio_{category}-{source_name}.png")
+    plot_transcript_to_gene_ratio_distributions(pred_ratios, label_ratios, source_name, output_path)
 
 def calculate_metrics_per_category(
     test_data: Dict[str, pd.DataFrame], 
-    config: Dict[str, Any], 
     trainer: Any,
     output_dir: str,
-    set_name: str) -> List[Dict[str, float]]:
+    set_name: str,
+    sample_category: str,
+    batch_size: int,
+    source_name: str,
+    plot_results: bool = False,
+    getBM_path: str = None) -> List[Dict[str, float]]:
     """
     Calculates metrics for each category in the test dataset, including:
     - Performance metrics for each category (e.g., accuracy, precision, recall).
@@ -127,9 +130,14 @@ def calculate_metrics_per_category(
 
     Args:
         test_data (Dict[str, pd.DataFrame]): Test dataset including metadata, scaled features, and true labels.
-        config (Dict[str, Any]): Configuration dictionary containing category and batch size information.
         trainer (Any): Trainer object with `generate_predictions`.
         output_dir (str): Directory path to save results and plots.
+        set_name (str): Name of the dataset being processed.
+        sample_category (str): Column name for the sample categories in the metadata.
+        batch_size (int): Batch size for the DataLoader.
+        source_name (str): Name of the data source, used for saving results.
+        plot_results (bool): Whether to generate plots for predictions and ratios.
+        getBM_path (str): Path to the `getBM` file for mapping transcripts to genes.
 
     Returns:
         List[Dict[str, float]]: List of metrics dictionaries, one for each category.
@@ -138,28 +146,25 @@ def calculate_metrics_per_category(
     metadata_df = test_data['metadata_df']
     metrics_list = []
     set_names_list = []
-
+    
     for category in categories:
         print(f"Processing category: {category}")
         # Filter samples for the current category
-        category_samples = metadata_df.loc[metadata_df[config['sample_category']] == category].index
-        
+        category_samples = metadata_df.loc[metadata_df[sample_category] == category].index
         # Filter test data for selected samples
         test_subset = filter_data_by_sample_ids(data=test_data, selected_sample_ids=category_samples)
-        
         # Create DataLoader
         test_loader = DataLoader(
             CustomTensorDataset(test_subset), 
-            batch_size=adjust_batch_size(test_subset['scaled_rbp_expr_df'], config['training']['batch_size'] * 2)
+            batch_size=adjust_batch_size(test_subset['scaled_rbp_expr_df'], batch_size * 2)
         )
-        
         # Generate predictions and calculate metrics
         predictions, true_values, predictions_matrix = trainer.generate_predictions(test_loader)
         metrics = calculate_metrics(predictions, true_values)
         print(f"Metrics for category {category}: {metrics}")
         metrics_list.append(metrics)
         set_names_list.append(category)
-
+        # Prepare data for visualization
         labels_df = test_subset['trans_expr_df']
         pred_df = pd.DataFrame(
                     predictions_matrix, 
@@ -167,26 +172,27 @@ def calculate_metrics_per_category(
                     index=category_samples)
         genes_df = test_subset['gene_expr_df']
 
-        if config.get('plot_results', False):   
-            # Plot real vs pred values
+        # Optional: Plot results
+        if plot_results:
             scatter_real_vs_pred(
                 category=category,
-                config=config,
+                source_name=source_name,
                 metrics=metrics,
                 pred=predictions,
                 labels=true_values,
-                output_dir=os.path.join(output_dir, 'scat_plot_real_vs_pred_value', config["source_name"], set_name, category)
+                output_dir=os.path.join(output_dir, 'scat_plot_real_vs_pred_value', source_name, set_name, category),
             )
 
-            if config['data_paths'].get('getBM_path'):
-                getBM = pd.read_csv(config['data_paths']['getBM_path']) 
+            if getBM_path:
+                getBM = pd.read_csv(getBM_path)
                 analyze_transcript_to_gene_ratios(
                     getBM=getBM,
                     pred_df=pred_df,
                     labels_df=labels_df,
                     genes_df=genes_df,
                     category=category,
-                    output_dir=os.path.join(output_dir, 'pred_label_expression_ratio_histogram', config["source_name"], set_name, category),
-                    config=config,
+                    output_dir=os.path.join(output_dir, 'pred_label_expression_ratio_histogram', source_name, set_name, category),
+                    source_name=source_name,
                 )
+
     return metrics_list, set_names_list
