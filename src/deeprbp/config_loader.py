@@ -13,16 +13,19 @@ class Config:
     """
     source_name: str
     data_paths: Dict[str, str]
-    model: Dict[str, Any]
-    training: Dict[str, Any]
     sample_category: str
     select_samples: List[str]
+    model: Dict[str, Any]
+    training: Dict[str, Any] = field(default_factory=dict)
+    explainability: Dict[str, Any] = field(default_factory=dict)
     output_dir: str = field(default_factory=str)
     seed: int = 0
     plot_results: bool = False
+
     def __getitem__(self, key: str) -> Any:
         """ Access configuration values using dictionary-style indexing. """
         return self.get(key)
+    
     def get(self, key: str, default=None) -> Any:
         """ Retrieve a value for a given key, or raise an exception if key does not exist. """
         value = self[key]
@@ -57,6 +60,7 @@ class ConfigParser:
                     'optimizer_name': "adamW",
                     'cuda': True
                 },
+
                 'training': {
                     'epochs': 100,
                     'batch_size': 128,
@@ -66,8 +70,21 @@ class ConfigParser:
                     'test_fraction': 0.2,
                     'val_fraction': 0.15
                 },
-                'sample_category': '',
-                'select_samples': ['no_samples'],  # Valor por defecto si no se especifica
+
+                'explainability': {  # Nueva sección para la explicación
+                    'trained_model_path': '',
+                    'model_file': '',
+                    'scaler_path': '',
+                    'explanation_method': 'DeepLIFT',
+                    'reference_data': 'knockdown_reference',
+                    'batch_reduction_method': 't-statistic',
+                    'gene_collapse_method': 'max_absolute_value',
+                    'postar_matrix_path': '',
+                    'postar_file': ''
+                },
+
+                'sample_category': 'detailed_category',
+                'select_samples': ['all'],  # Valor por defecto si no se especifica
                 'output_dir': '',
                 'seed': 0,
                 'plot_results': False
@@ -120,90 +137,10 @@ class ConfigParser:
         }
     
     def get_model_training_config(self) -> Dict[str, Any]:
-        """
-        Retrieves the combined model and training configurations.
-        
-        Returns:
-        - dict: Combined dictionary of model and training configurations.
-        """
         return {
             **self.config.model,  # Merge model configuration
             **self.config.training  # Merge training configuration
         }
-
-
-# ######################## version old maybe? ####################
-# @dataclass
-# class Config:
-#     source_name: str
-#     data_paths: Dict[str, str]
-#     model: Dict[str, any]
-#     training: Dict[str, any]
-#     sample_category: str
-#     select_samples: List[str]
-#     output_dir: str = field(default_factory=str)
-#     seed: int = 0
-#     plot_results: bool = False
-
-#     def __getitem__(self, key: str) -> Any:
-#         #First, we try to get the value of the class attributes.
-#         if hasattr(self, key):
-#             return getattr(self, key)
-#         #Si no está en los atributos, intentamos acceder a los valores dentro de data_paths o cualquier otro diccionario.
-#         if key in self.data_paths:
-#             return self.data_paths[key]
-#         if key in self.model:
-#             return self.model[key]
-#         if key in self.training:
-#             return self.training[key]
-#         raise KeyError(f"[Config] Key '{key}' not found in the configuration.")
-
-#     def get(self, key: str, default=None) -> Any:
-#         """Return the value for a given key, or default if key doesn't exist."""
-#         try:
-#             return self[key]  # Uses __getitem__
-#         except KeyError:
-#             return default
-
-# def generate_unique_id(config: Config, suffix_length: int = 3) -> str:
-#     """Generates a unique identifier for the configuration based on the source name and selected tumor types."""
-#     timestamp = datetime.now().strftime("%Y-%m-%d")
-#     source_train = config.source_name
-#     tumor_types = '-'.join([t.split('_')[0] for t in config.select_samples])
-#     # Generate a random numeric suffix to ensure uniqueness
-#     suffix = ''.join(random.choices(string.digits, k=suffix_length))
-#     return f"{source_train}_{tumor_types}_{timestamp}_{suffix}"
-
-# def load_config(yaml_path: str) -> Config:
-#     """Loads the configuration from a YAML file and returns a Config object."""
-#     print('[load_config] Loading configuration... Let\'s make some magic! 💫')
-
-#     try:
-#         with open(yaml_path, 'r') as file:
-#             config_dict = yaml.safe_load(file)
-        
-#         # Ensure all required configuration keys are present
-#         required_keys = ['source_name', 'data_paths', 'model', 'training', 'sample_category', 'select_samples', 'seed', 'plot_results']
-#         for key in required_keys:
-#             if key not in config_dict:
-#                 raise KeyError(f"[load_config] Missing required key: {key} in the configuration file.")
-
-#         # Create the Config object
-#         config = Config(**config_dict)
-
-#         # If output_dir is not specified, generate a unique path
-#         if not config.output_dir.strip():
-#             print('[load_config] output_dir is empty, generating a unique path... 🎯')
-#             unique_id = generate_unique_id(config)
-#             config.output_dir = f'/scratch/jsanchoz/DeepRBP/output/results/analysis/{unique_id}/train_prediction_model'
-#         return config
-
-#     except FileNotFoundError:
-#         print(f"[load_config] Error: The YAML file '{yaml_path}' was not found.")
-#         raise
-#     except yaml.YAMLError as e:
-#         print(f"[load_config] Error parsing the YAML file: {e}")
-#         raise
-#     except Exception as e:
-#         print(f"[load_config] An unexpected error occurred: {e}")
-#         raise
+    
+    def get_explainability_config(self) -> Dict[str, Any]:
+        return self.config.explainability 

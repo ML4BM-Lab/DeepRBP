@@ -5,7 +5,7 @@ import seaborn as sns
 import numpy as np
 from typing import Dict, List, Union
 
-from utils import ensure_directory_exists
+from .utils import ensure_directory_exists
 
 def scatter_real_vs_pred(
     category: str,

@@ -28,14 +28,13 @@ setup(
         "openpyxl",
         "captum",        
         "optuna",        
-        "joblib"  
+        "joblib"
     ],
-
     entry_points={
         'console_scripts': [
             'prepare-model-inputs=src.deeprbp.data_preprocessing.prep_model_inputs:main',
+            'run-deeprbp-predictor=src.deeprbp.predictor_pipeline:main'
         ],
     },
-    zip_safe=False
+    zip_safe=False,
 )
- 

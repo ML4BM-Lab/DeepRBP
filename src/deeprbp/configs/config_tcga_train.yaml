@@ -16,7 +16,7 @@ model:
   num_hidden_layers: 2
   max_node: 1024
   uniform_nodes: True
-  node_shrink_factor: 2
+  node_shrink_factor: 8
   activation_func: "relu"
   learning_rate: 0.001
   optimizer_name: "adamW"
@@ -24,7 +24,7 @@ model:
 
 # Training configuration
 training:
-  epochs: 100
+  epochs: 1000
   batch_size: 128
   print_every: 10  # Print progress every N epochs
   train_test_split: true
@@ -35,10 +35,10 @@ training:
   
 # Sample selection
 sample_category: "detailed_category"  # The column in metadata to stratify on
-#select_samples: ["all"]  # Puede ser 'all' o una lista de tipos de muestras específicas
-select_samples:
-  - "Lung_Adenocarcinoma"
-  - "Breast_Invasive_Carcinoma"
+select_samples: ["all"]  # Puede ser 'all' o una lista de tipos de muestras específicas
+#select_samples:
+#  - "Lung_Adenocarcinoma"
+#  - "Breast_Invasive_Carcinoma"
 output_dir: ""  # Se generará automáticamente si no se especifica
 plot_results: True
 

@@ -7,8 +7,8 @@ from scipy.stats import spearmanr, pearsonr
 from sklearn.metrics import mean_squared_error, r2_score
 from typing import Tuple, List, Dict, Any, Union
 
-from utils import CustomTensorDataset, adjust_batch_size, filter_data_by_sample_ids
-from plots import scatter_real_vs_pred, plot_transcript_to_gene_ratio_distributions
+from .utils import CustomTensorDataset, adjust_batch_size, filter_data_by_sample_ids
+from .plots import scatter_real_vs_pred, plot_transcript_to_gene_ratio_distributions
 
 def calculate_metrics(predictions, true_values):
     """

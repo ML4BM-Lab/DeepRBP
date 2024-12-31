@@ -80,10 +80,10 @@ class TrainPredictor:
         flattened_predictions = concatenated_predictions.flatten()
         return flattened_predictions, true_values, concatenated_predictions
 
-    def save_model(self, output_dir, model_name):
-        """Saves the model to the specified directory."""
-        # Save the model
-        os.makedirs(output_dir, exist_ok=True)
-        torch.save(self.model.state_dict(), os.path.join(output_dir, model_name))
-        print(f'Model saved successfully in {output_dir}')
+    # def save_model(self, output_dir, model_name):
+    #     """Saves the model to the specified directory."""
+    #     # Save the model
+    #     os.makedirs(output_dir, exist_ok=True)
+    #     torch.save(self.model.state_dict(), os.path.join(output_dir, model_name))
+    #     print(f'Model saved successfully in {output_dir}')
         

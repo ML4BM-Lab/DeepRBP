@@ -8,7 +8,7 @@ from tqdm import tqdm
 import warnings
 import argparse
 import timeit
-from verification_output import save_processed_patients_to_excel, compare_patients_with_excel
+from stuff.verification_output import save_processed_patients_to_excel, compare_patients_with_excel
 
 def prepare_inputs( 
     raw_data_dir: str, 

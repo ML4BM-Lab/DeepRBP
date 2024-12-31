@@ -1,7 +1,7 @@
 
-# DeepRBP
-## A novel deep neural network for inferring splicing regulation
+# DeepRBP: A novel deep neural network for inferring splicing regulation
 #### Publication: https://doi.org/10.1101/2024.04.11.589004
+
 <p align="center">
   <a href="https://www.python.org/downloads/release/python-390/">
     <img src="https://img.shields.io/badge/Python-3.9%2B-blue.svg" alt="Python Version">
@@ -22,11 +22,17 @@
     <img src="images/methods_deepsf.png" width="700" alt="PDF Image">
 </p>
 
-Alternative splicing plays a pivotal role in various biological processes. In the context of cancer, aberrant splicing patterns can lead to disease progression and treatment resistance. 
-Understanding the regulatory mechanisms underlying alternative splicing is crucial for elucidating disease mechanisms and identifying potential therapeutic targets.
-We present DeepRBP, a deep learning (DL) based framework to identify potential RNA-binding proteins (RBP)-Gene regulation pairs for further in-vitro validation. DeepRBP is composed of a DL model 
-that predicts transcript abundance given RBP and gene expression data coupled with an explainability module that computes informative RBP-
-Gene scores using DeepLIFT. We show that the proposed framework is able to identify known RBP-Gene regulations, demonstrating its applicability to identify new ones.
+Alternative splicing plays a pivotal role in various biological processes. In the context of cancer, aberrant splicing patterns can lead to disease progression and treatment resistance. Understanding the regulatory mechanisms underlying alternative splicing is crucial for elucidating disease mechanisms and identifying potential therapeutic targets.  
+We present DeepRBP, a deep learning (DL)-based framework to identify potential RNA-binding protein (RBP)-Gene regulation pairs for further *in-vitro* validation. DeepRBP is composed of:  
+
+1. **Prediction module:** A DL model that predicts transcript abundance given RBP and gene expression data.  
+2. **Explainability module:** Computes informative RBP-Gene scores using DeepLIFT.
+
+Why Use DeepRBP?
+Experimental methods like CLIP are expensive, labor-intensive, and require prior knowledge of the target RBP. DeepRBP offers a computational alternative, predicting regulatory interactions without these constraints. This approach is cost-effective, scalable, and capable of uncovering complex multi-RBP interactions often missed by traditional methods.
+
+DeepRBP has been validated on cancer datasets like TCGA, revealing potential novel regulatory relationships in AML, KICH, and HCC.
+---
 
 ## Installation
 To install **DeepRBP**, follow these steps:
@@ -39,25 +45,19 @@ conda activate DeepRBP # conda activate /data/jsanchoz/conda-env/DeepRBP
 pip install -e .
 ```
 
-## Datasets information
-In this project, we have used several databases. On one hand, we have used a cohort that contains, among others, samples from TCGA and GTEx. The samples from the former have been used to train the DeepRBP predictor that learns transcript abundances, and the samples from GTEx have been used to evaluate how well the predictive model generalizes.
+# Prediction Module
+## Datasets Information
+In this project, we have used several datasets, including TCGA and GTEx samples. The TCGA samples are used to train the DeepRBP predictor that learns transcript abundances, while GTEx samples are used to evaluate generalization.
 
-On the other hand, the DeepRBP explainer has been validated using TCGA samples from a tumor type to calculate the GxRBP scores and a binary matrix with shape GxRBP indicating whether the evidence in POSTAR3 experiments indicates regulation or not. Also, the DeepRBP explainer has been tested in-vitro knockdown experiments. Below, you are instructed on how to download these data.
-
-### Data Download
-You can download the necessary datasets from the [UCSC Xena platform](https://xenabrowser.net/) (Goldman et al., 2020).
-
-To simplify the process, we provide a script that handles downloading the raw data for this project. To initiate the download, execute the following command (approx. 20 minutes):
+## Data Download
+You can download the necessary datasets from the [UCSC Xena platform](https://xenabrowser.net/) (Goldman et al., 2020). To automate the process, execute (approx. 20 minutes):
 
 ```bash
 sbatch slurm/download_data.sh
 ```
-
 The datasets will be automatically saved to the following directory: `/data/training_module/raw`
 
-### Data preprocessing 
-# Data Preprocessing and Model Input Preparation
-
+## Data Preprocessing
 In this step, we will load and preprocess the raw data files: gene expression (`TcgaTargetGtex_rsem_gene_tpm.gz`), transcript expression (`TcgaTargetGtex_rsem_isoform_tpm.gz`), and phenotype metadata (`TcgaTargetGTEX_phenotype.txt`). These will be used to prepare input matrices for both TCGA and GTEX datasets. Specifically, we will generate:
 
 - **RBP expression matrix**: `RBPs_log2p_tpm.csv` (log2(tpm+1)), derived from the gene expression data, with dimensions `n_patients x num_RBPs`.
@@ -65,8 +65,7 @@ In this step, we will load and preprocess the raw data files: gene expression (`
 - **Gene expression matrix**: `gn_expr_each_iso_tpm.csv` (in TPM) with dimensions `n_patients x num_transcripts`.
 - **Metadata file**: `phenotype_metadata.csv`, containing phenotype information for each sample, indicating tissue or tumor type.
 
-## Process Details
-
+### Process Details
 Among other tasks, this process includes:
 
 1. Cleaning and standardizing phenotype data.
@@ -119,17 +118,218 @@ Alternatively, you can submit this command on an HPC system with Slurm:
 sbatch slurm/generate_model_inputs.sh
 ```
 
-
-
-
-
-  
-
-
-
+# Darle una vuelta a estos dos comentarios:
 # (explicar más en detalle), que entra que sale, como , porque  decir como se consiguen los RBPs, que procesos hacemos etc
 
 # filter TCGA and GTEx samples and save the gene and transcript expression matrices for each dataset. From the gene expression matrix, we create a subset containing the expression of RNA-binding proteins (RBPs) genes, which will serve as the primary input for our model.
+
+## Executing DeepRBP Predictor
+There are three options:
+* Running the Python script 
+* Submitting a job to a HPC queue
+* Running with Docker
+
+---
+
+### **Option 1: Running the Python Script**  
+To execute DeepRBP on the **TCGA** dataset, use a `.yaml` configuration file. Below is an example configuration file:
+
+#### **Example Configuration File (`config.yaml`)**
+
+```yaml
+source_name: "TCGA"
+
+# Paths for the data files
+data_paths:
+  rbp_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/RBPs_log2p_tpm.csv"
+  isoform_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/trans_log2p_tpm.csv"
+  metadata_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/phenotype_metadata.csv"
+  gene_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/gn_expr_each_iso_tpm.csv"
+  getBM_path: "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/getBM.csv"
+
+# Model predictor configuration
+model:
+  input_size: 1348               # Number of input features
+  output_size: 11459             # Number of output isoforms
+  num_hidden_layers: 2           # Number of hidden layers
+  max_node: 1024                 # Maximum nodes per layer
+  uniform_nodes: true            # Uniform node distribution across layers
+  node_shrink_factor: 2          # Factor to reduce nodes per layer
+  activation_func: "relu"        # Activation function
+  learning_rate: 0.001           # Optimizer learning rate
+  optimizer_name: "adamW"        # Optimizer to use
+  cuda: true                     # Set to true for GPU acceleration
+
+# Training configuration
+training:
+  epochs: 1000                   # Total number of training epochs
+  batch_size: 128                # Batch size for training
+  print_every: 10                # Print progress every N epochs
+  train_test_split: true         # Enable train-test split
+  train_val_split: true          # Enable train-validation split
+  test_fraction: 0.2             # Fraction of data reserved for testing
+  val_fraction: 0.15             # Fraction of training data for validation
+  seed: 0                        # Random seed for reproducibility
+
+# Sample selection
+sample_category: "detailed_category"   # Metadata column used for stratification
+select_samples:                       # Specify sample categories to include
+  - "Lung_Adenocarcinoma"
+  - "Breast_Invasive_Carcinoma"
+
+output_dir: ""                        # Output directory (generated automatically if not specified)
+plot_results: True                    # Enable visualization of results
+```
+
+where,  
+- **`source_name`**: Name of the dataset being used.  
+- **`data_paths`**: Paths to input data files:  
+  - **`rbp_path`**: File containing RBP expression data.  
+  - **`isoform_expr_path`**: File containing isoform expression data.  
+  - **`metadata_path`**: Metadata file (sample-level information).  
+  - **`gene_expr_path`**: File with gene expression data per isoform.  
+  - **`getBM_path`**: File for selected gene-RBP mappings.  
+- **`model`**: Configuration for the neural network model, including the number of layers, activation function, and optimizer.  
+- **`training`**: Training hyperparameters, including epochs, batch size, and data splits.  
+- **`sample_category`**: Metadata column used to stratify samples.  
+- **`select_samples`**: Specify sample categories to include during training. Use `"all"` to include all samples.  
+- **`output_dir`**: Directory where results will be saved. If not specified, it is generated automatically.  
+- **`plot_results`**: Enable or disable visualization of results.  
+
+**Note**: You can also include a configuration for an external dataset where evaluations will be performed using the already trained model. This is in addition to the test fraction defined from the source dataset. The configuration for this external dataset would look as follows:  
+
+#### **Example: Configuration for External Dataset Evaluation (`config_gtex.yaml`)** 
+
+```yaml
+source_name: "GTEX"
+
+# Paths for the data files
+data_paths:
+  rbp_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/GTEX/RBPs_log2p_tpm.csv"
+  isoform_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/GTEX/trans_log2p_tpm.csv"
+  metadata_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/GTEX/phenotype_metadata.csv"
+  gene_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/GTEX/gn_expr_each_iso_tpm.csv"
+  getBM_path: "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/getBM.csv" 
+
+# Training configuration
+training:
+  train_test_split: false
+  train_val_split: false
+  test_fraction: 0
+  val_fraction: 0
+
+# Sample selection
+sample_category: "detailed_category"  # The column in metadata to stratify on
+select_samples: ["all"]  # Use 'all' to include all samples
+output_dir: ""  # Automatically generated if not specified
+seed: 0
+plot_results: True
+```
+
+Once the config.yaml file is ready, execute the script as follows:
+
+```bash
+run-deeprbp-predictor \
+  --config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_tcga_train.yaml" \
+  --external_config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_gtex.yaml"
+```
+
+### Option 2: Submit a Job in a HPC
+If the number of training datasets or the total number of samples is high, we recommend submitting the job using the provided `run_predictor_pipeline.sh` script from the cluster directory. 
+This script is adapted to Slurm, but can be easily modified to work on SGE. 
+The specific parameters should be adapted depending on the specifications of the HPC.
+
+```bash
+cd slurm
+sbatch run_predictor_pipeline.sh
+```
+### Option 3: Running with Docker
+
+---
+
+
+### Explainability Module
+This module uses the already trained DeepRBP Predictor to compute TxRBP (transcript-by-RBP) and GxRBP (gene-by-RBP) scores using DeepLIFT (Shrikumar, Greenside, and Kundaje, 2017) [Learning important features through propagating activation differences, International Conference on Machine Learning, PMLR, pages 3145–3153].
+
+With DeepLIFT, the contribution of each RBP-Transcript pair is determined for every sample in the input data, resulting in a three-dimensional score matrix with the following dimensions:
+- Number of transcripts 
+- Number of RBPs
+- Number of samples.
+
+Positive scores indicate activation of the transcript, while negative scores indicate transcript inhibition. To obtain a single score indicative of the general behavior of each RBP-Transcript pair, we collapse the scores across samples by computing the t-statistic (labeled as “t-stat”), calculated by the formula:
+\[ \text{t-stat} = \frac{\text{mean}}{\left(\frac{\sigma}{\sqrt{n}}\right)} \]
+where \( n \) represents the number of samples. This results in a score matrix of size: number of transcripts by number of RBPs.
+
+Specific TCGA samples (not presented in the training process) are used to calculate the scores. This module is validated primarily using a binary matrix indicating experimental evidence of regulation in POSTAR3 (Zhao et al., 2022) [POSTAR3: an updated platform for exploring post-transcriptional regulation coordinated by RNA-binding proteins, Nucleic Acids Research, volume 50, D1, pages D287–D294]. POSTAR3 is a comprehensive Post-Transcriptional Regulation database that provides protein binding sites on RNA obtained from CLIP experiments.
+
+Additionally, we have applied our model in in-vitro knockdown experiments.
+
+This module aims to provide insights into how RBPs regulate gene expression. Below is an overview of the validation process and instructions to access the required data.
+
+---
+
+#### Data Access  
+The necessary data for running this module is available through the provided Zenodo link. Below is a description of the files:  
+
+- **Events_Regions_gc23_400nt.RData**: Contains detailed information about the genomic regions associated with the events.  
+- **EventsFound_gencode23.txt**: Provides metadata about the events, including genomic positions, event types, names, and IDs.  
+- **human.txt**: Contains POSTAR3 data, including RNA-binding protein (RBP) binding sites on RNA. This file is tissue-specific and includes data from CLIP experiments as POSTAR peaks.  
+
+To generate a tissue-specific POSTAR matrix, you can use the script `create_gene_rbp_postar_matrix.R`. This script processes the provided files and outputs a matrix customized for a specific tissue.  
+
+**Command example:**  
+
+```bash
+Rscript /scratch/jsanchoz/DeepRBP/src/deeprbp/data_preprocessing/create_gene_rbp_postar_matrix.R \
+    /data/jsanchoz/DeepRBP/data/explainability_module/postar3 \
+    /scratch/jsanchoz/DeepRBP/data/explainability_module/postar3/processed \
+    human_liver \
+    human.txt \
+    Events_Regions_gc23_400nt.RData \
+    EventsFound_gencode23.txt \
+    HepG2,Huh7
+```
+*Argument details*:
+
+- **/path/to/input**: Directory containing the input files.
+- **/path/to/output**: Directory where the processed output will be saved.
+- **human_liver**: The name of the output file.
+- **human.txt**: The POSTAR file containing RBP binding information.
+- **Events_Regions_gc23_400nt.RData**: File specifying the genomic regions of the events.
+- **EventsFound_gencode23.txt**: File with metadata on events, including IDs and positions.
+- **HepG2,Huh7**: Specifies the cell lines from POSTAR experiments to include in the matrix.
+
+By following these steps, you can generate a POSTAR matrix tailored to your specific tissue and experimental needs.
+For AML use the K562 cell-line.
+
+## Executing DeepRBP Explainer
+There are three options:
+* Running the Python script 
+* Submitting a job to a HPC queue
+* Running with Docker
+
+---
+
+### AQUIIII !!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+### **Option 1: Running the Python Script**  
+To execute DeepRBP on the **TCGA** dataset, use a `.yaml` configuration file. Below is an example configuration file:
+
+#### **Example Configuration File (`config.yaml`)**
+
+```yaml
+source_name: "TCGA"
+
+
+
+
+#Lo que antes era Liver_GxRBP.csv ahora se llama human_liver_GxRBP.csv
+
+
+
+
+
+
 
 
 
@@ -161,6 +361,17 @@ sbatch slurm/generate_model_inputs.sh
 │
 │   ├── explainability_module                   # Módulo dedicado a la validación y explicación del modelo
 │   │   ├── postar3                             # Datos de POSTAR3 para validación
+│   │   │   ├── raw
+│   │   │   │   ├── Events_Regions_gc23_400nt.RData # las regiones de los eventos
+│   │   │   │   ├── EventsFound_gencode23.txt # info de los eventos: posición, tipo de evento, nombre, id, etc...
+│   │   │   │   ├── human.txt: Postar3 of the selected tissue: information of the RBPs attatch in genome.
+                        (/data/jsanchoz/DeepRBP/data/explainability_module/postar3 - los primeros 3 docs)
+│   │   │   │   ├── human_postar3_cell_line_info.csv
+
+                # meter aquí los distintos human.txt que se creen
+│   │   │   │ 
+│   │   │   ├── processed
+│   │   │   │   ├── 
 │   │   └── real_kds                            # Datos de experimentos de knockdown (KD)
 │ 
 ├── output/                           # Carpeta para almacenar resultados y modelos entrenados
@@ -209,7 +420,11 @@ sbatch slurm/generate_model_inputs.sh
 
 │   ├── data_preprocessing/  # Preprocesamiento de datos crudos
 │   │   └── prep_model_inputs.py  # Preprocesa los datos TCGA/GTEx para generar matrices de input
-│   │   └── .py  # 
+│   │   └── create_gxrbp.R  # Creates the GxRBP matrix for specific tissues
+
+
+
+
 
 │   └── tests/  # Tests unitarios para el paquete DeepRBP
 │       └── test_data_loader.py  # Test unitario para la clase DataLoader (por ejemplo)
@@ -219,6 +434,7 @@ sbatch slurm/generate_model_inputs.sh
 │   ├── generate_model_inputs.sh  # Script para procesar los datos descargados y generar matrices de input
 │   ├── run_DeepRBP_predictor.sh  # Script para entrenar y evaluar el predictor DeepRBP
 │   └── run_explainability.sh  # Script para ejecutar el módulo de explainability
+
 ├── images  # Imágenes para visualización (por ejemplo, diagramas o ejemplos de resultados)
 
 ├── README.md  # Instrucciones y documentación del proyecto
