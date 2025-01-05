@@ -1,16 +1,13 @@
 ### TRYING THE NEW CODE!!
-
+# aqui hay que poner los puntos relativos.
 import os
 from tqdm import tqdm
-import warnings
-warnings.filterwarnings('ignore')
-from captum.attr import DeepLift
 from config_loader import ConfigParser
 from processing import DataImporter, DatasetLoader, Scaler
 from model import PredictorModel
 from utils import *
 from logger import Logger
-from .deeplift_handler import DeepLiftHandler
+from deeplift_handler import DeepLiftHandler
 
 # from .utils import *
 # from .config_loader import ConfigParser
@@ -18,6 +15,7 @@ from .deeplift_handler import DeepLiftHandler
 # self.base_config = self.config_parser.get_base_config()
 # self.explain_config = self.config_parser.get_explainability_config()
 
+# 1) Obtain GxRBP score matrix
 ### 1) Prepare INPUTS to perform the in-silico validation of our DL model (old title list).
 config_path = '/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_tcga_explain.yaml'
 config_parser = ConfigParser(config_path)
@@ -58,22 +56,15 @@ model = PredictorModel.load_model(
         config=training_config
         )
 
-### 3) Load POSTAR experimental data with GxRBP relationships   
-df_val_GxRBP = pd.read_csv(
-        os.path.join(explain_config['postar_matrix_path'], explain_config['postar_file']), 
-        index_col=0
-)
-
-### 4) Perform DEEPLIFT method
+### 3) Perform DEEPLIFT method
 # Create an instance of DeepLiftHandler
-deeplift_handler = DeepLiftHandler(model, data, explain_config)
+deeplift_handler = DeepLiftHandler(model, data, base_config, explain_config)
 
 # Prepare RBP tensors
 scaled_rbp_tensor, gn_tensor, reference_rbp_tensor = deeplift_handler.prepare_rbp_tensors()
 
 # Compute attribution scores
 list_batch_scores = deeplift_handler.compute_attribution_scores(scaled_rbp_tensor, reference_rbp_tensor, gn_tensor)
-
 # Reduce batch dimension (RBP x T)
 df_deeplift_scores_TxRBP = deeplift_handler.reduce_batch_dimension(list_batch_scores)
 
@@ -84,25 +75,38 @@ df_deeplift_scores_TxRBP = deeplift_handler.filter_scores_for_low_expressed_gene
     threshold=1
 )
 
+# Collapse scores to genes (RBP x G)
+result_table, df_deeplift_scores_GxRBP = deeplift_handler.collapse_transcript_scores_to_genes(df_deeplift_scores_TxRBP)
+
+# Optionally print or use the resulting DataFrames
+print("\nTranscript Scores DataFrame:")
 print(df_deeplift_scores_TxRBP)
+print("\nGene Scores DataFrame:")
+print(df_deeplift_scores_GxRBP)
+print("Result Table:")
+print(result_table)
 
 ####
 ####
 
-# 4) Collapse scores to genes (RBP x G) ME HE QUEDADO AQUI BROTHER !!!
-#### AQUII !!! explain_config['gene_collapse_method'] getBM_path = base_config['data_paths'].get('getBM_path', None)
-getBM = pd.read_csv(getBM_path, index_col=0)
-#path_save_results
-df_deeplift_scores_GxRBP = collapse_transcript_scores_to_genes(
-            df_deeplift_scores_TxRBP, 
-            getBM)
+# ME HE QUEDADO AQUI BROTHER !!!
+### Load POSTAR experimental data with GxRBP relationships   
+df_val_GxRBP = pd.read_csv(
+        os.path.join(explain_config['postar_matrix_path'], explain_config['postar_file']), 
+        index_col=0
+)
 
 
-# Sorting the getBM DataFrame to ensure proper alignment
-getBM_sorted = getBM.sort_values(by='Transcript_ID').reset_index(drop=True)
-# Ensure that df_score_TxRBP's index matches Transcript_ID from getBM
-df_deeplift_scores_TxRBP = df_deeplift_scores_TxRBP.loc[getBM_sorted['Transcript_ID']]
-  
+# 2) Force the matching of the shapes of df_val_GxRBP with the DeepLIFT GxRBP (esto ayudarme de un postar_utils.py)
+# 2.1) Analyze the matched Postar matrix for this cell line
+# 3) Plot DeepLIFT scores vs Postar (esto ayudarme de un x.py - piensa un nombre guay)
+
+# Guardar df_deeplift_scores_TxRBP, df_deeplift_scores_GxRBP y result_table.to_csv(os.path.join(path_save, 'rbp_gene_transcript_scores_results.csv'))
+
+
+######
+
+
 # COMPROBACIONES QUE HAY QUE HACER:
 #•	En Postar3 NO puede haber NaN en los genes, verificar al construir la matriz de Postar si esos genes porque no se matchean que tenemos NaNs! A ÁNGEL le sorprendia igualmenter que a at gene level los NaN sean mas bajos tb.
 #•	Referencias DeepLIFT usar todo 0.5 como referencia? 

@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
-from typing import Tuple, List, Dict
+from typing import Tuple, List, Dict, Optional
 import os
 
 class CustomTensorDataset(Dataset):
@@ -93,3 +93,18 @@ def ensure_directory_exists(directory: str) -> None:
     """
     if directory and not os.path.exists(directory):
         os.makedirs(directory, exist_ok=True)
+
+def get_gene_names_from_ids(gene_ids: List[str], getBM: pd.DataFrame) -> List[Optional[str]]:
+    """
+    Retrieves gene names from a list of Gene_IDs using the getBM DataFrame.
+
+    Parameters:
+    gene_ids (List[str]): A list of Gene_IDs.
+    getBM (pd.DataFrame): A DataFrame that contains the relationship between Gene_ID and Gene_name.
+
+    Returns:
+    List[Optional[str]]: A list of Gene_names corresponding to the provided Gene_IDs.
+                         If a Gene_ID does not have a corresponding Gene_name, None will be returned.
+    """
+    getBM_subset = getBM[['Gene_ID', 'Gene_name']].drop_duplicates().set_index('Gene_ID')
+    return getBM_subset.loc[gene_ids]['Gene_name'].values.tolist()

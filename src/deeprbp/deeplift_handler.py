@@ -1,34 +1,47 @@
 # DeepRBP/src/deeprbp/deeplift_handler.py
 
+import os
 import torch
+from captum.attr import DeepLift
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from .logger import Logger
+from logger import Logger
+from .utils import get_gene_names_from_ids
+
+#import warnings
+#warnings.filterwarnings('ignore')
 
 class DeepLiftHandler:
     ## Solve this: # Suppress specific user warnings
     # warnings.filterwarnings("ignore", message="Input Tensor .* did not already require gradients")
     # warnings.filterwarnings("ignore", message="Setting forward, backward hooks and attributes on non-linear activations")
     
-    def __init__(self, model, data, explain_config):
+    def __init__(self, model, data, base_config, explain_config):
         """
         Initialize the DeepLiftHandler with model, data, and explain configuration.
 
         Parameters:
-            model: The model to be explained.
-            data (dict): Dictionary containing the scaled RBP expression DataFrame under 'scaled_rbp_expr_df'
-                     and gene expression DataFrame under 'gene_expr_df'.
+            model: The model to be explained. This should be an instance of a trained machine learning model that
+                   supports explanations through the DeepLift method.
+            data (dict): A dictionary containing necessary data for the explanation process.
+                It should include:
+                - 'scaled_rbp_expr_df': DataFrame containing the scaled RBP (RNA-binding protein) expression data.
+                - 'gene_expr_df': DataFrame containing the gene expression data.
+            base_config (dict): A dictionary containing various configuration settings and paths that are
+                                essential for loading data, saving results, and other operational parameters. 
             explain_config (dict): Configuration for explanations.
         """
         self.deeplift_explainer = DeepLift(model)
         self.data = data
         self.explain_config = explain_config
+        self.base_config = base_config
         self.logger = Logger(verbose=1)
        
         # Define rbps_id and trans_id from the data provided
         self.rbps_id = list(data['scaled_rbp_expr_df'].columns)
         self.trans_id = list(data['gene_expr_df'].columns)
+        self.getBM = pd.read_csv(self.base_config['data_paths'].get('getBM_path', None)).drop_duplicates()
         self.len_out_features = len(self.trans_id)
 
     def prepare_rbp_tensors(self):
@@ -47,26 +60,26 @@ class DeepLiftHandler:
                 - gn_tensor (Tensor): Tensor of gene expression values
                 - reference_rbp_tensor (Tensor): Tensor used as a reference for RBP expression.
         """
-        scaled_rbp_tensor = torch.tensor(data['scaled_rbp_expr_df'].values, dtype=torch.float32)
-        gn_tensor = torch.tensor(data['gene_expr_df'].values, dtype=torch.float32)
+        scaled_rbp_tensor = torch.tensor(self.data['scaled_rbp_expr_df'].values, dtype=torch.float32)
+        gn_tensor = torch.tensor(self.data['gene_expr_df'].values, dtype=torch.float32)
         self.logger.log("[prepare_rbp_tensors] Converted scaled RBP expression and gene expression to tensors (float32).")
 
         # Determine reference tensor based on configuration
         reference_type = self.explain_config.get('reference_data')
         if reference_type == 'median_reference':
             self.logger.log("[prepare_rbp_tensors] Using median of RBP expression as reference.")
-            reference_rbp_tensor = torch.tensor(np.median(data['scaled_rbp_expr_df'], axis=0), dtype=torch.float32)
+            reference_rbp_tensor = torch.tensor(np.median(self.data['scaled_rbp_expr_df'], axis=0), dtype=torch.float32)
             reference_rbp_tensor = torch.reshape(reference_rbp_tensor, (1, reference_rbp_tensor.size(0)))
             self.logger.log("[prepare_rbp_tensors] Median reference tensor created.")
         
         elif reference_type == 'knockdown_reference':
             self.logger.log("[prepare_rbp_tensors] Using knockdown (zeroed) RBP expression as reference.")
-            reference_rbp_tensor = torch.zeros(1, data['scaled_rbp_expr_df'].shape[1], dtype=torch.float32)
+            reference_rbp_tensor = torch.zeros(1, self.data['scaled_rbp_expr_df'].shape[1], dtype=torch.float32)
             self.logger.log("[prepare_rbp_tensors] Knockdown reference tensor created.")
         
         elif reference_type == 'half_reference':
             self.logger.log("[prepare_rbp_tensors] Using half-zeroed RBP expression as reference.")
-            reference_rbp_tensor = torch.ones(1, data['scaled_rbp_expr_df'].shape[1], dtype=torch.float32) * 0.5
+            reference_rbp_tensor = torch.ones(1, self.data['scaled_rbp_expr_df'].shape[1], dtype=torch.float32) * 0.5
             self.logger.log("[prepare_rbp_tensors] Half-zeroed reference tensor created.")
         
         else:
@@ -151,20 +164,19 @@ class DeepLiftHandler:
             if zero_std_indices.size > 0:
                 self.logger.log(f"[reduce_batch_dimension] Found {len(zero_std_indices)} positions with std=0.")
                 for idx in zero_std_indices:
-                    trans = trans_id[idx[0]]
-                    rbp = rbps_id[idx[1]]
+                    trans = self.trans_id[idx[0]]
+                    rbp = self.rbps_id[idx[1]]
                     self.logger.log(f"[reduce_batch_dimension] Zero std at Transcript: {trans}, RBP: {rbp}.")
             
-            df_deeplift_TxRBP = pd.DataFrame(t_stat_scores, index=trans_id, columns=rbps_id)
+            df_deeplift_TxRBP = pd.DataFrame(t_stat_scores, index=self.trans_id, columns=self.rbps_id)
             self.logger.log("[reduce_batch_dimension] T-statistic reduction completed.")
 
         elif batch_reduction_type == 'sum_scores':
             self.logger.log("[reduce_batch_dimension] Calculating sum of scores.")
             scores_stack = np.stack(batch_scores_np, axis=0)
             sum_scores = np.sum(scores_stack, axis=1)
-            df_deeplift_TxRBP = pd.DataFrame(sum_scores, index=trans_id, columns=rbps_id)
+            df_deeplift_TxRBP = pd.DataFrame(sum_scores, index=self.trans_id, columns=self.rbps_id)
             self.logger.log("[reduce_batch_dimension] Sum reduction completed.")
-
         return df_deeplift_TxRBP
 
     def filter_scores_for_low_expressed_genes(self, deeplift_scores, gene_expr_df, threshold=1):
@@ -183,3 +195,49 @@ class DeepLiftHandler:
         deeplift_scores.loc[low_expr_genes, :] = 0
         self.logger.log(f"Low-expressed genes (mean expression < {threshold} TPM) have been excluded from the TxRBP scores.")
         return deeplift_scores
+
+    def collapse_transcript_scores_to_genes(self, deeplift_scores):
+        """
+        Collapse DeepLIFT scores from transcript level to gene level by aggregating the scores 
+        for each gene-RBP pair. Specifically, this method transforms the given DataFrame of 
+        scores into a long format, merges it with gene information, and then aggregates 
+        to find the maximum absolute score for each gene-RBP pair. Finally, it creates a 
+        pivot table to summarize the results.
+
+        Parameters:
+            deeplift_scores (pd.DataFrame): DataFrame containing DeepLIFT scores at the transcript level,
+                                                where rows correspond to transcripts and columns 
+                                                correspond to RBPs. 
+        Returns:
+            tuple: A tuple containing:
+                - result_table (pd.DataFrame): A DataFrame with RBP and transcript details,
+                - df_deeplift_scores_genes (pd.DataFrame): DataFrame with DeepLIFT scores (GxRBP).
+        """
+        # Transform the wide format DataFrame into a long format
+        deeplift_scores_long = deeplift_scores.stack().reset_index()
+        deeplift_scores_long.columns = ['Transcript_ID', 'RBP_ID', 'Score']  
+
+        # Get RBP names from their IDs
+        deeplift_scores_long['RBP_name'] = get_gene_names_from_ids(gene_ids = deeplift_scores_long['RBP_ID'], getBM = self.getBM)
+        # Merge with gene information to get Gene_IDs and additional metadata
+        deeplift_scores_long = deeplift_scores_long.merge(self.getBM, on='Transcript_ID', how='left')
+
+        # Determine collapse method based on configuration
+        collapse_type = self.explain_config.get('gene_collapse_method')
+        
+        if collapse_type == 'max_absolute_value':
+            deeplift_scores_long['Score_abs'] = deeplift_scores_long['Score'].abs() 
+            # Find the index of the maximum score for each Gene-RBP pair
+            max_indices = deeplift_scores_long.loc[deeplift_scores_long.groupby(['Gene_ID', 'RBP_ID'])['Score_abs'].idxmax()]  
+            result_table = max_indices[['RBP_ID', 'RBP_name', 'Gene_ID', 'Gene_name', 
+                                        'Transcript_ID', 'Transcript_name', 
+                                        'Transcript_biotype', 'Score']].reset_index(drop=True)
+
+            # Create a pivot table to summarize scores by Gene_ID and RBP_ID
+            df_deeplift_scores_genes = result_table.pivot_table(
+                    index='Gene_ID', 
+                    columns='RBP_ID', 
+                    values='Score', 
+                    aggfunc='first'
+                )
+        return result_table, df_deeplift_scores_genes[self.rbps_id]
