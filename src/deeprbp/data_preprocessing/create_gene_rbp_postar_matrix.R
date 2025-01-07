@@ -9,12 +9,13 @@ BiocManager::install("GenomicRanges")
 library(readr)
 library(GenomicRanges)
 
-create_gxrbp <- function(input_path, output_path, output_file_name, postar_file, events_regions_file, events_gencode_file, selected_tissue_cell_line) {
+create_gxrbp <- function(input_path, output_path, output_file_name, postar_file, events_regions_file, events_gencode_file, selected_tissue_cell_line, getBM_file) {
   
   # Construct file paths based on input arguments
   path_events <- file.path(input_path, events_gencode_file)
   path_regions <- file.path(input_path, events_regions_file)
   path_postar <- file.path(input_path, postar_file)
+  path_getbm <- file.path(input_path, getBM_file)
   
   # Load the EventsFound file and add EventID column
   EventsFound <- read.delim(file = path_events, stringsAsFactors = FALSE)
@@ -114,11 +115,31 @@ create_gxrbp <- function(input_path, output_path, output_file_name, postar_file,
   # Set values greater than 1 to 1 again
   GxRBP[GxRBP > 1] <- 1
   
-  # e) Write the GxRBP matrix to a CSV file
+  # e) Change gene name for identify RBPs for gene_id
+  # Read the getBM file
+  getBM <- read.csv(path_getbm, header = TRUE, stringsAsFactors = FALSE)
+  
+  # Create a mapping vector between Gene_name and Gene_ID
+  gene_map <- setNames(getBM$Gene_ID, getBM$Gene_name)
+  
+  # Replace column names in the original dataframe
+  colnames(GxRBP) <- ifelse(colnames(GxRBP) %in% names(gene_map),
+                                   gene_map[colnames(GxRBP)],
+                                   colnames(GxRBP))
+  
+  # Add axis names (rownames and colnames)
+  attr(GxRBP, "row_axis_name") <- "Gene_ID"
+  attr(GxRBP, "col_axis_name") <- "RBP_ID"
+  
+  # Verify the result
+  attributes(GxRBP)
+
+  # f) Write the GxRBP matrix to a CSV file
   if (!dir.exists(output_path)) {
     dir.create(output_path, recursive = TRUE)
   }
   write.csv(GxRBP, file = file.path(output_path, paste0(output_file_name, "_GxRBP.csv")))
+  #saveRDS(GxRBP, file = file.path(output_path, paste0(output_file_name, "_GxRBP.rds")))
   
   # Clean up the workspace
   rm(postar_txt, POSTAR, POSTAR_L, mySF, ExRBP, peaks, peaks_GR, Overlaps, EvMatch)
@@ -135,6 +156,7 @@ postar_file <- args[4]
 events_regions_file <- args[5]
 events_gencode_file <- args[6]
 selected_tissue_cell_line <- unlist(strsplit(args[7], ","))
+getBM_file <- args[8]
 
 # Call the function with the parsed arguments
-create_gxrbp(input_path, output_path, output_file_name, postar_file, events_regions_file, events_gencode_file, selected_tissue_cell_line)
+create_gxrbp(input_path, output_path, output_file_name, postar_file, events_regions_file, events_gencode_file, selected_tissue_cell_line, getBM_file)

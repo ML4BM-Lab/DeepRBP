@@ -1,22 +1,19 @@
 # DeepRBP/src/deeprbp/deeplift_handler.py
 
-import os
 import torch
 from captum.attr import DeepLift
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from logger import Logger
-from .utils import get_gene_names_from_ids
+from utils import get_gene_info
 
-#import warnings
-#warnings.filterwarnings('ignore')
-
-class DeepLiftHandler:
-    ## Solve this: # Suppress specific user warnings
-    # warnings.filterwarnings("ignore", message="Input Tensor .* did not already require gradients")
-    # warnings.filterwarnings("ignore", message="Setting forward, backward hooks and attributes on non-linear activations")
+import warnings
+warnings.filterwarnings('ignore')
+#warnings.filterwarnings("ignore", message="Input Tensor .* did not already require gradients")
+warnings.filterwarnings("ignore", message="Setting forward, backward hooks and attributes on non-linear activations")
     
+class DeepLiftHandler:
     def __init__(self, model, data, base_config, explain_config):
         """
         Initialize the DeepLiftHandler with model, data, and explain configuration.
@@ -211,14 +208,14 @@ class DeepLiftHandler:
         Returns:
             tuple: A tuple containing:
                 - result_table (pd.DataFrame): A DataFrame with RBP and transcript details,
-                - df_deeplift_scores_genes (pd.DataFrame): DataFrame with DeepLIFT scores (GxRBP).
+                - deeplift_scores_genes (pd.DataFrame): DataFrame with DeepLIFT scores (GxRBP).
         """
         # Transform the wide format DataFrame into a long format
         deeplift_scores_long = deeplift_scores.stack().reset_index()
         deeplift_scores_long.columns = ['Transcript_ID', 'RBP_ID', 'Score']  
 
         # Get RBP names from their IDs
-        deeplift_scores_long['RBP_name'] = get_gene_names_from_ids(gene_ids = deeplift_scores_long['RBP_ID'], getBM = self.getBM)
+        deeplift_scores_long['RBP_name'] = get_gene_info(deeplift_scores_long['RBP_ID'], self.getBM, return_type='names')
         # Merge with gene information to get Gene_IDs and additional metadata
         deeplift_scores_long = deeplift_scores_long.merge(self.getBM, on='Transcript_ID', how='left')
 
@@ -234,10 +231,10 @@ class DeepLiftHandler:
                                         'Transcript_biotype', 'Score']].reset_index(drop=True)
 
             # Create a pivot table to summarize scores by Gene_ID and RBP_ID
-            df_deeplift_scores_genes = result_table.pivot_table(
+            deeplift_scores_genes = result_table.pivot_table(
                     index='Gene_ID', 
                     columns='RBP_ID', 
                     values='Score', 
                     aggfunc='first'
                 )
-        return result_table, df_deeplift_scores_genes[self.rbps_id]
+        return result_table, deeplift_scores_genes[self.rbps_id]

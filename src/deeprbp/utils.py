@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
-from typing import Tuple, List, Dict, Optional
+from typing import List, Dict, Optional, Union
 import os
 
 class CustomTensorDataset(Dataset):
@@ -94,17 +94,47 @@ def ensure_directory_exists(directory: str) -> None:
     if directory and not os.path.exists(directory):
         os.makedirs(directory, exist_ok=True)
 
-def get_gene_names_from_ids(gene_ids: List[str], getBM: pd.DataFrame) -> List[Optional[str]]:
+def get_gene_info(gene_ids_or_names: List[str], getBM: pd.DataFrame, return_type: str = 'names') -> List[Optional[str]]:
     """
-    Retrieves gene names from a list of Gene_IDs using the getBM DataFrame.
+    Retrieves Gene_names from Gene_IDs or Gene_IDs from Gene_names using the getBM DataFrame.
 
     Parameters:
-    gene_ids (List[str]): A list of Gene_IDs.
+    gene_ids_or_names (List[str]): A list of Gene_IDs or Gene_names.
     getBM (pd.DataFrame): A DataFrame that contains the relationship between Gene_ID and Gene_name.
+    return_type (str): Indicates what to return:
+                       - 'names': return Gene_names for given Gene_IDs
+                       - 'ids': return Gene_IDs for given Gene_names
 
     Returns:
-    List[Optional[str]]: A list of Gene_names corresponding to the provided Gene_IDs.
-                         If a Gene_ID does not have a corresponding Gene_name, None will be returned.
+    List[Optional[str]]: A list of Gene_names or Gene_IDs corresponding to the provided input.
+                         If a Gene_ID or Gene_name does not have a corresponding entry, None will be returned.
     """
-    getBM_subset = getBM[['Gene_ID', 'Gene_name']].drop_duplicates().set_index('Gene_ID')
-    return getBM_subset.loc[gene_ids]['Gene_name'].values.tolist()
+    getBM_subset = getBM[['Gene_ID', 'Gene_name']].drop_duplicates()
+    if return_type == 'names':
+        # Convert Gene_IDs to Gene_names
+        getBM_subset.set_index('Gene_ID', inplace=True)
+        return getBM_subset.loc[gene_ids_or_names]['Gene_name'].values.tolist()
+    
+    elif return_type == 'ids':
+        # Convert Gene_names to Gene_IDs
+        getBM_subset.set_index('Gene_name', inplace=True)
+        #gene_ids = getBM_subset.loc[gene_ids_or_names]
+        # Prepare to retrieve Gene_IDs and print duplicates
+        gene_ids = []
+        for gene_name in gene_ids_or_names:
+            if gene_name in getBM_subset.index:
+                occurrences = getBM_subset.loc[gene_name]
+                if len(occurrences) > 1:
+                    print(f"Duplicate entries found for Gene_name '{gene_name}': {occurrences['Gene_ID'].values.tolist()}")
+                # Use the first occurrence as the final result
+                if isinstance(occurrences, pd.DataFrame):
+                    first_gene_id = occurrences['Gene_ID'].iloc[0]  # Safe access for DataFrame
+                else:
+                    first_gene_id = occurrences['Gene_ID']  # Direct access for Series
+                print(f"Using '{first_gene_id}' as Gene_ID for Gene_name '{gene_name}'")
+                gene_ids.append(first_gene_id)
+            else:
+                gene_ids.append(None)
+        return gene_ids
+    else:
+        raise ValueError("Invalid return_type. Use 'names' or 'ids'.")

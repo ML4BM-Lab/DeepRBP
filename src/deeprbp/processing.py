@@ -7,8 +7,8 @@ import os
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split as sk_train_test_split
 from typing import Dict, Tuple, Optional, List
-from .utils import *
-from .logger import Logger
+from utils import *
+from logger import Logger
 
 # Ejemplos de uso:
 # nosotros asumimos que el usuario su data lo ha transformado de la siguiente manera antes de importarlo en esta clase:

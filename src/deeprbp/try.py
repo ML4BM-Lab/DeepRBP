@@ -1,112 +1,165 @@
 ### TRYING THE NEW CODE!!
 # aqui hay que poner los puntos relativos.
 import os
-from tqdm import tqdm
-from config_loader import ConfigParser
-from processing import DataImporter, DatasetLoader, Scaler
-from model import PredictorModel
-from utils import *
+import numpy as np
+import pandas as pd
+from typing import Tuple
 from logger import Logger
-from deeplift_handler import DeepLiftHandler
+from models import PredictorModel, ExplainerModel
 
-# from .utils import *
-# from .config_loader import ConfigParser
-# self.config_parser = ConfigParser(config_path)
-# self.base_config = self.config_parser.get_base_config()
-# self.explain_config = self.config_parser.get_explainability_config()
-
-# 1) Obtain GxRBP score matrix
-### 1) Prepare INPUTS to perform the in-silico validation of our DL model (old title list).
-config_path = '/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_tcga_explain.yaml'
-config_parser = ConfigParser(config_path)
-base_config = config_parser.get_base_config()
-explain_config = config_parser.get_explainability_config()
-
-# Define paths for saving data and results
-#self.path_save_data = os.path.join(self.base_config['output_dir'], 'data')
-#self.path_save_results = os.path.join(self.base_config['output_dir'], 'results')
-path_save_data = os.path.join(base_config['output_dir'], 'data')
-path_save_results = os.path.join(
-    base_config['output_dir'], 
-    'results',
-    f"{explain_config['explanation_method']}_{explain_config['reference_data']}_{explain_config['batch_reduction_method']}_{explain_config['gene_collapse_method']}"
-)
-ensure_directory_exists(path_save_data)
-ensure_directory_exists(path_save_results)
-
-# Initialize DataImporter for primary data
-#self.data_importer = DataImporter(self.base_config['data_paths'])
-#self.scaler = Scaler()
-data_importer = DataImporter(base_config['data_paths'])
-data_loader = DatasetLoader(data_importer, base_config)
-scaler = Scaler.load(explain_config['scaler_path'])
-
-#def load_and_process_data(self, loader):
-data = data_loader.load_data()
-#return data
-data['scaled_rbp_expr_df'] = scaler.transform(data['rbp_expr_df'])
-
-### 2) Load the trained model (old title list).
+config_path_explain = '/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_tcga_explain.yaml'
 config_path_train = '/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_tcga_train.yaml'
-config_train_parser = ConfigParser(config_path_train)
-training_config = config_train_parser.get_model_training_config()
 
-model = PredictorModel.load_model(
-        path_to_weights = os.path.join(explain_config['trained_model_path'], explain_config['model_file']),
-        config=training_config
-        )
+# en explainer_validatior_postar.py
+class ExplainerValidatorPostar:
+    """
+    A class to validate the results of the ExplainerModel against POSTAR experimental data.
 
-### 3) Perform DEEPLIFT method
-# Create an instance of DeepLiftHandler
-deeplift_handler = DeepLiftHandler(model, data, base_config, explain_config)
+    This class is responsible for loading POSTAR data that contains GxRBP (Gene to RNA Binding Protein) relationships, 
+    matching these scores with those computed by the ExplainerModel, and providing analysis and visualization of the results.
 
-# Prepare RBP tensors
-scaled_rbp_tensor, gn_tensor, reference_rbp_tensor = deeplift_handler.prepare_rbp_tensors()
+    Attributes:
+        explainer_model (ExplainerModel): An instance of the ExplainerModel that has computed scores for GxRBP.
+        explain_config (dict): Configuration parameters from the ExplainerModel.
+        postar_score_genes_raw (DataFrame): Raw DataFrame containing POSTAR  GxRBP scores before alignment.
+        postar_score_genes_with_nan_aligned (DataFrame): Aligned Postar DataFrame with NaN for non-matching genes/RBPs.
+        deeplift_scores_genes_aligned (DataFrame) : Aligned Explainer Dataframe for comparation with Postar matrix.
+        logger (Logger): Logger instance for logging messages and errors.
+    """
+    def __init__(self, explainer_model, verbose = 1):
+        """
+        Initializes the ExplainerValidatorPostar with the given explainer model and verbosity level.
 
-# Compute attribution scores
-list_batch_scores = deeplift_handler.compute_attribution_scores(scaled_rbp_tensor, reference_rbp_tensor, gn_tensor)
-# Reduce batch dimension (RBP x T)
-df_deeplift_scores_TxRBP = deeplift_handler.reduce_batch_dimension(list_batch_scores)
+        Args:
+            explainer_model (ExplainerModel): An instance of the ExplainerModel to validate.
+            verbose (int): The level of verbosity for logging (default is 1).
+        """
+        self.explainer_model = explainer_model
+        self.explain_config = explainer_model.explain_config
+        self.postar_score_genes_raw = None
+        self.postar_score_genes_with_nan_aligned = None
+        self.deeplift_scores_genes_aligned = None
+        self.logger = Logger(verbose)
+    def load_postar_data(self):
+        """Load POSTAR experimental data with GxRBP relationships.
+        This method reads the POSTAR data from a CSV file specified in the configuration,
+        renames the axes to 'RBP_ID' and 'Gene_ID', and stores the data in the postar_score_genes attribute.
+        """
+        try:
+            self.logger.log("Loading POSTAR data...")
+            self.postar_score_genes_raw = pd.read_csv(
+                os.path.join(self.explain_config['postar_matrix_path'], self.explain_config['postar_file']),
+                index_col=0
+            ).rename_axis('RBP_ID', axis=1).rename_axis('Gene_ID')
+            self.logger.log("POSTAR data loaded successfully.")
+        except FileNotFoundError as e:
+            self.logger.error(f"File not found: {e}", exception_type=FileNotFoundError)
+        except Exception as e:
+            self.logger.error(f"Failed to load POSTAR data: {e}", exception_type=RuntimeError)
+    def match_scores_and_postar_data(self, deeplift_scores_genes: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """Match DeepLIFT scores with POSTAR data and return aligned DataFrames.
 
-# Set low-expressed genes' scores (mean < 1TPM) to 0.
-df_deeplift_scores_TxRBP = deeplift_handler.filter_scores_for_low_expressed_genes(
-    deeplift_scores=df_deeplift_scores_TxRBP,
-    gene_expr_df=data['gene_expr_df'],
-    threshold=1
-)
+        This method matches the provided DeepLIFT scores with the POSTAR scores,
+        ensuring both DataFrames have the same shape and corresponding genes and RBPs.
 
-# Collapse scores to genes (RBP x G)
-result_table, df_deeplift_scores_GxRBP = deeplift_handler.collapse_transcript_scores_to_genes(df_deeplift_scores_TxRBP)
+        Args:
+            deeplift_scores_genes (pd.DataFrame): DataFrame containing DeepLIFT scores at the gene level.
 
-# Optionally print or use the resulting DataFrames
-print("\nTranscript Scores DataFrame:")
-print(df_deeplift_scores_TxRBP)
-print("\nGene Scores DataFrame:")
-print(df_deeplift_scores_GxRBP)
+        Returns:
+            Tuple[pd.DataFrame, pd.DataFrame]: Modified DeepLIFT scores DataFrame and POSTAR scores DataFrame
+            with matching genes and RBPs.
+        """
+        if self.postar_score_genes_raw is None:
+            self.logger.error("POSTAR scores must be loaded before matching.", exception_type=RuntimeError)
+        # Find matching and non-matching genes and RBPs
+        genes_match = [x for x in deeplift_scores_genes.index if x in self.postar_score_genes_raw.index]
+        genes_not_match = [x for x in deeplift_scores_genes.index if x not in self.postar_score_genes_raw.index]
+        rbps_match = [x for x in deeplift_scores_genes.columns if x in self.postar_score_genes_raw.columns]
+        rbps_not_match = [x for x in deeplift_scores_genes.columns if x not in self.postar_score_genes_raw.columns]
+        self.logger.log("Finding matching and non-matching genes and RBPs...")
+        # Create a DataFrame for POSTAR scores with NaN values for non-matching RBPs and genes
+        nan_df = pd.DataFrame(index=genes_not_match, columns=rbps_not_match, dtype=np.float32).fillna(np.nan)
+        postar_score_genes_with_nan = pd.concat([self.postar_score_genes_raw, nan_df], axis=0)
+        # Reindex the DataFrames to align their shapes
+        self.deeplift_scores_genes_aligned = deeplift_scores_genes.loc[genes_match + genes_not_match, rbps_match + rbps_not_match]
+        self.postar_score_genes_with_nan_aligned = postar_score_genes_with_nan.loc[genes_match + genes_not_match, rbps_match + rbps_not_match]
+        return self.deeplift_scores_genes_aligned, self.postar_score_genes_with_nan_aligned
+
+
+# integrar esto: # 2.1) Analyze the matched Postar matrix for this cell line
+df_count_rbps_per_gen, df_count_genes_per_rbp = count_and_sort_postar_matrix(matched_postar_scores)
+
+def count_and_sort_postar_matrix(matched_postar_scores):
+    """
+    Analyze the POSTAR matrix to count the number of RBPs per gene and the number of genes per RBP,
+    and sort the results based on the number of Class 1 occurrences.
+
+    Parameters:
+        matched_postar_scores (pd.DataFrame): DataFrame containing POSTAR scores with Gene_ID as index and RBP_ID as columns.
+
+    Returns:
+        Tuple[pd.DataFrame, pd.DataFrame]: DataFrames containing counts of RBPs per gene and genes per RBP,
+                                            both sorted by the number of Class 1 occurrences.
+    """
+    # Create a filtered copy of the matched POSTAR scores
+    matched_postar_scores_filtered = matched_postar_scores.copy()
+    # Number of RBPs per Gene
+    df_count_rbps_per_gen = pd.DataFrame()
+    df_count_rbps_per_gen['Class 0'] = matched_postar_scores_filtered.apply(lambda x: (x == 0).sum(), axis=1)
+    df_count_rbps_per_gen['Class 1'] = matched_postar_scores_filtered.apply(lambda x: (x == 1).sum(), axis=1)
+    df_count_rbps_per_gen['Class NaN'] = matched_postar_scores_filtered.apply(lambda x: x.isna().sum(), axis=1)
+    df_count_rbps_per_gen['Genes'] = df_count_rbps_per_gen.index
+    df_count_rbps_per_gen = df_count_rbps_per_gen.reset_index(drop=True)
+    # Sort the RBPs per Gene DataFrame by Class 1 in descending order
+    df_count_rbps_per_gen = df_count_rbps_per_gen.sort_values(by='Class 1', ascending=False).reset_index(drop=True)
+    # Number of genes per RBP
+    df_count_genes_per_rbp = pd.DataFrame()
+    df_count_genes_per_rbp['Class 0'] = matched_postar_scores_filtered.apply(lambda x: (x == 0).sum(), axis=0)
+    df_count_genes_per_rbp['Class 1'] = matched_postar_scores_filtered.apply(lambda x: (x == 1).sum(), axis=0)
+    df_count_genes_per_rbp['Class NaN'] = matched_postar_scores_filtered.apply(lambda x: x.isna().sum(), axis=0)
+    df_count_genes_per_rbp['RBPs'] = df_count_genes_per_rbp.index
+    df_count_genes_per_rbp = df_count_genes_per_rbp.reset_index(drop=True)
+    # Sort the Genes per RBP DataFrame by Class 1 in descending order
+    df_count_genes_per_rbp = df_count_genes_per_rbp.sort_values(by='Class 1', ascending=False).reset_index(drop=True)
+    return df_count_rbps_per_gen, df_count_genes_per_rbp
+
+
+
+############################################## llamada
+    
+# Uso de la clase
+explainer_model = ExplainerModel(config_path_explain=config_path_explain, config_path_train=config_path_train)
+data = explainer_model.load_and_process_data()
+model = explainer_model.load_model()
+outputs = explainer_model.perform_explainer()
+
+# Acceso a los resultados
+df_scores_TxRBP = outputs['df_scores_TxRBP']
+df_scores_GxRBP = outputs['df_scores_GxRBP']
+result_table = outputs['result_table']
+
+# Imprimir resultados
+print("Transcript Scores DataFrame (TxRBP):")
+print(df_scores_TxRBP)
+print("Gene Scores DataFrame (GxRBP):")
+print(df_scores_GxRBP)
 print("Result Table:")
 print(result_table)
 
-####
-####
+postar_validator = ExplainerValidatorPostar(explainer_model)
+# Cargar datos de POSTAR
+postar_validator.load_postar_data()
 
-# ME HE QUEDADO AQUI BROTHER !!!
-### Load POSTAR experimental data with GxRBP relationships   
-df_val_GxRBP = pd.read_csv(
-        os.path.join(explain_config['postar_matrix_path'], explain_config['postar_file']), 
-        index_col=0
-)
+df_scores_GxRBP_aligned, df_postar_GxRBP_aligned = postar_validator.match_scores_and_postar_data(df_scores_GxRBP)
 
+# /scratch/jsanchoz/DeepRBP/src/deeprbp/postar_utils.py
+                              
+# code to yet develop 
 
-# 2) Force the matching of the shapes of df_val_GxRBP with the DeepLIFT GxRBP (esto ayudarme de un postar_utils.py)
 # 2.1) Analyze the matched Postar matrix for this cell line
+df_count_rbps_per_gen, df_count_genes_per_rbp = count_and_sort_postar_matrix(matched_postar_scores)
+
+# 3) Plot Explainer computed scores vs Postar
+
 # 3) Plot DeepLIFT scores vs Postar (esto ayudarme de un x.py - piensa un nombre guay)
-
-# Guardar df_deeplift_scores_TxRBP, df_deeplift_scores_GxRBP y result_table.to_csv(os.path.join(path_save, 'rbp_gene_transcript_scores_results.csv'))
-
-
-######
-
-
-# COMPROBACIONES QUE HAY QUE HACER:
-#•	En Postar3 NO puede haber NaN en los genes, verificar al construir la matriz de Postar si esos genes porque no se matchean que tenemos NaNs! A ÁNGEL le sorprendia igualmenter que a at gene level los NaN sean mas bajos tb.
-#•	Referencias DeepLIFT usar todo 0.5 como referencia? 
+# ME HE QUEDADO AQUI BROTHER !!!

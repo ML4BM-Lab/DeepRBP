@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 #import logging
 from .config_loader import ConfigParser
 from .processing import DataImporter, DatasetLoader, DataSplitter, Scaler
-from .model import PredictorModel
+from .models import PredictorModel
 from .utils import *
 from .plots import plot_loss_curve
 from .evaluation_utils import *

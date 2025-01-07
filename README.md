@@ -287,7 +287,8 @@ Rscript /scratch/jsanchoz/DeepRBP/src/deeprbp/data_preprocessing/create_gene_rbp
     human.txt \
     Events_Regions_gc23_400nt.RData \
     EventsFound_gencode23.txt \
-    HepG2,Huh7
+    HepG2,Huh7 \
+    getBM.csv
 ```
 *Argument details*:
 
@@ -298,6 +299,7 @@ Rscript /scratch/jsanchoz/DeepRBP/src/deeprbp/data_preprocessing/create_gene_rbp
 - **Events_Regions_gc23_400nt.RData**: File specifying the genomic regions of the events.
 - **EventsFound_gencode23.txt**: File with metadata on events, including IDs and positions.
 - **HepG2,Huh7**: Specifies the cell lines from POSTAR experiments to include in the matrix.
+- **getBM.csv**: Name of the getBM file with info to relate gene_name with gene_ids.
 
 By following these steps, you can generate a POSTAR matrix tailored to your specific tissue and experimental needs.
 For AML use the K562 cell-line.
@@ -319,7 +321,7 @@ To execute DeepRBP on the **TCGA** dataset, use a `.yaml` configuration file. Be
 
 ```yaml
 source_name: "TCGA"
-
+```
 
 
 
@@ -406,12 +408,19 @@ source_name: "TCGA"
 │   ├── deeprbp
 │   │   ├── __init__.py  # Inicialización del paquete DeepRBP
 │   │   ├── config_loader.py  # Clase Config y load_config para cargar configuraciones desde un YAML
-│   │   ├── main_predictor.py  # (PENDIENTE DE TRASLOCO) función main para ejecutar la pipeline de training del predictor.
-│   │   ├── model.py  # Definición de la clase modelo de predicción y explainer (PredictorModel y ExplainerModel)
+│   │   ├── logger.py # contiene la clase de los logs de print, warning y errors.
+│   │   ├── models.py  # Definición de la clase modelo de predicción y explainer (class PredictorModel y ExplainerModel)
 │   │   ├── processing.py  # clases de procesamiento de datos, responsable de cargar, filtrar, dividir, transformar y escalar los datos
-│   │   ├── train_predictor.py  # la clase para entrenar el modelo predictor
-│   │   ├── train_explainer.py  # la clase para entrenar el modelo explainer (EN OBRAS)
+│   │   ├── train_predictor.py  # la clase TrainPredictor para entrenar el modelo predictor
+│   │   ├── predictor_pipeline.py  # función main para ejecutar la pipeline de training del predictor. (llamar a la clase de processing del data, TrainPredictor, etc.)
+│   │   ├── deeplift_handler.py  # contiene la clase DeepLiftHandler que realiza los cálculos de los atributos de deeplift a nivel de transcritos y genes.
+│   │   ├── pseudokd_handler.py  # (en OBRAS)
+
+
 │   │   ├── utils.py  # Funciones auxiliares
+│   │   ├── evaluation_utils.py  # Funciones auxiliares para evaluar la performance del modelo predictivo (calculo de correlaciones, llamadas a funciones de plot.)
+│   │   ├── plots.py # script con funciones para plotear resultados.
+
 │   │   └── pretrained_model/  # Contiene el modelo preentrenado y sus archivos asociados 
 │   │       ├── config.json  # Configuración del modelo preentrenado
 │   │       ├── model.pt  # Modelo preentrenado
@@ -421,9 +430,6 @@ source_name: "TCGA"
 │   ├── data_preprocessing/  # Preprocesamiento de datos crudos
 │   │   └── prep_model_inputs.py  # Preprocesa los datos TCGA/GTEx para generar matrices de input
 │   │   └── create_gxrbp.R  # Creates the GxRBP matrix for specific tissues
-
-
-
 
 
 │   └── tests/  # Tests unitarios para el paquete DeepRBP
