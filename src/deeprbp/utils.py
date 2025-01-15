@@ -1,9 +1,9 @@
 # utils.py
-import numpy as np
+
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
-from typing import List, Dict, Optional, Union
+from typing import List, Dict, Optional
 import os
 
 class CustomTensorDataset(Dataset):

@@ -17,6 +17,7 @@ python /scratch/jsanchoz/DeepRBP/src/deeprbp/data_preprocessing/prep_model_input
   --output_dir "/scratch/jsanchoz/DeepRBP/data/training_module/processed" \
   --transcript_expression_file "TcgaTargetGtex_rsem_isoform_tpm.gz" \
   --gene_expression_file "TcgaTargetGtex_rsem_gene_tpm.gz" \
+  --gene_counts_file "TcgaTargetGTEX_gene_expected_count.gz" \
   --phenotype_data_file "TcgaTargetGTEX_phenotype.txt" \
   --chunk_size 4500 \
   --gene_selection True \

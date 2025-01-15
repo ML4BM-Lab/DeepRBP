@@ -1,14 +1,9 @@
 
 # predictor_pipeline.py
-# from deeprbp.config_loader import load_config
-# from deeprbp.data_importer import DataImporter
-# from deeprbp.data_splitter import DataSplitter
-# from deeprbp.utils import filter_data_by_sample_ids
 
 import argparse
 import os
 from torch.utils.data import DataLoader
-#import logging
 from .config_loader import ConfigParser
 from .processing import DataImporter, DatasetLoader, DataSplitter, Scaler
 from .models import PredictorModel
@@ -51,15 +46,6 @@ class DeepRBPredictorPipeline:
         )
         return data, external_data
 
-    # def load_data(self, data_importer, base_config):
-    #     data = data_importer.load()
-    #     sel_sample_ids = select_sample_ids_by_type(
-    #         metadata_df = data['metadata_df'],
-    #         sample_category_col = base_config['sample_category'],
-    #         sample_types = base_config['select_samples']
-    #     )
-    #     return filter_data_by_sample_ids(data, sel_sample_ids)
-    
     def split_data(self, data):
         splitter = DataSplitter(data, self.training_config)
         return splitter.split_data_sets()

@@ -264,16 +264,16 @@ class ExplainerModel():
         self.logger.log("Data loaded and processed successfully.")
         return self.data
     
-    def load_model(self):
-        """Load the trained model."""
-        self.logger.log("Loading the trained model...")
-        self.model = PredictorModel.load_model(
-            path_to_weights=os.path.join(self.explain_config['trained_model_path'], self.explain_config['model_file']),
-            config=self.training_config
-        )
-        self.logger.log("Model loaded successfully.")
-        return self.model
-    
+    def load_trained_predictor_model(self):  
+        """Load the trained predictor model."""  
+        self.logger.log("Loading the trained predictor model...")  
+        self.model = PredictorModel.load_model(  
+            path_to_weights=os.path.join(self.explain_config['trained_model_path'], self.explain_config['model_file']),  
+            config=self.training_config  
+        )  
+        self.logger.log("Model loaded successfully.")  
+        return self.model  
+
     def _initialize_explainer_handler(self):
         """Initialize the ExplainerHandler with the loaded model and data."""
         if self.model is None or self.data is None:
@@ -320,9 +320,9 @@ class ExplainerModel():
     def save_results(self, df_scores_TxRBP, df_scores_GxRBP, result_table):
         """Save the results as CSV files."""
         try:
-            df_scores_TxRBP.to_csv(os.path.join(self.path_save_results, 'df_scores_TxRBP.csv'), index=False)
-            df_scores_GxRBP.to_csv(os.path.join(self.path_save_results, 'df_scores_GxRBP.csv'), index=False)
-            result_table.to_csv(os.path.join(self.path_save_results, 'result_table.csv'), index=False)
+            df_scores_TxRBP.to_csv(os.path.join(self.path_save_results, 'df_scores_TxRBP.csv'), index=True)
+            df_scores_GxRBP.to_csv(os.path.join(self.path_save_results, 'df_scores_GxRBP.csv'), index=True)
+            result_table.to_csv(os.path.join(self.path_save_results, 'result_table.csv'), index=True)
             self.logger.log("Results saved successfully.")
         except Exception as e:
             self.logger.error(f"Error saving results: {e}")

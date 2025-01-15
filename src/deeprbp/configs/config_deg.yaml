@@ -1,0 +1,16 @@
+# config_tcga_train.yaml
+source_name: "TCGA"
+
+# Paths for the data files
+data_paths:
+  rbp_counts_path: "/scratch/jsanchoz/DeepRBP/data/training_module/new_old_processed/TCGA/RBPs_counts.csv"
+  metadata_path: "/scratch/jsanchoz/DeepRBP/data/training_module/new_old_processed/TCGA/phenotype_metadata.csv"
+  getBM_path: "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/getBM.csv" # NEW
+
+# Sample selection
+sample_category: "detailed_category"  # The column in metadata to stratify on
+select_samples: ["Liver_Hepatocellular_Carcinoma"]  # Puede ser 'all' o una lista de tipos de muestras específicas
+output_dir: "/scratch/jsanchoz/DeepRBP/output/results/analysis/deg_analysis"  # Se generará automáticamente si no se especifica
+plot_results: True
+
+

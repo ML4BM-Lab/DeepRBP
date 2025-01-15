@@ -175,6 +175,12 @@ class DeepLiftHandler:
             df_deeplift_TxRBP = pd.DataFrame(sum_scores, index=self.trans_id, columns=self.rbps_id)
             self.logger.log("[reduce_batch_dimension] Sum reduction completed.")
         return df_deeplift_TxRBP
+    
+    #def filter_scores_for_low_expressed_transcripts(self, deeplift_scores, trans_expr_df, threshold=1):
+    # a día de hoy no hay forma de que yo acceda a la expressión de esos transcritos en TPM. Tengo que sacarlos del input data
+    # habría que cambiar un poco el paradigma (tengo ganas de ello porque ahora tampoco me parecía lo más funcional).
+
+# JUAN: si hay un transcrito que nunca se expresa se puede quitar, cuando es constante. Hacerlo entonces mas restrictivo que a nivel de genes.
 
     def filter_scores_for_low_expressed_genes(self, deeplift_scores, gene_expr_df, threshold=1):
         """
@@ -216,6 +222,7 @@ class DeepLiftHandler:
 
         # Get RBP names from their IDs
         deeplift_scores_long['RBP_name'] = get_gene_info(deeplift_scores_long['RBP_ID'], self.getBM, return_type='names')
+        
         # Merge with gene information to get Gene_IDs and additional metadata
         deeplift_scores_long = deeplift_scores_long.merge(self.getBM, on='Transcript_ID', how='left')
 
@@ -229,6 +236,13 @@ class DeepLiftHandler:
             result_table = max_indices[['RBP_ID', 'RBP_name', 'Gene_ID', 'Gene_name', 
                                         'Transcript_ID', 'Transcript_name', 
                                         'Transcript_biotype', 'Score']].reset_index(drop=True)
+           
+            # Count the number of transcripts per Gene_ID
+            num_transcripts_per_gene = self.getBM['Gene_ID'].value_counts().reset_index()
+            num_transcripts_per_gene.columns = ['Gene_ID', 'Num_trans_per_gene']
+
+            # Merge the count of transcripts with result_table
+            result_table = result_table.merge(num_transcripts_per_gene, on='Gene_ID', how='left')
 
             # Create a pivot table to summarize scores by Gene_ID and RBP_ID
             deeplift_scores_genes = result_table.pivot_table(

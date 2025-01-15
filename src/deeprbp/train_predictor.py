@@ -1,10 +1,7 @@
 
-import os
 import torch
 import numpy as np
-import pandas as pd
 from tqdm import tqdm
-import torch.nn.functional as F
 
 class TrainPredictor:
     def __init__(self, model, config, input_features=('rbp_expr', 'gene_expr'), output_features=('trans_expr',)):

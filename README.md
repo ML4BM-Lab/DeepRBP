@@ -1,4 +1,3 @@
-
 # DeepRBP: A novel deep neural network for inferring splicing regulation
 #### Publication: https://doi.org/10.1101/2024.04.11.589004
 
@@ -55,27 +54,40 @@ You can download the necessary datasets from the [UCSC Xena platform](https://xe
 ```bash
 sbatch slurm/download_data.sh
 ```
-The datasets will be automatically saved to the following directory: `/data/training_module/raw`
+The following files will be downloaded and stored in the `/data/training_module/raw` directory:
+
+- **Gene expression data** (TcgaTargetGtex_rsem_isoform_tpm.gz)  
+  This file contains gene expression levels measured in Transcripts Per Million (TPM) as log2(tpm + 0.001) format. TPM is a normalization method that accounts for both the length of the gene and the total number of reads in a sample, allowing for comparison of gene expression levels across different samples. It includes samples across TCGA, GTEx and TARGET (not used).
+
+- **Transcript expression data** (TcgaTargetGtex_rsem_gene_tpm.gz)  
+  Similar to the gene expression file, this file provides expression levels for various transcript isoforms also in TPM format as log2(tpm + 0.001) format. Similar to the isoform data, it includes expression levels for genes from TCGA, GTEx and TARGET datasets. It enables analyses focused on specific isoforms of genes, which can have different functional roles and regulatory mechanisms.
+
+- **Gene count expression data** (TcgaTargetGTEX_phenotype.txt)
+  This file contains raw gene counts in log2(expected_count+1) from TCGA, GTEx, and TARGET, representing the number of reads mapped to each gene. Unlike TPM, raw counts do not account for gene length or total sequencing depth. They are often used in statistical methods for differential expression analysis, as they provide a direct measure of sequencing data.
+
+- **Phenotype metadata** (TcgaTargetGTEX_gene_expected_count.gz) 
+  This text file contains important clinical and biological information about the samples from the TCGA, GTEx, and TARGET datasets.
 
 ## Data Preprocessing
-In this step, we will load and preprocess the raw data files: gene expression (`TcgaTargetGtex_rsem_gene_tpm.gz`), transcript expression (`TcgaTargetGtex_rsem_isoform_tpm.gz`), and phenotype metadata (`TcgaTargetGTEX_phenotype.txt`). These will be used to prepare input matrices for both TCGA and GTEX datasets. Specifically, we will generate:
+In this step, we will load and preprocess the raw data files to prepare input matrices for both TCGA and GTEX datasets. Specifically, we will generate:
 
-- **RBP expression matrix**: `RBPs_log2p_tpm.csv` (log2(tpm+1)), derived from the gene expression data, with dimensions `n_patients x num_RBPs`.
-- **Transcript expression matrix**: `trans_log2p_tpm.csv` (log2(tpm+1)), with dimensions `n_patients x num_transcripts`.
-- **Gene expression matrix**: `gn_expr_each_iso_tpm.csv` (in TPM) with dimensions `n_patients x num_transcripts`.
+- **RBP expression matrix**: `RBPs_tpm.csv` (in TPM) derived from the gene expression data, with dimensions `n_patients x num_RBPs`.
+- **Transcript expression matrix**: `trans_tpm.csv` (in TPM) with dimensions `n_patients x num_transcripts`.
+- **Gene expression matrix**: `gn_tpm.csv` (in TPM) with dimensions `n_patients x num_transcripts`.
 - **Metadata file**: `phenotype_metadata.csv`, containing phenotype information for each sample, indicating tissue or tumor type.
+- **RBP count matrix**: `RBPs_counts.csv` (in counts) with dimensions `n_patients x num_RBPs`. For further differential expression analysis.
 
 ### Process Details
 Among other tasks, this process includes:
 
 1. Cleaning and standardizing phenotype data.
-2. Cleaning gene and transcript expression data by removing genome version annotations and aggregating loci.
+2. Cleaning gene and transcript expression and count data data by removing genome version annotations and aggregating loci.
 3. Filtering out transcripts of genes with only one isoform.
 4. Selecting genes and their transcripts for modeling based on either cancer-related genes or all protein-coding genes.
-5. Filtering RNA-binding proteins (RBPs) for modeling and creating a subset RBP matrix from the gene matrix.
-6. Transforming gene expression to TPM, and RBP and transcript expression to log2(tpm+1).
+5. Filtering RNA-binding proteins (RBPs) for modeling and creating a subset RBP matrix from the gene matrix for expression and counts.
+6. Transforming gene expression to TPM, RBP and transcript expression to TPM.
 7. Transposing expression data so patients are rows and genes (or transcript IDs) are columns.
-8. Saving processed expression data and phenotype metadata as CSV files in the specified output directory.
+8. Saving processed expression and count data and phenotype metadata as CSV files in the specified output directory.
 
 ## Execution Command
 To execute this, run:
@@ -86,6 +98,7 @@ prepare-model-inputs --raw_data_dir "/scratch/jsanchoz/DeepRBP/data/training_mod
                      --output_dir "/scratch/jsanchoz/DeepRBP/data/training_module/processed" \
                      --transcript_expression_file "TcgaTargetGtex_rsem_isoform_tpm.gz" \
                      --gene_expression_file "TcgaTargetGtex_rsem_gene_tpm.gz" \
+                     --gene_counts_file "TcgaTargetGTEX_gene_expected_count.gz" \
                      --phenotype_data_file "TcgaTargetGTEX_phenotype.txt" \
                      --chunk_size 1000 \
                      --gene_selection True \
@@ -102,6 +115,7 @@ prepare-model-inputs --raw_data_dir "/scratch/jsanchoz/DeepRBP/data/training_mod
 - **output_dir (str)**: Directory for saving processed files.
 - **transcript_expression_file (str)**: Filename for transcript expression data (transcripts x n_patients) in log2(tpm+0.001).
 - **gene_expression_file (str)**: Filename for gene expression data (genes x n_patients) in log2(tpm+0.001).
+- **gene_counts_file (str)**: Filename for gene-level expected counts data ('genes x n_patients' matrix) in log2(expected_count+1).
 - **phenotype_data_file (str)**: Filename for phenotype data (patients x phenotype features).
 - **chunk_size (int)**: Rows to process per chunk for memory efficiency.
 - **gene_selection (bool)**: Flag to indicate gene selection; True uses cancer and alternative splicing-related genes.
@@ -122,6 +136,11 @@ sbatch slurm/generate_model_inputs.sh
 # (explicar más en detalle), que entra que sale, como , porque  decir como se consiguen los RBPs, que procesos hacemos etc
 
 # filter TCGA and GTEx samples and save the gene and transcript expression matrices for each dataset. From the gene expression matrix, we create a subset containing the expression of RNA-binding proteins (RBPs) genes, which will serve as the primary input for our model.
+
+
+
+((((((((## voy por aqui JOSEBINHO (13/01)))))
+
 
 ## Executing DeepRBP Predictor
 There are three options:
@@ -247,7 +266,6 @@ sbatch run_predictor_pipeline.sh
 
 ---
 
-
 ### Explainability Module
 This module uses the already trained DeepRBP Predictor to compute TxRBP (transcript-by-RBP) and GxRBP (gene-by-RBP) scores using DeepLIFT (Shrikumar, Greenside, and Kundaje, 2017) [Learning important features through propagating activation differences, International Conference on Machine Learning, PMLR, pages 3145–3153].
 
@@ -322,14 +340,57 @@ To execute DeepRBP on the **TCGA** dataset, use a `.yaml` configuration file. Be
 ```yaml
 source_name: "TCGA"
 ```
-
+ 
 
 
 #Lo que antes era Liver_GxRBP.csv ahora se llama human_liver_GxRBP.csv
 
+# Results Visualization
+This script allows you to compare scores derived from explainability techniques (such as DeepLIFT) against POSTAR experimental data. You can execute the following command to run the script:
 
+```bash
+module load R/4.3.2
+Rscript /scratch/jsanchoz/DeepRBP/src/deeprbp/results_visualization/run_postar_plot_generation.R \
+  --input_path /scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2024-12-16_292/explain_prediction_model/results/DeepLIFT_knockdown_reference_t-statistic_max_absolute_value \
+  --output_path /scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2024-12-16_292/explain_prediction_model/results/DeepLIFT_knockdown_reference_t-statistic_max_absolute_value/results_visualization \
+  --output_filename plot_score_results.pdf \
+  --results_filename df_results_summary.csv \
+  --list_rbps_postar_filename list_rbps_postar_ordered.csv \
+  --list_genes_postar_filename list_genes_postar_ordered.csv \
+  --getBM_filename getBM.csv \
+  --save_plot TRUE \
+  --index_start 1 \
+  --index_end 4 \
+  --max_iterations 7
+```
 
+# Overview
+This command generates box plots that illustrate the distribution of scores across different RNA Binding Proteins (RBPs) and genes, utilizing POSTAR labels for classification. The plot also displays the results obtained from conducting a Wilcoxon test across RBPs or genes between the groups 0 and 1 of POSTAR, allowing you to assess whether the difference in medians is statistically significant.
 
+## Parameters
+The parameters, in order, are as follows:
+- **`input_path`**:  
+  A character string specifying the path to the input files.
+- **`output_path`**:  
+  A character string specifying the path where the output files will be saved.
+- **`output_filename`**:  
+  A character string indicating the name of the output file (including the extension).
+- **`results_filename`**:  
+  A character string indicating the name of the results file (CSV) that contains the calculated scores.
+- **`list_rbps_postar_filename`**:  
+  A character string indicating the name of the RBP list file, ordered in descending order by the number of positive regulations associated with that RBP in POSTAR (CSV).
+- **`list_genes_postar_filename`**:  
+  A character string indicating the name of the gene list file, ordered in descending order by the number of positive regulations associated with that gene in POSTAR (CSV).
+- **`getBM_filename`**:  
+  A character string indicating the name of the getBM file (CSV) that contains gene ID mappings.
+- **`save_plot`**:  
+  A logical value indicating whether to save the plot as a PDF. Default is `TRUE`.
+- **`index_start`**:  
+  An integer specifying the starting index for slicing the RBP and gene lists for plotting. Default is `1`.
+- **`index_end`**:  
+  An integer specifying the ending index for slicing the RBP and gene lists for plotting. Default is `4`.
+- **`max_iterations`**:  
+  An integer specifying the maximum number of iterations for processing RBPs and genes for plotting. Default is `5`.
 
 
 
@@ -346,6 +407,7 @@ source_name: "TCGA"
 │   │   │   ├── TcgaTargetGtex_rsem_isoform_tpm.gz   # Datos de transcritos en log2(tpm+0.001) (TCGA y GTEx)
 │   │   │   ├── TcgaTargetGtex_rsem_gene_tpm.gz      # Datos de genes en log2(tpm+0.001) (TCGA y GTEx)
 │   │   │   ├── TcgaTargetGTEX_phenotype.txt         # Datos de fenotipo de TCGA, GTEx y TARGET
+│   │   │   ├── TcgaTargetGTEX_gene_expected_count.gz  # Datos de genes cuentas raw de TCGA, GTEx y TARGET
 │   │   │
 │   │   ├── selected_genes_rbps                # Listas seleccionadas de genes y RBPs relevantes
 │   │   │   ├── Table_Cancer_Gene_Census.tsv        # Tabla con el censo de genes de cáncer
@@ -354,12 +416,14 @@ source_name: "TCGA"
 │   │   │   ├── Table_S6_Cancer_gene_eyras.xlsx            # Tabla S6 con genes de cáncer (Eyras)
 │   │   │   ├── getBM.csv                          # Relaciona genes id con su trans id correspondiente
 │   │   │
-│   │   ├── processed   # Datos procesados y listos para ser usados en el modelo
+│   │   ├── processed   # Datos procesados del raw data listos para ser usados por el modelo (después de ser transformados)
 │   │   │   ├── TCGA / GTEx                      # Datos de TCGA o GTEX(sin normalizar, escalar ni dividir en Train/Test)
-│   │   │   │   ├── RBPs_log2p_tpm.csv           # Expresión de RBPs en datos de TCGA
-│   │   │   │   ├── gn_expr_each_iso_tpm         # Expresión de genes en datos de TCGA
-│   │   │   │   ├── trans_log2p_tpm.csv          # Expresión de transcritos en datos de TCGA
+│   │   │   │   ├── RBPs_tpm.csv           # Expresión de RBPs en datos de TCGA
+│   │   │   │   ├── RBPs_log2p_counts.csv  # Counts de RBPs en datos de TCGA
+│   │   │   │   ├── gn_tpm         # Expresión de genes en datos de TCGA
+│   │   │   │   ├── trans_tpm.csv          # Expresión de transcritos en datos de TCGA
 │   │   │   │   ├── phenotype_metadata.csv       # Datos de fenotipo de TCGA o GTEX
+│   │   │   │
 │
 │   ├── explainability_module                   # Módulo dedicado a la validación y explicación del modelo
 │   │   ├── postar3                             # Datos de POSTAR3 para validación
@@ -408,18 +472,24 @@ source_name: "TCGA"
 │   ├── deeprbp
 │   │   ├── __init__.py  # Inicialización del paquete DeepRBP
 │   │   ├── config_loader.py  # Clase Config y load_config para cargar configuraciones desde un YAML
-│   │   ├── logger.py # contiene la clase de los logs de print, warning y errors.
-│   │   ├── models.py  # Definición de la clase modelo de predicción y explainer (class PredictorModel y ExplainerModel)
 │   │   ├── processing.py  # clases de procesamiento de datos, responsable de cargar, filtrar, dividir, transformar y escalar los datos
-│   │   ├── train_predictor.py  # la clase TrainPredictor para entrenar el modelo predictor
-│   │   ├── predictor_pipeline.py  # función main para ejecutar la pipeline de training del predictor. (llamar a la clase de processing del data, TrainPredictor, etc.)
-│   │   ├── deeplift_handler.py  # contiene la clase DeepLiftHandler que realiza los cálculos de los atributos de deeplift a nivel de transcritos y genes.
-│   │   ├── pseudokd_handler.py  # (en OBRAS)
-
-
 │   │   ├── utils.py  # Funciones auxiliares
 │   │   ├── evaluation_utils.py  # Funciones auxiliares para evaluar la performance del modelo predictivo (calculo de correlaciones, llamadas a funciones de plot.)
 │   │   ├── plots.py # script con funciones para plotear resultados.
+│   │   ├── logger.py # contiene la clase de los logs de print, warning y errors.
+│   │   ├── models.py  # Definición de la clase modelo de predicción y explainer (class PredictorModel y ExplainerModel)
+
+PREDICTOR (# HACER UN FOLDER EN FUTURO)
+│   │   ├── train_predictor.py  # la clase TrainPredictor para entrenar el modelo predictor
+│   │   ├── predictor_pipeline.py  # función main para ejecutar la pipeline de training del predictor. (llamar a la clase de processing del data, TrainPredictor, PredictorModel etc.)
+
+EXPLAINER (# HACER UN FOLDER EN FUTURO)
+│   │   ├── deeplift_handler.py  # contiene la clase DeepLiftHandler que realiza los cálculos de los atributos de deeplift a nivel de transcritos y genes.
+│   │   ├── pseudokd_handler.py  # (en OBRAS)
+│   │   ├── explainer_validator_postar.py  # A class to validate the results of the ExplainerModel against POSTAR experimental data.
+│   │   ├── explainer_postar_pipeline.py # (en OBRAS) cargar los datos de validación, realizar la comparación con los resultados del ExplainerModel, y realizar las visualizaciones necesarias. Esta clase puede utilizar una instancia de ExplainerModel para calcular los scores y luego proceder a cargar la matriz de validación y realizar las comparaciones.
+
+│   │   ├── replicate_figure_2_ggpubr.R # (en OBRAS) Lo que antes era plot_score_results y plot_ktop_rbp_genes
 
 │   │   └── pretrained_model/  # Contiene el modelo preentrenado y sus archivos asociados 
 │   │       ├── config.json  # Configuración del modelo preentrenado
@@ -427,10 +497,22 @@ source_name: "TCGA"
 │   │       ├── scaler_sfs.joblib  # Escaladores usados en el preprocesamiento
 │   │       └── sigma_sfs.txt  # Parámetros adicionales del modelo
 
+│   ├── configs/  # Configuraciones
+│   │   └── config_tcga_train.yaml 
+│   │   └── config_gtex.yaml 
+│   │   └── config_tcga_explain.yaml 
+│   │   └── config_deg.yaml 
+│   │
 │   ├── data_preprocessing/  # Preprocesamiento de datos crudos
 │   │   └── prep_model_inputs.py  # Preprocesa los datos TCGA/GTEx para generar matrices de input
 │   │   └── create_gxrbp.R  # Creates the GxRBP matrix for specific tissues
-
+│   │
+│   ├── differential_expression_analysis/   
+│   │   └── deg_analysis.py    
+│   │
+│   ├── results_visualization/  # Visualizacion de los resultados de postar/real kds
+│   │   └── generate_postar_plots.R  # function
+│   │   └── run_postar_plot_generation.R  # main
 
 │   └── tests/  # Tests unitarios para el paquete DeepRBP
 │       └── test_data_loader.py  # Test unitario para la clase DataLoader (por ejemplo)

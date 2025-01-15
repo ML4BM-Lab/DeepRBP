@@ -12,9 +12,29 @@ from logger import Logger
 
 # Ejemplos de uso:
 # nosotros asumimos que el usuario su data lo ha transformado de la siguiente manera antes de importarlo en esta clase:
-    # rbp --> log2(TPM+1)
-    # transcripts --> log2(TPM+1)
-    # genes --> TPM
+    # rbp --> log2(TPM+1) AHORA VA A SER TPM (13/01)
+    # transcripts --> log2(TPM+1). AHORA VA A SER TPM 
+    # genes --> TPM. AHORA TENEMOS QUE CREAR NOSOTROS EL gn_expr_each_iso_tpm
+
+# ESTO AHORA HAY QUE METERLO DENTRO: 
+   #data['df_rbp_gene'] = np.log2(data['df_rbp_gene'] + 1)
+   # data['df_trans'] = np.log2(data['df_trans'] + 1); 
+
+   # Operación Element-wise: La función np.log2() se aplica de manera element-wise (elemento por elemento) a 
+   # todos los valores de la estructura de datos. Esto significa que cada valor individual se transforma de acuerdo a la operación, sin importar si está en una fila o columna.
+
+#La de genes ahora necesito el getBM para expandirla
+   #- list_genes (list): List of Gene_IDs corresponding to the selected genes.
+ #- list_genes_mapped_to_trans (list): List of selected Gene_IDs mapped to each of Transcripts_IDs
+
+ #list_genes_mapped_to_trans = [
+    #        getBM_filtered.loc[getBM_filtered['Transcript_ID'] == trans_id, 'Gene_ID'].values[0]
+    #        for trans_id in list_transcripts
+    #        ]
+
+#df_genes = df_gene.loc[list_genes_mapped_to_trans, :]
+# Set index names for genes mapped to transcripts
+#df_genes_mapped_to_trans.index = list_transcripts
 
 # a) Clase de configuración de datos: Para separar la carga de datos y la preparación de un conjunto de datos:
 class DataImporter:
@@ -30,7 +50,7 @@ class DataImporter:
             self.logger.error("The 'metadata_path' is required and must be provided.", ValueError)
 
         self.paths = paths
-        self.data = None
+        self.data = {}
 
     def load(self):
         """
@@ -38,30 +58,51 @@ class DataImporter:
         """
         try:
             self.logger.log("Loading data from specified paths...")
-            self.data = {
-                    "rbp_expr_df": pd.read_csv(self.paths["rbp_path"], index_col=0), # Ensure user knows expected format
-                    "gene_expr_df": pd.read_csv(self.paths["gene_expr_path"], index_col=0),
-                    "trans_expr_df": pd.read_csv(self.paths["isoform_expr_path"], index_col=0),
-                    "metadata_df": pd.read_csv(self.paths["metadata_path"], index_col=0),
-            }
-        
+            
+            # Load data conditionally based on provided paths
+            if "rbp_path" in self.paths:
+                self.data["rbp_expr_tpm_df"] = pd.read_csv(self.paths["rbp_path"], index_col=0)
+                self.logger.log("Loaded RBP expression data.")
+            
+            if "rbp_counts_path" in self.paths:
+                self.data["rbp_counts_log2p_df"] = pd.read_csv(self.paths["rbp_counts_path"], index_col=0)
+                self.logger.log("Loaded RBP log2p counts data.")
+            
+            if "gene_expr_path" in self.paths:
+                self.data["gene_expr_tpm_df"] = pd.read_csv(self.paths["gene_expr_path"], index_col=0)
+                self.logger.log("Loaded gene expression data.")
+
+            if "isoform_expr_path" in self.paths:
+                self.data["trans_expr_tpm_df"] = pd.read_csv(self.paths["isoform_expr_path"], index_col=0)
+                self.logger.log("Loaded isoform expression data.")
+
+            if "metadata_path" in self.paths:
+                self.data["metadata_df"] = pd.read_csv(self.paths["metadata_path"], index_col=0)
+                self.logger.log("Loaded metadata.")
+            
         except FileNotFoundError as e:
             self.logger.error(f"Error loading file: {e}", FileNotFoundError)
-
+            
         self._check_consistency()  # Verify the indices are consistent
         return self.data
     
     def _check_consistency(self):
         """
         Ensure the indices are consistent across all datasets.
+        If not, retain only the common samples by intersecting the indices.
         """
-        rbp_ids = self.data["rbp_expr_df"].index
-        gene_ids = self.data["gene_expr_df"].index
-        trans_ids = self.data["trans_expr_df"].index
-        metadata_ids = self.data["metadata_df"].index
+        indices = {key: df.index for key, df in self.data.items()}
+        common_indices = set.intersection(*[set(index) for index in indices.values()])
 
-        if not (rbp_ids.equals(gene_ids) and gene_ids.equals(trans_ids) and trans_ids.equals(metadata_ids)):
-            self.logger.error("Patient IDs are not aligned across datasets.", ValueError)
+        for key, df in self.data.items():
+            if not df.index.isin(common_indices).all():
+                self.data[key] = df.loc[common_indices]
+                self.logger.log(f"Filtered {key} to keep only common samples.")
+
+        # Verify that all DataFrames now have the same index
+        first_index = next(iter(indices.values())).tolist()
+        if not all(df.index.tolist() == first_index for df in self.data.values()):
+            self.logger.error("Error: Not all DataFrames have the same indices after filtering.", ValueError)
 
 class DatasetLoader:
     def __init__(self, data_importer, base_config):
