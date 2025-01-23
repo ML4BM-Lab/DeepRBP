@@ -69,13 +69,13 @@ The following files will be downloaded and stored in the `/data/training_module/
   This text file contains important clinical and biological information about the samples from the TCGA, GTEx, and TARGET datasets.
 
 ## Data Preprocessing
-In this step, we will load and preprocess the raw data files to prepare input matrices for both TCGA and GTEX datasets. Specifically, we will generate:
+In this step, we will load and preprocess the raw data files to prepare input matrices for both TCGA and GTEX datasets. Specifically, we will generate and save in `output_dir`:
 
 - **RBP expression matrix**: `RBPs_tpm.csv` (in TPM) derived from the gene expression data, with dimensions `n_patients x num_RBPs`.
 - **Transcript expression matrix**: `trans_tpm.csv` (in TPM) with dimensions `n_patients x num_transcripts`.
 - **Gene expression matrix**: `gn_tpm.csv` (in TPM) with dimensions `n_patients x num_transcripts`.
 - **Metadata file**: `phenotype_metadata.csv`, containing phenotype information for each sample, indicating tissue or tumor type.
-- **RBP count matrix**: `RBPs_counts.csv` (in counts) with dimensions `n_patients x num_RBPs`. For further differential expression analysis.
+- **Gene count matrix**: `gn_counts.csv` (in counts) with dimensions `n_patients x num_RBPs`. For further differential expression analysis.
 
 ### Process Details
 Among other tasks, this process includes:
@@ -84,8 +84,8 @@ Among other tasks, this process includes:
 2. Cleaning gene and transcript expression and count data data by removing genome version annotations and aggregating loci.
 3. Filtering out transcripts of genes with only one isoform.
 4. Selecting genes and their transcripts for modeling based on either cancer-related genes or all protein-coding genes.
-5. Filtering RNA-binding proteins (RBPs) for modeling and creating a subset RBP matrix from the gene matrix for expression and counts.
-6. Transforming gene expression to TPM, RBP and transcript expression to TPM.
+5. Filtering RNA-binding proteins (RBPs) for modeling and creating a subset RBP matrix from the gene matrix for expression.
+6. Transforming gene expression to TPM (and counts), RBP and transcript expression to TPM. 
 7. Transposing expression data so patients are rows and genes (or transcript IDs) are columns.
 8. Saving processed expression and count data and phenotype metadata as CSV files in the specified output directory.
 
@@ -132,16 +132,6 @@ Alternatively, you can submit this command on an HPC system with Slurm:
 sbatch slurm/generate_model_inputs.sh
 ```
 
-# Darle una vuelta a estos dos comentarios:
-# (explicar más en detalle), que entra que sale, como , porque  decir como se consiguen los RBPs, que procesos hacemos etc
-
-# filter TCGA and GTEx samples and save the gene and transcript expression matrices for each dataset. From the gene expression matrix, we create a subset containing the expression of RNA-binding proteins (RBPs) genes, which will serve as the primary input for our model.
-
-
-
-((((((((## voy por aqui JOSEBINHO (13/01)))))
-
-
 ## Executing DeepRBP Predictor
 There are three options:
 * Running the Python script 
@@ -160,11 +150,11 @@ source_name: "TCGA"
 
 # Paths for the data files
 data_paths:
-  rbp_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/RBPs_log2p_tpm.csv"
-  isoform_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/trans_log2p_tpm.csv"
+  rbp_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/RBPs_tpm.csv"
+  isoform_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/trans_tpm.csv"
+  gene_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/gn_tpm.csv"
   metadata_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/phenotype_metadata.csv"
-  gene_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/gn_expr_each_iso_tpm.csv"
-  getBM_path: "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/getBM.csv"
+  getBM_path: "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/getBM.csv" 
 
 # Model predictor configuration
 model:
@@ -224,10 +214,10 @@ source_name: "GTEX"
 
 # Paths for the data files
 data_paths:
-  rbp_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/GTEX/RBPs_log2p_tpm.csv"
-  isoform_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/GTEX/trans_log2p_tpm.csv"
+  rbp_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/GTEX/RBPs_tpm.csv"
+  isoform_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/GTEX/trans_tpm.csv"
+  gene_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/GTEX/gn_tpm.csv"
   metadata_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/GTEX/phenotype_metadata.csv"
-  gene_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/GTEX/gn_expr_each_iso_tpm.csv"
   getBM_path: "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/getBM.csv" 
 
 # Training configuration
@@ -253,7 +243,7 @@ run-deeprbp-predictor \
   --external_config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_gtex.yaml"
 ```
 
-### Option 2: Submit a Job in a HPC
+### Option 2: Submit a Job in a HPC (comprueba esta jose, 23 enero)
 If the number of training datasets or the total number of samples is high, we recommend submitting the job using the provided `run_predictor_pipeline.sh` script from the cluster directory. 
 This script is adapted to Slurm, but can be easily modified to work on SGE. 
 The specific parameters should be adapted depending on the specifications of the HPC.
@@ -278,7 +268,7 @@ Positive scores indicate activation of the transcript, while negative scores ind
 \[ \text{t-stat} = \frac{\text{mean}}{\left(\frac{\sigma}{\sqrt{n}}\right)} \]
 where \( n \) represents the number of samples. This results in a score matrix of size: number of transcripts by number of RBPs.
 
-Specific TCGA samples (not presented in the training process) are used to calculate the scores. This module is validated primarily using a binary matrix indicating experimental evidence of regulation in POSTAR3 (Zhao et al., 2022) [POSTAR3: an updated platform for exploring post-transcriptional regulation coordinated by RNA-binding proteins, Nucleic Acids Research, volume 50, D1, pages D287–D294]. POSTAR3 is a comprehensive Post-Transcriptional Regulation database that provides protein binding sites on RNA obtained from CLIP experiments.
+Specific TCGA samples (not presented in the training process) are used to calculate the scores. This module is validated using a binary matrix indicating experimental evidence of regulation in POSTAR3 (Zhao et al., 2022) [POSTAR3: an updated platform for exploring post-transcriptional regulation coordinated by RNA-binding proteins, Nucleic Acids Research, volume 50, D1, pages D287–D294]. POSTAR3 is a comprehensive Post-Transcriptional Regulation database that provides protein binding sites on RNA obtained from CLIP experiments.
 
 Additionally, we have applied our model in in-vitro knockdown experiments.
 
@@ -298,31 +288,53 @@ To generate a tissue-specific POSTAR matrix, you can use the script `create_gene
 **Command example:**  
 
 ```bash
+module load R/4.3.2
 Rscript /scratch/jsanchoz/DeepRBP/src/deeprbp/data_preprocessing/create_gene_rbp_postar_matrix.R \
-    /data/jsanchoz/DeepRBP/data/explainability_module/postar3 \
-    /scratch/jsanchoz/DeepRBP/data/explainability_module/postar3/processed \
-    human_liver \
-    human.txt \
-    Events_Regions_gc23_400nt.RData \
-    EventsFound_gencode23.txt \
-    HepG2,Huh7 \
-    getBM.csv
+    --input_path /data/jsanchoz/DeepRBP/data/explainability_module/postar3 \
+    --output_path /scratch/jsanchoz/DeepRBP/data/explainability_module/postar3/processed \
+    --output_file_name human_liver \
+    --postar_file human.txt \
+    --events_regions_file Events_Regions_gc23_400nt.RData \
+    --events_gencode_file EventsFound_gencode23.txt \
+    --selected_tissue_cell_line HepG2,Huh7 \
+    --getBM_file getBM.csv
 ```
 *Argument details*:
-
-- **/path/to/input**: Directory containing the input files.
-- **/path/to/output**: Directory where the processed output will be saved.
-- **human_liver**: The name of the output file.
-- **human.txt**: The POSTAR file containing RBP binding information.
-- **Events_Regions_gc23_400nt.RData**: File specifying the genomic regions of the events.
-- **EventsFound_gencode23.txt**: File with metadata on events, including IDs and positions.
-- **HepG2,Huh7**: Specifies the cell lines from POSTAR experiments to include in the matrix.
-- **getBM.csv**: Name of the getBM file with info to relate gene_name with gene_ids.
+- **`--input_path`**: The directory containing the necessary input files for processing. This should include the POSTAR file, events regions file, and any other relevant data files.
+- **`--output_path`**: The directory where the processed output files will be saved. Ensure that this path exists or will be created by the script.
+- **`--output_file_name`**: The base name of the output file that will be generated. The resulting file will be named `<output_file_name>_GxRBP.csv`.
+- **`--postar_file`**: The POSTAR file containing information about RNA-binding protein (RBP) binding. This file is critical for identifying RBP interactions in the data.
+- **`--events_regions_file`**: The file specifying the genomic regions associated with events of interest. This file should be in RData format and contain the necessary genomic range data.
+- **`--events_gencode_file`**: A text file containing metadata about events, including identifiers (IDs) and their genomic positions. This information is used to correlate events with RBPs.
+- **`--selected_tissue_cell_line`**: A comma-separated list of cell lines from the POSTAR experiments to include in the analysis. This allows for filtering the data based on specific tissues or cell types.
+- **`--getBM_file`**: The name of the CSV file containing mapping information to relate gene names with their corresponding gene IDs. This file is essential for converting RBP names to gene IDs in the output matrix.
 
 By following these steps, you can generate a POSTAR matrix tailored to your specific tissue and experimental needs.
-For AML use the K562 cell-line.
 
-## Executing DeepRBP Explainer
+For acute myeloid leukemia (AML) use the K562 cell-line; for kidney chromophobe (KICH) use HEK293 cell-line, and for 
+liver hepatocellular carcinoma (HCC) use HepG2 and Huh7 cell-lines.
+
+<!-- Rscript /scratch/jsanchoz/DeepRBP/src/deeprbp/data_preprocessing/create_gene_rbp_postar_matrix.R \
+    --input_path /data/jsanchoz/DeepRBP/data/explainability_module/postar3 \
+    --output_path /scratch/jsanchoz/DeepRBP/data/explainability_module/postar3/processed \
+    --output_file_name human_aml \
+    --postar_file human.txt \
+    --events_regions_file Events_Regions_gc23_400nt.RData \
+    --events_gencode_file EventsFound_gencode23.txt \
+    --selected_tissue_cell_line K562 \
+    --getBM_file getBM.csv
+
+Rscript /scratch/jsanchoz/DeepRBP/src/deeprbp/data_preprocessing/create_gene_rbp_postar_matrix.R \
+    --input_path /data/jsanchoz/DeepRBP/data/explainability_module/postar3 \
+    --output_path /scratch/jsanchoz/DeepRBP/data/explainability_module/postar3/processed \
+    --output_file_name human_kidney \
+    --postar_file human.txt \
+    --events_regions_file Events_Regions_gc23_400nt.RData \
+    --events_gencode_file EventsFound_gencode23.txt \
+    --selected_tissue_cell_line HEK293 \
+    --getBM_file getBM.csv -->
+
+## Executing DeepRBP Explainer 
 There are three options:
 * Running the Python script 
 * Submitting a job to a HPC queue
@@ -330,16 +342,47 @@ There are three options:
 
 ---
 
-### AQUIIII !!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
 ### **Option 1: Running the Python Script**  
-To execute DeepRBP on the **TCGA** dataset, use a `.yaml` configuration file. Below is an example configuration file:
+To execute DeepRBP Explainer on the **TCGA** test dataset, use a `.yaml` configuration file. Below is an example configuration file:
 
 #### **Example Configuration File (`config.yaml`)**
 
 ```yaml
+# src/deeprbp/configs/config_tcga_explain.yaml
 source_name: "TCGA"
+
+# Paths for the data files
+data_paths:
+  rbp_path: "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2025-01-22_100_new_good_trained_model/train_prediction_model/data/test_data/rbp_expr_tpm_df.csv"
+  isoform_expr_path: "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2025-01-22_100_new_good_trained_model/train_prediction_model/data/test_data/trans_expr_tpm_df.csv"
+  gene_expr_path: "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2025-01-22_100_new_good_trained_model/train_prediction_model/data/test_data/gene_expr_tpm_df.csv"
+  metadata_path: "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2025-01-22_100_new_good_trained_model/train_prediction_model/data/test_data/metadata_df.csv"
+  getBM_path: "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/getBM.csv"  
+
+explainability:
+  trained_model_path: "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2025-01-22_100_new_good_trained_model/train_prediction_model/results"
+  model_file: "model.pt"
+  scaler_path: "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2025-01-22_100_new_good_trained_model/train_prediction_model/data/scaler_trained"
+  explanation_method: "DeepLIFT"
+  reference_data: "knockdown_reference"
+  batch_reduction_method: "t-statistic"
+  gene_collapse_method: "max_absolute_value"
+  postar_matrix_path: "/scratch/jsanchoz/DeepRBP/data/explainability_module/postar3/processed"
+  postar_file: "human_liver_GxRBP.csv"
+
+# Sample selection
+sample_category: "detailed_category"  # The column in metadata to stratify on
+select_samples: ["Liver_Hepatocellular_Carcinoma"]  # Can be "all" or a list of specific sample types
+output_dir: "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2025-01-22_100_new_good_trained_model/explain_prediction_model"  # Will be generated automatically if not specified
+plot_results: True
 ```
+In this configuration file, the data should be in TPM format, untransformed and unscaled, and the gene matrix should not be expanded. The method will subsequently transform the data, generate the extended gene matrix, and load the scaler and trained model to initialize the explainability process. The desired samples for explainability will be filtered by `selected_samples` argument.
+
+
+
+
+
+# !!! (Vamos por aquí colega)
  
 
 
@@ -401,7 +444,7 @@ The parameters, in order, are as follows:
 
 # nuevo organigrama !!! (puede estar aun sujeto a muchos cambios) ACTUALIZA ESTO BROTHER!!!
 /DeepRBP
-├── data
+├── data (esto hay que actualizar)
 │   ├── training_module                       
 │   │   ├── raw                                # Datos crudos descargados de TCGA y GTEx
 │   │   │   ├── TcgaTargetGtex_rsem_isoform_tpm.gz   # Datos de transcritos en log2(tpm+0.001) (TCGA y GTEx)
@@ -468,33 +511,36 @@ The parameters, in order, are as follows:
 │   ├── Tutorial_replicate_postar3.ipynb  # Tutorial para replicar los resultados en POSTAR3
 │   └── Tutorial_replicate_real_kds.ipynb  # Tutorial para replicar knockdown experiments
 
-├── src  # Código principal del paquete DeepRBP
-│   ├── deeprbp
-│   │   ├── __init__.py  # Inicialización del paquete DeepRBP
-│   │   ├── config_loader.py  # Clase Config y load_config para cargar configuraciones desde un YAML
-│   │   ├── processing.py  # clases de procesamiento de datos, responsable de cargar, filtrar, dividir, transformar y escalar los datos
-│   │   ├── utils.py  # Funciones auxiliares
-│   │   ├── evaluation_utils.py  # Funciones auxiliares para evaluar la performance del modelo predictivo (calculo de correlaciones, llamadas a funciones de plot.)
-│   │   ├── plots.py # script con funciones para plotear resultados.
-│   │   ├── logger.py # contiene la clase de los logs de print, warning y errors.
-│   │   ├── models.py  # Definición de la clase modelo de predicción y explainer (class PredictorModel y ExplainerModel)
 
-PREDICTOR (# HACER UN FOLDER EN FUTURO)
-│   │   ├── train_predictor.py  # la clase TrainPredictor para entrenar el modelo predictor
-│   │   ├── predictor_pipeline.py  # función main para ejecutar la pipeline de training del predictor. (llamar a la clase de processing del data, TrainPredictor, PredictorModel etc.)
 
-EXPLAINER (# HACER UN FOLDER EN FUTURO)
-│   │   ├── deeplift_handler.py  # contiene la clase DeepLiftHandler que realiza los cálculos de los atributos de deeplift a nivel de transcritos y genes.
-│   │   ├── pseudokd_handler.py  # (en OBRAS)
-│   │   ├── explainer_validator_postar.py  # A class to validate the results of the ExplainerModel against POSTAR experimental data.
-│   │   ├── explainer_postar_pipeline.py # (en OBRAS) cargar los datos de validación, realizar la comparación con los resultados del ExplainerModel, y realizar las visualizaciones necesarias. Esta clase puede utilizar una instancia de ExplainerModel para calcular los scores y luego proceder a cargar la matriz de validación y realizar las comparaciones.
-
-│   │   ├── replicate_figure_2_ggpubr.R # (en OBRAS) Lo que antes era plot_score_results y plot_ktop_rbp_genes
-
-│   │   └── pretrained_model/  # Contiene el modelo preentrenado y sus archivos asociados 
-│   │       ├── config.json  # Configuración del modelo preentrenado
-│   │       ├── model.pt  # Modelo preentrenado
-│   │       ├── scaler_sfs.joblib  # Escaladores usados en el preprocesamiento
+src/  # Main code for the DeepRBP package
+│
+├── deeprbp/
+│   ├── __init__.py                      # Initialize the DeepRBP package
+│   │
+│   ├── training_module/ 
+│   │   ├── main_predictor.py              # Main function to execute the predictor training pipeline 
+│   │   ├── pipeline.py                    # Class DeepRBPredictorPipeline
+│   │   ├── train_model.py                 # Class TrainPredictor for training the model
+│   │   ├── model.py                       # Defines the prediction model class (PredictorModel)
+│   │   ├── plots.py                       # Functions for plotting results
+│   │   ├── evaluation.py            # Functions to evaluate the performance of the predictive model
+│   │
+│   │── explainability_module/ 
+│   │   ├── postar_pipeline.py   # Load validation data and compare with results from ExplainerModel.
+│   │   ├── postar_validator.py  # Class to validate results against POSTAR experimental data.
+│   │   ├── deeplift_handler.py            # Class for DeepLift calculations at transcript and gene levels.
+│   │   ├── pseudokd_handler.py            # (In Progress)
+│   │   ├── model.py             # Defines the explanatory model class (ExplainerModel)
+│   │   │   ├── results_visualization/  # Visualizacion de los resultados de postar/real kds
+│   │   │   │   └── generate_postar_plots.R  # function
+│   │   │   │   └── run_postar_plot_generation.R  # main
+│   │   │   │   └── plots.py                       # Functions for plotting results
+│   │ 
+│   │── pretrained_model/  # Contiene el modelo preentrenado y sus archivos asociados 
+│   │   ├── config.json  # Configuración del modelo preentrenado
+│   │   ├── model.pt  # Modelo preentrenado
+│   │   ├── scaler_sfs.joblib  # Escaladores usados en el preprocesamiento
 │   │       └── sigma_sfs.txt  # Parámetros adicionales del modelo
 
 │   ├── configs/  # Configuraciones
@@ -502,18 +548,22 @@ EXPLAINER (# HACER UN FOLDER EN FUTURO)
 │   │   └── config_gtex.yaml 
 │   │   └── config_tcga_explain.yaml 
 │   │   └── config_deg.yaml 
+│   │ 
+│   ├── data_loading/  
+│   │   └── config_loader.py                  # Config class and load_config to load configurations from YAML
+│   │   └── processing.py  # Classes for data loading, filtering, splitting, etc.
 │   │
-│   ├── data_preprocessing/  # Preprocesamiento de datos crudos
-│   │   └── prep_model_inputs.py  # Preprocesa los datos TCGA/GTEx para generar matrices de input
-│   │   └── create_gxrbp.R  # Creates the GxRBP matrix for specific tissues
+│   ├── util/  
+│   │   └── utils.py               # Utility functions
+│   │   └── logger.py              # Class for logging print, warning, and errors
+
+│   ├── data_preprocessing/  # Raw data preprocessing
+│   │   └── prep_model_inputs.py  # Prepares TCGA/GTEx data for model input
+│   │   └── create_gene_rbp_postar_matrix.R # Creates the GxRBP matrix for specific tissues
 │   │
 │   ├── differential_expression_analysis/   
 │   │   └── deg_analysis.py    
-│   │
-│   ├── results_visualization/  # Visualizacion de los resultados de postar/real kds
-│   │   └── generate_postar_plots.R  # function
-│   │   └── run_postar_plot_generation.R  # main
-
+│   │ 
 │   └── tests/  # Tests unitarios para el paquete DeepRBP
 │       └── test_data_loader.py  # Test unitario para la clase DataLoader (por ejemplo)
 

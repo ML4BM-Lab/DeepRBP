@@ -1,13 +1,15 @@
-# evaluation_utils.py
+# src/deeprbp/training_module/evaluation.py
+
 import os
 import numpy as np
 import pandas as pd
 from torch.utils.data import DataLoader
 from scipy.stats import spearmanr, pearsonr
 from sklearn.metrics import mean_squared_error, r2_score
-from typing import Tuple, List, Dict, Any, Union
+from typing import List, Dict, Any
+from tqdm import tqdm 
 
-from .utils import CustomTensorDataset, adjust_batch_size, filter_data_by_sample_ids
+from ..util.utils import CustomTensorDataset, adjust_batch_size, filter_data_by_sample_ids
 from .plots import scatter_real_vs_pred, plot_transcript_to_gene_ratio_distributions
 
 def calculate_metrics(predictions, true_values):
@@ -106,9 +108,6 @@ def analyze_transcript_to_gene_ratios(
     pred_ratios = calculate_ratios(pred_agg, genes_filtered)
     label_ratios = calculate_ratios(label_agg, genes_filtered)
     # 4. Plot histograms
-    #output_path = os.path.join(
-    #    output_dir, f"histogram_ratio_{category}-{config['source_name']}.png")
-    #plot_transcript_to_gene_ratio_distributions(pred_ratios, label_ratios, config["source_name"], output_path)
     output_path = os.path.join(output_dir, f"histogram_ratio_{category}-{source_name}.png")
     plot_transcript_to_gene_ratio_distributions(pred_ratios, label_ratios, source_name, output_path)
 
@@ -121,7 +120,7 @@ def calculate_metrics_per_category(
     batch_size: int,
     source_name: str,
     plot_results: bool = False,
-    getBM_path: str = None) -> List[Dict[str, float]]:
+    getBM: str = None) -> List[Dict[str, float]]:
     """
     Calculates metrics for each category in the test dataset, including:
     - Performance metrics for each category (e.g., accuracy, precision, recall).
@@ -137,7 +136,7 @@ def calculate_metrics_per_category(
         batch_size (int): Batch size for the DataLoader.
         source_name (str): Name of the data source, used for saving results.
         plot_results (bool): Whether to generate plots for predictions and ratios.
-        getBM_path (str): Path to the `getBM` file for mapping transcripts to genes.
+        getBM (str): `getBM` dataframe for mapping transcripts to genes.
 
     Returns:
         List[Dict[str, float]]: List of metrics dictionaries, one for each category.
@@ -146,9 +145,8 @@ def calculate_metrics_per_category(
     metadata_df = test_data['metadata_df']
     metrics_list = []
     set_names_list = []
-    
-    for category in categories:
-        print(f"Processing category: {category}")
+    # Use tqdm to create a progress bar for processing categories
+    for category in tqdm(categories, desc="Processing categories", unit="category"):
         # Filter samples for the current category
         category_samples = metadata_df.loc[metadata_df[sample_category] == category].index
         # Filter test data for selected samples
@@ -156,22 +154,20 @@ def calculate_metrics_per_category(
         # Create DataLoader
         test_loader = DataLoader(
             CustomTensorDataset(test_subset), 
-            batch_size=adjust_batch_size(test_subset['scaled_rbp_expr_df'], batch_size * 2)
+            batch_size=adjust_batch_size(test_subset['scaled_rbp_expr_log2p_tpm_df'], batch_size * 2)
         )
         # Generate predictions and calculate metrics
         predictions, true_values, predictions_matrix = trainer.generate_predictions(test_loader)
         metrics = calculate_metrics(predictions, true_values)
-        print(f"Metrics for category {category}: {metrics}")
         metrics_list.append(metrics)
         set_names_list.append(category)
         # Prepare data for visualization
-        labels_df = test_subset['trans_expr_df']
+        labels_df = test_subset['trans_expr_log2p_tpm_df']
         pred_df = pd.DataFrame(
                     predictions_matrix, 
-                    columns=list(test_subset['trans_expr_df'].columns), 
+                    columns=list(test_subset['trans_expr_log2p_tpm_df'].columns), 
                     index=category_samples)
-        genes_df = test_subset['gene_expr_df']
-
+        genes_df = test_subset['gn_expr_each_iso_tpm_df'] #gn_expr_tpm_each_iso_df
         # Optional: Plot results
         if plot_results:
             scatter_real_vs_pred(
@@ -182,9 +178,12 @@ def calculate_metrics_per_category(
                 labels=true_values,
                 output_dir=os.path.join(output_dir, 'scat_plot_real_vs_pred_value', source_name, set_name, category),
             )
-
-            if getBM_path:
-                getBM = pd.read_csv(getBM_path)
+            if getBM is not None:  # Ensure getBM is not None
+                print(getBM)
+                print(pred_df)
+                print(labels_df)
+                print(genes_df)
+                print(category)
                 analyze_transcript_to_gene_ratios(
                     getBM=getBM,
                     pred_df=pred_df,
@@ -194,5 +193,4 @@ def calculate_metrics_per_category(
                     output_dir=os.path.join(output_dir, 'pred_label_expression_ratio_histogram', source_name, set_name, category),
                     source_name=source_name,
                 )
-
     return metrics_list, set_names_list

@@ -1,4 +1,4 @@
-# utils.py
+# src/deeprbp/util/utils.py
 
 import pandas as pd
 import torch
@@ -7,7 +7,7 @@ from typing import List, Dict, Optional
 import os
 
 class CustomTensorDataset(Dataset):
-    def __init__(self, data, features_data=('rbp_expr', 'gene_expr', 'trans_expr')):
+    def __init__(self, data, features_data=('scaled_rbp_expr_log2p_tpm', 'gn_expr_each_iso_tpm', 'trans_expr_log2p_tpm')):
         """
         Custom dataset for loading RBP, gene, and transcript expressions
         """
@@ -114,7 +114,6 @@ def get_gene_info(gene_ids_or_names: List[str], getBM: pd.DataFrame, return_type
         # Convert Gene_IDs to Gene_names
         getBM_subset.set_index('Gene_ID', inplace=True)
         return getBM_subset.loc[gene_ids_or_names]['Gene_name'].values.tolist()
-    
     elif return_type == 'ids':
         # Convert Gene_names to Gene_IDs
         getBM_subset.set_index('Gene_name', inplace=True)

@@ -1,16 +1,17 @@
-# src/deeprbp/data_preprocessing/create_gene_rbp_postar_matrix.R
+#src/deeprbp/data_preprocessing/create_gene_rbp_postar_matrix.R
 
 # Load necessary libraries
 chooseCRANmirror(graphics = FALSE, ind = 1)  # Selecciona el primer espejo disponible
 options(repos = c(CRAN = "https://cloud.r-project.org/"))
 install.packages("readr")
 install.packages("BiocManager")
+install.packages("optparse")
 BiocManager::install("GenomicRanges")
 library(readr)
 library(GenomicRanges)
+library(optparse)
 
 create_gxrbp <- function(input_path, output_path, output_file_name, postar_file, events_regions_file, events_gencode_file, selected_tissue_cell_line, getBM_file) {
-  
   # Construct file paths based on input arguments
   path_events <- file.path(input_path, events_gencode_file)
   path_regions <- file.path(input_path, events_regions_file)
@@ -145,18 +146,31 @@ create_gxrbp <- function(input_path, output_path, output_file_name, postar_file,
   rm(postar_txt, POSTAR, POSTAR_L, mySF, ExRBP, peaks, peaks_GR, Overlaps, EvMatch)
 }
 
-# Get command-line arguments
-args <- commandArgs(trailingOnly = TRUE)
+# Define command-line options
+option_list <- list(
+  make_option(c("--input_path"), type = "character", help = "Directory containing the input files."),
+  make_option(c("--output_path"), type = "character", help = "Directory where the processed output will be saved."),
+  make_option(c("--output_file_name"), type = "character", help = "The name of the output file."),
+  make_option(c("--postar_file"), type = "character", help = "The POSTAR file containing RBP binding information."),
+  make_option(c("--events_regions_file"), type = "character", help = "File specifying the genomic regions of the events."),
+  make_option(c("--events_gencode_file"), type = "character", help = "File with metadata on events, including IDs and positions."),
+  make_option(c("--selected_tissue_cell_line"), type = "character", help = "Specifies the cell lines from POSTAR experiments to include in the matrix (comma-separated)."),
+  make_option(c("--getBM_file"), type = "character", help = "Name of the getBM file with info to relate gene_name with gene_ids.")
+)
+
+# Parse command-line arguments
+opt_parser <- OptionParser(option_list = option_list)
+opt <- parse_args(opt_parser)
 
 # Assign arguments to variables
-input_path <- args[1]
-output_path <- args[2]
-output_file_name <- args[3]
-postar_file <- args[4]
-events_regions_file <- args[5]
-events_gencode_file <- args[6]
-selected_tissue_cell_line <- unlist(strsplit(args[7], ","))
-getBM_file <- args[8]
+input_path <- opt$input_path
+output_path <- opt$output_path
+output_file_name <- opt$output_file_name
+postar_file <- opt$postar_file
+events_regions_file <- opt$events_regions_file
+events_gencode_file <- opt$events_gencode_file
+selected_tissue_cell_line <- unlist(strsplit(opt$selected_tissue_cell_line, ","))
+getBM_file <- opt$getBM_file
 
 # Call the function with the parsed arguments
 create_gxrbp(input_path, output_path, output_file_name, postar_file, events_regions_file, events_gencode_file, selected_tissue_cell_line, getBM_file)

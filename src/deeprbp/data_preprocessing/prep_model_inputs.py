@@ -1,4 +1,4 @@
-# /src/deeprbp/data_preprocessing/prep_model_inputs.py
+#src/deeprbp/data_preprocessing/prep_model_inputs.py
 
 import os
 import pandas as pd
@@ -8,7 +8,6 @@ from tqdm import tqdm
 import warnings
 import argparse
 import timeit
-#from stuff.verification_output import save_processed_patients_to_excel, compare_patients_with_excel
 
 def prepare_inputs( 
     raw_data_dir: str, 
@@ -54,10 +53,13 @@ def prepare_inputs(
     """
 
     # Load patient IDs and phenotype data
-    #patient_ids = pd.read_csv(f"{raw_data_dir}/{gene_expression_file}", compression='gzip', sep='\t', nrows=1).columns.tolist()
     df_phenotype = pd.read_csv(f"{raw_data_dir}/{phenotype_data_file}", sep='\t', encoding='ISO-8859-1')
     df_phenotype = clean_and_format_phenotype_data(df_phenotype)
     patient_ids = df_phenotype.index.tolist()
+
+    # Load all columns from df_counts once to avoid repeated reads
+    available_cols_counts = pd.read_csv(f"{raw_data_dir}/{gene_counts_file}", compression='gzip', sep='\t', nrows=0).columns.tolist()
+    available_cols_set = set(available_cols_counts)  # Use a set for faster membership testing
 
     # Load the getBM data
     getBM = pd.read_csv(f"{selected_genes_dir}/{gene_transcript_mapping_file}")
@@ -70,52 +72,50 @@ def prepare_inputs(
     chunk_idx = 0
     total_cols = len(patient_ids)
 
-    # Read the available columns from df_counts only once before the loop
-    available_counts_cols = pd.read_csv(f"{raw_data_dir}/{gene_counts_file}", compression='gzip', sep='\t', nrows=0).columns.tolist()
-
     with tqdm(total=total_cols, desc="Prepare model inputs") as pbar:
         while col_start < total_cols:
-            col_end = min(col_start + chunk_size, total_cols)
             
+            col_end = min(col_start + chunk_size, total_cols)
             selected_cols = patient_ids[col_start:col_end]
-            filtered_selected_cols = [col for col in selected_cols if col in available_counts_cols] # Filter selected_cols to include only those that are available in df_counts
-
+          
             if 'sample' not in selected_cols:
                 selected_cols.insert(0, 'sample')
-                
-            if 'sample' not in filtered_selected_cols:
-                filtered_selected_cols.insert(0, 'sample')
-                print('filtered_selected_cols')
-                print(filtered_selected_cols)
 
             df_genes = pd.read_csv(f"{raw_data_dir}/{gene_expression_file}", compression='gzip', sep='\t', usecols=selected_cols)
             df_trans = pd.read_csv(f"{raw_data_dir}/{transcript_expression_file}", compression='gzip', sep='\t', usecols=selected_cols)
-            df_counts = pd.read_csv(f"{raw_data_dir}/{gene_counts_file}", compression='gzip', sep='\t', usecols=filtered_selected_cols) 
+            
+            # Filter selected_cols to include only those that exist in df_counts
+            valid_selected_cols = [col for col in selected_cols if col in available_cols_set]
 
-            process_data_chunk(df_genes, df_trans, df_counts, df_phenotype, 
-                               getBM, selected_genes_dir, gene_selection, 
-                               rbp_genes_file, output_dir, #phenotype_saved,
+            # Ensure 'sample' is at the beginning of valid_selected_cols
+            if 'sample' not in valid_selected_cols:
+                valid_selected_cols.insert(0, 'sample')
+
+            # Read df_counts using valid selected columns
+            df_counts = pd.read_csv(f"{raw_data_dir}/{gene_counts_file}", compression='gzip', sep='\t', usecols=valid_selected_cols)
+
+            process_data_chunk(df_genes, df_trans, df_counts, df_phenotype, getBM, selected_genes_dir, gene_selection, rbp_genes_file, output_dir,
                                splicing_genes_file if gene_selection else None,
                                cancer_genes_file if gene_selection else None,
                                gene_census_file if gene_selection else None,    
                                **kwargs)
             
-            col_start = col_end
-            # Update the progress bar
-            #pbar.update(len(selected_cols) - 1)
-            pbar.update(chunk_size)
-
             # Store processed patients
-            processed_patients["Patient_ID"].extend(selected_cols[1:])  # Excluimos 'sample' (esto lo puedo comentar una vez que el código se haya verificado otra vez)
-            processed_patients["Chunk"].extend([chunk_idx] * (len(selected_cols) - 1))  # Excluimos 'sample' (esto lo puedo comentar una vez que el código se haya verificado otra vez)
+            processed_patients["Patient_ID"].extend(selected_cols[1:])  
+            processed_patients["Chunk"].extend([chunk_idx] * (len(selected_cols) - 1))  # Remove 'sample' 
             chunk_idx += 1
-             
-    # Save the processed patient information to Excel
-    #save_processed_patients_to_excel(processed_patients, output_dir) # (esto lo puedo comentar una vez que el código se haya verificado otra vez)
-    # Compare processed patients with patient_ids to see if all of them were processed
-    #compare_patients_with_excel(output_dir, set(patient_ids)) # (esto lo puedo comentar una vez que el código se haya verificado otra vez)
-    # Align all matrices according to a common set of patient IDs
-    #sort_indices(output_dir)
+
+            # Update the progress bar
+            pbar.update(len(selected_cols) - 1)  # Use the actual number of processed patients
+            col_start = col_end
+
+    # Convert processed patients to a DataFrame
+    df_processed_patients = pd.DataFrame(processed_patients)
+
+    # Save the processed patients to an Excel file in the output directory
+    output_excel_path = f"{output_dir}/processed_patients.xlsx"
+    df_processed_patients.to_excel(output_excel_path, index=False)
+    print(f"Processed patients saved to {output_excel_path}")
 
 def clean_and_format_phenotype_data(dictionary_data: pd.DataFrame):
     """
@@ -288,10 +288,6 @@ def select_genes_for_modeling(getBM: pd.DataFrame,
                                                 parm_match_colums=parm_match_colums)
     list_genes = getBM_filtered['Gene_ID'].unique().tolist()
     list_transcripts = getBM_filtered['Transcript_ID'].tolist()
-    #list_genes_mapped_to_trans = [
-    #        getBM_filtered.loc[getBM_filtered['Transcript_ID'] == trans_id, 'Gene_ID'].values[0]
-    #        for trans_id in list_transcripts
-    #        ]
     print('[select_genes_for_modeling] Number of Genes:', len(list_genes))
     print('[select_genes_for_modeling] Number of Transcripts:', len(list_transcripts))
     print('\n')
@@ -304,7 +300,7 @@ def generate_model_input_matrices(data: dict,
                                   list_transcripts: list, 
                                   list_genes: list) -> tuple[dict, pd.DataFrame]:
     """
-    Generates model input matrices from expression data for the specified study.
+    Generates model input matrices from expression data chunk for the specified study.
     Args:
     - data (dict): A dictionary containing gene and transcript expression data. 
                    It should have the following keys:
@@ -322,40 +318,45 @@ def generate_model_input_matrices(data: dict,
             - 'df_rbp_gene' (DataFrame): A matrix of RBP expression values with patients as columns and RBPs as rows.
             - 'df_trans' (DataFrame): A matrix of transcript expression values with patients as columns and transcripts as rows.
             - 'df_genes' (DataFrame): A matrix of gene expression values with patients as columns and genes as rows, where gene indices are set to correspond to the mapped transcripts.
-            - 'df_rbp_counts (DataFrame): A matrix of gene counts values with patients as columns and genes as rows
+            - 'df_counts (DataFrame): A matrix of gene counts values with patients as columns and genes as rows
         - df_phenotype_study (DataFrame): A filtered DataFrame containing phenotype information for the patients relevant to the specified study.
 
     This function filters and organizes expression data into separate matrices for RBP, transcript, and gene expression based on the provided study name. It ensures that only samples common to both the phenotype and expression data are included, enabling accurate modeling for downstream analysis.
     """
     print(f'[generate_model_input_matrices] Generating input matrices for study: {study_name}...')
+    
     df_phenotype_study = df_phenotype[df_phenotype.study == study_name].copy()
     patients_df_genes = data['df_genes'].columns
     patients_df_trans = data['df_trans'].columns 
     patients_df_counts = data['df_counts'].columns 
+    
     # Get samples for the specific study
-    samples = list(set(df_phenotype_study.index) & 
-                   set(patients_df_genes) & 
-                   set(patients_df_trans) & 
-                   set(patients_df_counts))
-    print(f'[generate_model_input_matrices] Number of samples found: {len(samples)}')
-    # Obtain the RBP expression and count matrices
-    df_genes = data['df_genes'].loc[:, samples]
-    df_counts = data['df_counts'].loc[:, samples]
-    df_rbp_gene = df_genes.loc[list_rbps, :]
-    df_rbp_counts = df_counts.loc[list_rbps, :]
-    # Obtain the transcript expression dataset 
-    df_trans = data['df_trans'].loc[list_transcripts, samples]
-    # Get the dataset for genes mapped to transcripts
-    df_genes = df_genes.loc[list_genes, :]
-    output_data = {
-        'df_rbp_gene': df_rbp_gene,
-        'df_rbp_counts': df_rbp_counts,
-        'df_trans': df_trans,
-        'df_genes': df_genes
-    }
+    samples_tpm_matrix = list(set(df_phenotype_study.index) &
+                                set(patients_df_genes) & 
+                                set(patients_df_trans))
+
+    samples_count_matrix = list(set(df_phenotype_study.index) &
+                              set(patients_df_counts))
+
+    print(f'[generate_model_input_matrices] Number of samples found in tpm matrices: {len(samples_tpm_matrix)}')
+    print(f'[generate_model_input_matrices] Number of samples found in count matrix: {len(samples_count_matrix)}')
+
+    # Obtain the RBP expression, Gene expression and Transcript expression datasets
+    df_genes = data['df_genes'].loc[:, samples_tpm_matrix]
+    df_rbp_gene = df_genes.loc[list_rbps, :] # get the rbp gene expression dataset
+    df_genes = df_genes.loc[list_genes, :] # get the dataset for selected genes
+    df_trans = data['df_trans'].loc[list_transcripts, samples_tpm_matrix] # get the transcript expression dataset 
+            
+    df_counts = data['df_counts'].loc[:, samples_count_matrix] # get the gene count expression dataset
+
+    output_data = {'df_rbp_gene': df_rbp_gene,
+                    'df_trans': df_trans,
+                    'df_genes': df_genes,
+                    'df_counts': df_counts}
     print(f'[generate_model_input_matrices] RBP matrix shape: {df_rbp_gene.shape}')
     print(f'[generate_model_input_matrices] Transcript matrix shape: {df_trans.shape}')
     print(f'[generate_model_input_matrices] Genes matrix shape: {df_genes.shape}')
+    print(f'[generate_model_input_matrices] Genes matrix count shape: {df_counts.shape}')
     print('\n')
     return output_data, df_phenotype_study
 
@@ -367,17 +368,19 @@ def transform_expression_data(data: dict) -> dict:
     Returns:
     - dict: Dictionary with transformed gene and transcript DataFrames.
     """
-    print('Transforming expression data...')
+    print('Transforming expression data to TPM and counts...')
     data['df_rbp_gene'] = np.power(2, data['df_rbp_gene']) - 0.001
     data['df_trans'] = np.power(2, data['df_trans']) - 0.001
     data['df_genes'] = np.power(2, data['df_genes']) - 0.001
-    # Transform counts
-    data['df_rbp_counts'] = np.power(2, data['df_rbp_counts']) - 1
-    data['df_rbp_counts'] = data['df_rbp_counts'].round().astype(int)
 
+    # Clip min tpm expression value to 0
     data['df_rbp_gene'] = data['df_rbp_gene'].clip(lower=0)
     data['df_trans'] = data['df_trans'].clip(lower=0)
     data['df_genes'] = data['df_genes'].clip(lower=0)
+
+    # Transform counts and round
+    data['df_counts'] = np.power(2, data['df_counts']) - 1
+    data['df_counts'] = data['df_counts'].round().astype(int)
     print('[transform_expression_data] Transformation done\n')
     return data
 
@@ -387,18 +390,15 @@ def transpose_dataframes(data: dict) -> dict:
 
     Args:
     - data (dict): Dictionary containing DataFrames to transpose:
-        - 'df_rbp_gene': RBP expression data.
-        - 'df_trans': Transcript expression data.
-        - 'df_rbp_counts': RBP counts data.
-        - 'df_genes_mapped_to_trans': Gene expression data mapped to transcripts.
+  
     Returns:
     - dict: Dictionary with transposed DataFrames for RBP, transcripts, and mapped genes.
     """
     print('Transposing expression data...')
     data['df_rbp_gene'] = data['df_rbp_gene'].T
-    data['df_rbp_counts'] = data['df_rbp_counts'].T
     data['df_trans'] = data['df_trans'].T
     data['df_genes'] = data['df_genes'].T
+    data['df_counts'] = data['df_counts'].T
     print('[transpose_dataframes] Transposition done\n')
     return data
 
@@ -415,31 +415,30 @@ def save_processed_data(data: dict, df_phenotype_study: pd.DataFrame, output_dir
     print(f'[save_processed_data] Saving processed data for study: {study_name}...')
     path = os.path.join(output_dir, study_name)
     os.makedirs(path, exist_ok=True)
-
+    
     path_rbp = os.path.join(path, 'RBPs_tpm.csv')
-    path_rbp_counts = os.path.join(path, 'RBPs_counts.csv')
     path_trans = os.path.join(path, 'trans_tpm.csv')
     path_gn = os.path.join(path, 'gn_tpm.csv')
+    path_gn_counts = os.path.join(path, 'gn_counts.csv')
     path_phenotype = os.path.join(path, 'phenotype_metadata.csv')
-
+    
     print(f'[save_processed_data] Saving RBP expression matrix to {path_rbp}...')
     data['df_rbp_gene'].to_csv(path_rbp, mode='a', header=not os.path.exists(path_rbp))
 
-    print(f'[save_processed_data] Saving RBP count matrix to {path_rbp_counts}...')
-    data['df_rbp_counts'].to_csv(path_rbp_counts, mode='a', header=not os.path.exists(path_rbp))
-    
     print(f'[save_processed_data] Saving transcript expression matrix to {path_trans}...')
     data['df_trans'].to_csv(path_trans, mode='a', header=not os.path.exists(path_trans))
 
     print(f'[save_processed_data] Saving gene expression matrix mapped to transcripts to {path_gn}...')
     data['df_genes'].to_csv(path_gn, mode='a', header=not os.path.exists(path_gn))
 
+    print(f'[save_processed_data] Saving gene count matrix to {path_gn_counts}...')
+    data['df_counts'].to_csv(path_gn_counts, mode='a', header=not os.path.exists(path_gn_counts))
+
     print(f'[save_processed_data] Saving phenotype metadata to {path_phenotype}...')
     df_phenotype_study.loc[data['df_rbp_gene'].index].to_csv(path_phenotype, mode='a', header=not os.path.exists(path_phenotype))
-
     print('[save_processed_data] Data saving completed.\n')
 
-def process_data_chunk( # aqui tengo que ver que hacer con df_counts
+def process_data_chunk( 
                     df_genes: pd.DataFrame,  
                     df_trans: pd.DataFrame,
                     df_counts: pd.DataFrame,
@@ -449,7 +448,6 @@ def process_data_chunk( # aqui tengo que ver que hacer con df_counts
                     gene_selection: bool,
                     rbp_genes_file: str,
                     output_dir: str,
-                    #phenotype_saved: dict,
                     splicing_genes_file: str = None,
                     cancer_genes_file: str = None,
                     gene_census_file: str = None, 
@@ -526,9 +524,10 @@ def process_data_chunk( # aqui tengo que ver que hacer con df_counts
 
         data_transformed = transform_expression_data(data_study)
         data_transformed = transpose_dataframes(data_transformed)
+        print(data_transformed) # remove afterwards this!!
         
         # Save the processed data and phenotype metadata
-        save_processed_data(data_transformed, df_phenotype_study, output_dir, study_name) #, phenotype_saved)
+        save_processed_data(data_transformed, df_phenotype_study, output_dir, study_name)
         print('\n')
 
 def parse_args():

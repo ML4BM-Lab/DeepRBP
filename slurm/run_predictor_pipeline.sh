@@ -20,6 +20,6 @@ conda activate /data/jsanchoz/conda-env/DeepRBP
 export PYTHONPATH="/scratch/jsanchoz/DeepRBP/src:$PYTHONPATH"
 python -c "import deeprbp; print('Package found')"
 
-python -m deeprbp.predictor_pipeline \
+python -m deeprbp.training_module.main_predictor \
   --config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_tcga_train.yaml" \
   --external_config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_gtex.yaml"

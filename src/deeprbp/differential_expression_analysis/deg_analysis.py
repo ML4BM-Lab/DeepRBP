@@ -8,8 +8,8 @@ from pydeseq2.ds import DeseqStats
 import matplotlib.pyplot as plt
 from sanbomics.tools import id_map
 from sanbomics.plots import volcano
-from config_loader import ConfigParser
-from processing import DataImporter, DatasetLoader
+from deeprbp.data_loading.config_loader import ConfigParser
+from deeprbp.data_processing.processing import DataImporter, DatasetLoader
 from utils import ensure_directory_exists
 
 class DifferentialExpressionAnalysis:
@@ -189,8 +189,8 @@ import matplotlib.pyplot as plt
 from sanbomics.tools import id_map
 from sanbomics.plots import volcano
 
-from config_loader import ConfigParser
-from processing import DataImporter, DatasetLoader
+from deeprbp.data_loading.config_loader import ConfigParser
+from deeprbp.data_processing.processing import DataImporter, DatasetLoader
 from utils import ensure_directory_exists
 
 config_path = "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_deg.yaml"

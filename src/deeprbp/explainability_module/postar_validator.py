@@ -1,4 +1,4 @@
-# /scratch/jsanchoz/DeepRBP/src/deeprbp/explainer_validatior_postar.py
+# 
 import os
 from tqdm import tqdm
 import numpy as np
@@ -7,9 +7,9 @@ from typing import Tuple
 from sklearn.metrics import roc_curve, roc_auc_score
 from logger import Logger
 from utils import ensure_directory_exists
-from plots import plot_distributions_and_roc_with_thresholds
+from deeprbp.module_training.plots import plot_distributions_and_roc_with_thresholds
 
-class ExplainerValidatorPostar:
+class PostarValidator:
     """
     A class to validate the results of the ExplainerModel against POSTAR experimental data.
 
@@ -26,7 +26,7 @@ class ExplainerValidatorPostar:
     """
     def __init__(self, explainer_model, df_results_summary, verbose = 1):
         """
-        Initializes the ExplainerValidatorPostar with the given explainer model and verbosity level.
+        Initializes the PostarValidator with the given explainer model and verbosity level.
 
         Args:
             explainer_model (ExplainerModel): An instance of the ExplainerModel to validate.
@@ -44,7 +44,7 @@ class ExplainerValidatorPostar:
         self.optimal_thresholds_df = pd.DataFrame()
         self.auc_df = pd.DataFrame()
         self.logger = Logger(verbose)
-        self.logger.log("Initialized ExplainerValidatorPostar.")
+        self.logger.log("Initialized PostarValidator.")
     
     def validate_dataframe(self, df: pd.DataFrame, expected_columns: list):
         """Validate that the DataFrame contains the expected columns."""

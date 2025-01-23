@@ -1,4 +1,4 @@
-# logger.py
+# src/deeprbp/util/logger.py
 
 class Logger:
     def __init__(self, verbose=1) -> None:

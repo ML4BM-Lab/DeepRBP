@@ -1,18 +1,18 @@
-# config4explainability
+# src/deeprbp/configs/config_tcga_explain.yaml
 source_name: "TCGA"
 
 # Paths for the data files
 data_paths:
-  rbp_path: "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2024-12-16_292/train_prediction_model/data/test_data/rbp_expr_df.csv"
-  isoform_expr_path: "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2024-12-16_292/train_prediction_model/data/test_data/trans_expr_df.csv"
-  metadata_path: "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2024-12-16_292/train_prediction_model/data/test_data/metadata_df.csv"
-  gene_expr_path: "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2024-12-16_292/train_prediction_model/data/test_data/gene_expr_df.csv"
+  rbp_path: "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2025-01-22_100_new_good_trained_model/train_prediction_model/data/test_data/rbp_expr_tpm_df.csv"
+  isoform_expr_path: "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2025-01-22_100_new_good_trained_model/train_prediction_model/data/test_data/trans_expr_tpm_df.csv"
+  gene_expr_path: "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2025-01-22_100_new_good_trained_model/train_prediction_model/data/test_data/gene_expr_tpm_df.csv"
+  metadata_path: "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2025-01-22_100_new_good_trained_model/train_prediction_model/data/test_data/metadata_df.csv"
   getBM_path: "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/getBM.csv" # NEW
 
 explainability:
-  trained_model_path: "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2024-12-16_292/train_prediction_model/results"
+  trained_model_path: "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2025-01-22_100_new_good_trained_model/train_prediction_model/results"
   model_file: "model.pt"
-  scaler_path: "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2024-12-16_292/train_prediction_model/data/scaler_trained"
+  scaler_path: "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2025-01-22_100_new_good_trained_model/train_prediction_model/data/scaler_trained"
   explanation_method: "DeepLIFT"
   reference_data: "knockdown_reference"
   batch_reduction_method: "t-statistic"
@@ -22,6 +22,6 @@ explainability:
 
 # Sample selection
 sample_category: "detailed_category"  # The column in metadata to stratify on
-select_samples: ["Liver_Hepatocellular_Carcinoma"]  # Puede ser "all" o una lista de tipos de muestras específicas
-output_dir: "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2024-12-16_292/explain_prediction_model"  # Se generará automáticamente si no se especifica
+select_samples: ["Liver_Hepatocellular_Carcinoma"]  # Can be "all" or a list of specific sample types
+output_dir: "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2025-01-22_100_new_good_trained_model/explain_prediction_model"  # Will be generated automatically if not specified
 plot_results: True

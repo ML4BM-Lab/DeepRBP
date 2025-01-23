@@ -3,7 +3,7 @@ source_name: "TCGA"
 
 # Paths for the data files
 data_paths:
-  rbp_counts_path: "/scratch/jsanchoz/DeepRBP/data/training_module/new_old_processed/TCGA/RBPs_counts.csv"
+  counts_path: "/scratch/jsanchoz/DeepRBP/data/training_module/new_old_processed/TCGA/gn_counts.csv"
   metadata_path: "/scratch/jsanchoz/DeepRBP/data/training_module/new_old_processed/TCGA/phenotype_metadata.csv"
   getBM_path: "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/getBM.csv" # NEW
 

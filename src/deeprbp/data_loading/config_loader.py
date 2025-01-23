@@ -1,4 +1,5 @@
-# /scratch/jsanchoz/DeepRBP/src/deeprbp/config_loader.py
+# src/deeprbp/data_loading/config_loader.py
+
 import yaml
 from datetime import datetime
 import random

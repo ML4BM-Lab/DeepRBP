@@ -1,23 +1,13 @@
 
-# src/deeprbp/explainer_postar_pipeline.py
+#
 import argparse
-from .models import ExplainerModel
-from .explainer_validator_postar import ExplainerValidatorPostar
+from ..module_training.models import ExplainerModel
+from .postar_validator import ExplainerValidatorPostar
 
 def run(config_path_explain, config_path_train):
     # Initialize the explainer model
     explainer_model = ExplainerModel(config_path_explain=config_path_explain, config_path_train=config_path_train)
     
-    # Load and process the data for explainability
-    data = explainer_model.load_and_process_data()
-    print("Data loaded and processed:")
-    print(data)
-    
-    # Load the trained model
-    model = explainer_model.load_trained_predictor_model()
-    print("Trained model loaded:")
-    print(model)
-
     # Perform the explainability
     outputs = explainer_model.perform_explainer()
 
