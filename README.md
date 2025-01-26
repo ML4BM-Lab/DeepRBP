@@ -235,7 +235,7 @@ seed: 0
 plot_results: True
 ```
 
-Once the config.yaml file is ready, execute the script as follows:
+Once the config.yaml files are ready, execute the script as follows, specifying the path where you have saved both the config for the dataset used for training (`config_path`) and the config for an external data (`external_config_path`):
 
 ```bash
 run-deeprbp-predictor \
@@ -243,7 +243,7 @@ run-deeprbp-predictor \
   --external_config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_gtex.yaml"
 ```
 
-### Option 2: Submit a Job in a HPC (comprueba esta jose, 23 enero)
+### Option 2: Submit a Job in a HPC
 If the number of training datasets or the total number of samples is high, we recommend submitting the job using the provided `run_predictor_pipeline.sh` script from the cluster directory. 
 This script is adapted to Slurm, but can be easily modified to work on SGE. 
 The specific parameters should be adapted depending on the specifications of the HPC.
@@ -253,8 +253,9 @@ cd slurm
 sbatch run_predictor_pipeline.sh
 ```
 ### Option 3: Running with Docker
-
+## (work to do here)
 ---
+
 
 ### Explainability Module
 This module uses the already trained DeepRBP Predictor to compute TxRBP (transcript-by-RBP) and GxRBP (gene-by-RBP) scores using DeepLIFT (Shrikumar, Greenside, and Kundaje, 2017) [Learning important features through propagating activation differences, International Conference on Machine Learning, PMLR, pages 3145–3153].
@@ -345,7 +346,7 @@ There are three options:
 ### **Option 1: Running the Python Script**  
 To execute DeepRBP Explainer on the **TCGA** test dataset, use a `.yaml` configuration file. Below is an example configuration file:
 
-#### **Example Configuration File (`config.yaml`)**
+#### **Example Configuration File (`config_path_explain.yaml`)**
 
 ```yaml
 # src/deeprbp/configs/config_tcga_explain.yaml
@@ -376,26 +377,28 @@ select_samples: ["Liver_Hepatocellular_Carcinoma"]  # Can be "all" or a list of 
 output_dir: "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2025-01-22_100_new_good_trained_model/explain_prediction_model"  # Will be generated automatically if not specified
 plot_results: True
 ```
-In this configuration file, the data should be in TPM format, untransformed and unscaled, and the gene matrix should not be expanded. The method will subsequently transform the data, generate the extended gene matrix, and load the scaler and trained model to initialize the explainability process. The desired samples for explainability will be filtered by `selected_samples` argument.
 
+n this configuration file, it is important to ensure that the data is in TPM format, untransformed and unscaled, and that the gene matrix is not expanded. The method will transform the data, generate the extended gene matrix, and load the scaler and trained model to initialize the explainability process. The desired samples for explainability will be filtered using the `select_samples` argument.
 
+Make sure to include the path to the configuration file used for training the predictor model (`config_path_train`).
 
+Once you have your `config_path_explain.yaml` file ready, execute the script with the following command:
 
+```bash
+run-deeprbp-explainer-postar \
+  --config_path_explain "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_tcga_explain.yaml" \
+  --config_path_train "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_tcga_train.yaml"
 
-# !!! (Vamos por aquí colega)
- 
+```
 
-
-#Lo que antes era Liver_GxRBP.csv ahora se llama human_liver_GxRBP.csv
-
-# Results Visualization
-This script allows you to compare scores derived from explainability techniques (such as DeepLIFT) against POSTAR experimental data. You can execute the following command to run the script:
+#### Results Visualization (EJECUTAR ESTO AUN!!)
+After running the DeepRBP Explainer, you can visualize the results to compare scores derived from explainability techniques, such as DeepLIFT, against POSTAR experimental data. Use the following command to generate the visualization:
 
 ```bash
 module load R/4.3.2
 Rscript /scratch/jsanchoz/DeepRBP/src/deeprbp/results_visualization/run_postar_plot_generation.R \
-  --input_path /scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2024-12-16_292/explain_prediction_model/results/DeepLIFT_knockdown_reference_t-statistic_max_absolute_value \
-  --output_path /scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2024-12-16_292/explain_prediction_model/results/DeepLIFT_knockdown_reference_t-statistic_max_absolute_value/results_visualization \
+  --input_path /scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2025-01-22_100_new_good_trained_model/explain_prediction_model/results/DeepLIFT_knockdown_reference_t-statistic_max_absolute_value \
+  --output_path /scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2025-01-22_100_new_good_trained_model/explain_prediction_model/results/DeepLIFT_knockdown_reference_t-statistic_max_absolute_value/results_visualization \
   --output_filename plot_score_results.pdf \
   --results_filename df_results_summary.csv \
   --list_rbps_postar_filename list_rbps_postar_ordered.csv \
@@ -407,8 +410,7 @@ Rscript /scratch/jsanchoz/DeepRBP/src/deeprbp/results_visualization/run_postar_p
   --max_iterations 7
 ```
 
-# Overview
-This command generates box plots that illustrate the distribution of scores across different RNA Binding Proteins (RBPs) and genes, utilizing POSTAR labels for classification. The plot also displays the results obtained from conducting a Wilcoxon test across RBPs or genes between the groups 0 and 1 of POSTAR, allowing you to assess whether the difference in medians is statistically significant.
+This command generates box plots illustrating the distribution of scores across different RNA Binding Proteins (RBPs) and genes, utilizing POSTAR labels for classification. Additionally, the plot displays the results of conducting a Wilcoxon test across RBPs or genes between the groups 0 and 1 of POSTAR, allowing you to assess whether the difference in medians is statistically significant.
 
 ## Parameters
 The parameters, in order, are as follows:
@@ -436,6 +438,32 @@ The parameters, in order, are as follows:
   An integer specifying the maximum number of iterations for processing RBPs and genes for plotting. Default is `5`.
 
 
+### Option 2: Submit a Job in a HPC (EJECUTAR ESTO AUN!!)
+If the number of training datasets or the total number of samples is high, we recommend submitting the job using the provided `run_explainer_pipeline.sh` script from the cluster directory. 
+This script is adapted to Slurm, but can be easily modified to work on SGE. 
+The specific parameters should be adapted depending on the specifications of the HPC.
+
+```bash
+cd slurm
+sbatch run_explainer_postar_pipeline.sh
+```
+The above script takes care of executing the DeepRBP Explainer, validating the results with the appropriate POSTAR matrix, and generating the visualization plots. This allows you to automate the entire analysis and visualization process efficiently in a high-performance computing environment.
+
+### Option 3: Running with Docker
+## (work to do here)
+--- -->
+
+
+
+
+
+
+# ME QUEDA LUEGO HACER UN GET_POTENTIAL_CANDIDATES A PARTIR DE UN DF_SUMMARY. Y RESULTADOS DE DEG.
+# ME QUEDA PODER USAR DEEPRBPEXPLAINER PARA REAL KDS DATA (EL GET INPUT DATA HAY Q HACERLO TB PARA ESTOS)
+# ME QUEDA QUE EL PREP_MODEL_INPUTS COJA LOS COUNTS DE LOS TRANS Y TODOS LOS GENES.
+# hacer el pseucode.py y que el deeplift_handler pueda trabajar con todos los casos.
+# hacer merge de este branch en git y publicar la versión!
+# hacer notebooks!
 
 
 
@@ -506,10 +534,10 @@ The parameters, in order, are as follows:
 │   │   │   │   │   ├── test_data/   
 │   └── logs/                # Carpeta general para logs de todo el proyecto
 
-├── notebooks  # Notebooks de análisis y pruebas
+<!-- ├── notebooks  # Notebooks de análisis y pruebas
 │   ├── Tutorial_predict_transcript_expression.ipynb  # Tutorial para predecir expresión de transcriptos
 │   ├── Tutorial_replicate_postar3.ipynb  # Tutorial para replicar los resultados en POSTAR3
-│   └── Tutorial_replicate_real_kds.ipynb  # Tutorial para replicar knockdown experiments
+│   └── Tutorial_replicate_real_kds.ipynb  # Tutorial para replicar knockdown experiments -->
 
 
 
@@ -527,12 +555,13 @@ src/  # Main code for the DeepRBP package
 │   │   ├── evaluation.py            # Functions to evaluate the performance of the predictive model
 │   │
 │   │── explainability_module/ 
-│   │   ├── postar_pipeline.py   # Load validation data and compare with results from ExplainerModel.
-│   │   ├── postar_validator.py  # Class to validate results against POSTAR experimental data.
-│   │   ├── deeplift_handler.py            # Class for DeepLift calculations at transcript and gene levels.
+│   │   ├── main_explainer.py              # Main function to execute the explainer postar pipeline 
+│   │   ├── postar_pipeline.py   # Class DeepRBPostarExplainabilityPipeline
+│   │   ├── postar_validator.py  # Class PostarValidator to validate results against POSTAR experimental data.
+│   │   ├── deeplift_handler.py            # Class DeepLiftHandler for DeepLift calculations at transcript and gene levels.
 │   │   ├── pseudokd_handler.py            # (In Progress)
 │   │   ├── model.py             # Defines the explanatory model class (ExplainerModel)
-│   │   │   ├── results_visualization/  # Visualizacion de los resultados de postar/real kds
+│   │   ├── results_visualization/  # Visualizacion de los resultados de postar/real kds
 │   │   │   │   └── generate_postar_plots.R  # function
 │   │   │   │   └── run_postar_plot_generation.R  # main
 │   │   │   │   └── plots.py                       # Functions for plotting results
@@ -551,7 +580,7 @@ src/  # Main code for the DeepRBP package
 │   │ 
 │   ├── data_loading/  
 │   │   └── config_loader.py                  # Config class and load_config to load configurations from YAML
-│   │   └── processing.py  # Classes for data loading, filtering, splitting, etc.
+│   │   └── data_loader.py  # Classes for data loading, filtering, splitting, etc.
 │   │
 │   ├── util/  
 │   │   └── utils.py               # Utility functions
@@ -570,13 +599,10 @@ src/  # Main code for the DeepRBP package
 ├── slurm  # Scripts ejecutables
 │   ├── download_data.sh  # Script para descargar datos (TCGA, GTEx)
 │   ├── generate_model_inputs.sh  # Script para procesar los datos descargados y generar matrices de input
-│   ├── run_DeepRBP_predictor.sh  # Script para entrenar y evaluar el predictor DeepRBP
-│   └── run_explainability.sh  # Script para ejecutar el módulo de explainability
+│   ├── run_predictor_pipeline.sh  # Script para entrenar y evaluar el predictor DeepRBP
+│   └── run_explainer_postar_pipeline.sh  # Script para ejecutar el módulo de explainability
 
-├── images  # Imágenes para visualización (por ejemplo, diagramas o ejemplos de resultados)
-
+├── images  # Imágenes para visualización (por ejemplo, diagramas o ejemplos de resultados.
 ├── README.md  # Instrucciones y documentación del proyecto
-
 ├── .gitignore  # Archivos y carpetas a ignorar en el control de versiones
-
 └── setup.py  # Script de instalación para el paquete DeepRBP

@@ -33,39 +33,50 @@ class DataImporter:
         self.logger = Logger(verbose=1)
         if "metadata_path" not in paths or not paths["metadata_path"]:
             self.logger.error("❌ The 'metadata_path' is required and must be provided.", ValueError)
+
         self.paths = paths
         self.data = {}
+
     def load(self):
         """
         Load data dictionary from the specified paths and store it in the object.
         """
         try:
             self.logger.log("📥 Loading data from specified paths...")
+
             # Load data conditionally based on provided paths
             if "rbp_path" in self.paths:
                 self.data["rbp_expr_tpm_df"] = pd.read_csv(self.paths["rbp_path"], index_col=0)
                 self.logger.log("✅ Loaded RBP expression data.")
+
             if "gene_expr_path" in self.paths:
                 self.data["gene_expr_tpm_df"] = pd.read_csv(self.paths["gene_expr_path"], index_col=0)
                 self.logger.log("✅ Loaded gene expression data.")
+
             if "isoform_expr_path" in self.paths:
                 self.data["trans_expr_tpm_df"] = pd.read_csv(self.paths["isoform_expr_path"], index_col=0)
                 self.logger.log("✅ Loaded isoform expression data.")
+
             if "counts_path" in self.paths:
                 self.data["gn_counts_df"] = pd.read_csv(self.paths["counts_path"], index_col=0)
                 self.logger.log("✅ Loaded gene counts data.")
+
             if "metadata_path" in self.paths:
                 self.data["metadata_df"] = pd.read_csv(self.paths["metadata_path"], index_col=0)
                 self.logger.log("✅ Loaded metadata.")
+
             if "getBM_path" in self.paths:
                 self.getBM = pd.read_csv(self.paths["getBM_path"])
                 self.logger.log("✅ Loaded getBM data.")
+
         except FileNotFoundError as e:
             self.logger.error(f"❌ Error loading file: {e}", FileNotFoundError)
+
         self._transform_data()  # Apply transformations
         self._expand_gene_matrix() # Expand gene matrix
         self._check_consistency() # Verify the indices are consistent
         return self.data
+    
     def _transform_data(self):
         """
         Transform RBP and isoform expression data to log2(TPM + 1).
@@ -75,9 +86,11 @@ class DataImporter:
         if "rbp_expr_tpm_df" in self.data:
             self.data["rbp_expr_log2p_tpm_df"] = np.log2(self.data["rbp_expr_tpm_df"] + 1)
             self.logger.log("✅ Applied log2 transformation to RBP expression data.")
+
         if "trans_expr_tpm_df" in self.data:
             self.data["trans_expr_log2p_tpm_df"] = np.log2(self.data["trans_expr_tpm_df"] + 1)
             self.logger.log("✅ Applied log2 transformation to isoform expression data.")
+
     def _expand_gene_matrix(self):
         """
         Expand the gene expression matrix to match each isoform expression.
@@ -86,16 +99,19 @@ class DataImporter:
         self.logger.log("🔄 Starting expansion of gene expression matrix to match isoform expression...")
         if "gene_expr_tpm_df" in self.data and "trans_expr_tpm_df" in self.data:
             list_transcripts = self.data["trans_expr_tpm_df"].columns.tolist()
+
             # Get the Gene_IDs list mapped to each Transcript_ID
             list_genes_mapped_to_trans = [
                 self.getBM.loc[self.getBM['Transcript_ID'] == trans_id, 'Gene_ID'].values[0]
                 for trans_id in list_transcripts
             ]
+
             # Expand the gene expression matrix
             self.data["gn_expr_each_iso_tpm_df"] = self.data["gene_expr_tpm_df"].loc[:, list_genes_mapped_to_trans]
             # Set column names for genes mapped to transcripts.
             self.data["gn_expr_each_iso_tpm_df"].columns = list_transcripts
             self.logger.log("✅ Expanded gene expression matrix to match isoform expression.")
+
     def _check_consistency(self):
         """
         Ensure the indices are consistent across all datasets.
@@ -103,10 +119,12 @@ class DataImporter:
         """
         indices = {key: df.index for key, df in self.data.items()}
         common_indices = set.intersection(*[set(index) for index in indices.values()])
+
         for key, df in self.data.items():
             if not df.index.isin(common_indices).all():
                 self.data[key] = df.loc[common_indices]
                 self.logger.log(f"Filtered {key} to keep only common samples.")
+
         # Verify that all DataFrames now have the same index
         first_index = next(iter(indices.values())).tolist()
         if not all(df.index.tolist() == first_index for df in self.data.values()):
@@ -132,6 +150,7 @@ class DatasetLoader:
     def __init__(self, data_importer, base_config):
         self.data_importer = data_importer
         self.base_config = base_config
+
     def load_data(self):
         # Load the data using DataImporter
         data = self.data_importer.load()
@@ -177,14 +196,17 @@ class DataSplitter:
         self.sample_category = sample_category
         self.sample_ids = self.data['metadata_df'].index
         self.id2index_mapping = self._generate_id2index_mapping()
+
     def _generate_id2index_mapping(self) -> Dict[str, int]:
         """Generate the mapping from patient IDs to indices."""
         self.logger.log("🔄 Generating ID to index mapping...")
         return {patient_id: idx for idx, patient_id in enumerate(self.sample_ids)}
+    
     def split_data(self, data, test_size):
         """Perform a stratified train-test split based on the detailed_category in metadata."""
         sample_category = data['metadata_df'][self.sample_category]
         self.logger.log(f'📊 [split_data] Performing a stratified data split with fraction division equal to {test_size}...')
+        
         # Step 1: Perform the stratified split based on patient IDs (still strings at this point) and sample category
         train_idx, test_idx = sk_train_test_split(
             data['metadata_df'].index,
@@ -192,22 +214,27 @@ class DataSplitter:
             stratify=sample_category,
             random_state=self.config['seed']
         )
+        
         # Step 2: Convert string indices (train_idx, test_idx) to integer indices
         train_idx = [self.id2index_mapping[patient_id] for patient_id in train_idx]
         test_idx = [self.id2index_mapping[patient_id] for patient_id in test_idx]
         return train_idx, test_idx
+    
     def add_sample_set_label(self, set_name: str, samples: list):
         """ Add a column to the metadata DataFrame indicating whether samples belong to the training or test set."""
         sample_set = set(samples)
+        
         if 'set_type' not in self.data['metadata_df'].columns:
             self.data['metadata_df']['set_type'] = 'unknown'
         self.data['metadata_df'].loc[self.data['metadata_df'].index.isin(sample_set), 'set_type'] = set_name
         self.logger.log(f"🏷️ Added sample set label '{set_name}' for {len(samples)} samples.")
+    
     def split_data_sets(self) -> Tuple[Dict[str, pd.DataFrame], Dict[str, pd.DataFrame], Dict[str, pd.DataFrame]]:
         """
         This function handles the splitting of data into train, validation, and test sets based on the config.
         """
         train_data, valid_data, test_data = {}, {}, {}
+        
         if self.config["train_test_split"]:
             self.logger.log("🔄 Performing train/test split...")
             self.train_idx, self.test_idx = self.split_data(data=self.data, test_size=self.config['test_fraction'])
@@ -216,6 +243,7 @@ class DataSplitter:
             self.add_sample_set_label(set_name='testing', samples=index2id(self.id2index_mapping, self.test_idx))
             train_data = filter_data_by_sample_ids(self.data, index2id(self.id2index_mapping, self.train_idx))
             test_data = filter_data_by_sample_ids(self.data, index2id(self.id2index_mapping, self.test_idx))
+        
         if self.config["train_val_split"]:
             self.logger.log("🔄 Performing train/val split...")
             training_data = filter_data_by_sample_ids(self.data, index2id(self.id2index_mapping, self.train_idx)) 
@@ -224,6 +252,7 @@ class DataSplitter:
             self.add_sample_set_label(set_name='training', samples=index2id(self.id2index_mapping, self.train_idx))
             self.add_sample_set_label(set_name='validation', samples=index2id(self.id2index_mapping, self.valid_idx))
             valid_data = filter_data_by_sample_ids(self.data, index2id(self.id2index_mapping, self.valid_idx))
+        
         if not train_data and not valid_data and not test_data:
             self.logger.warn("⚠️ No splits performed, returning only test data.")
             test_data = self.data  # Return all data as test data
@@ -242,10 +271,12 @@ class Scaler:
         self.logger = Logger(verbose=1)
         self.scaler = existing_scaler
         self.sigma = existing_sigma
+
         if self.scaler is not None and self.sigma is not None:
             self.logger.log("✅ [Scaler] Existing scaler and sigma loaded. Ready for transformation.")
         else:
             self.logger.warn("⚠️ [Scaler] No existing scaler or sigma provided. Please fit before using.")
+
     def fit(self, train_set):
         """
         Fit a StandardScaler to the training dataset and compute the standard deviation (sigma) for clipping.
@@ -261,6 +292,7 @@ class Scaler:
         self.scaler.fit(train_set)
         self.sigma = np.std(self.scaler.transform(train_set).flatten().astype(np.float64))
         self.logger.log(f"✅ [Scaler:fit] Sigma computed: {self.sigma:.4f}")
+
     def transform(self, transform_set):
         """
         Normalize and clip the data using the fitted scaler and computed sigma.
@@ -276,6 +308,7 @@ class Scaler:
         """
         if self.scaler is None or self.sigma is None:
             self.logger.error("❌ [Scaler:transform] Scaler and sigma must be fitted or loaded before transformation.", ValueError)
+        
         # Scale the data
         scaled_set = pd.DataFrame(
             self.scaler.transform(transform_set),
@@ -284,12 +317,14 @@ class Scaler:
         )
         self.logger.log(f"[Scaler:transform] Mean after scaling: {scaled_set.mean().mean():.4f}")
         self.logger.log(f"[Scaler:transform] Std after scaling: {scaled_set.std().mean():.4f}")
+        
         # Clip and normalize
         self.logger.log("🔄 [Scaler:transform] Clipping the data...")
         scaled_set = np.clip(scaled_set, -2 * self.sigma, 2 * self.sigma, axis=1)
         scaled_set += 2 * self.sigma
         scaled_set /= 4 * self.sigma
         return scaled_set.astype(np.float64)
+    
     def save(self, folder_path):
         """
         Save the fitted scaler and the computed sigma to the specified directory.
@@ -302,18 +337,23 @@ class Scaler:
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
             self.logger.log(f"📁 [Scaler:save] Created directory: {folder_path}")
+        
         scaler_file = os.path.join(folder_path, 'scaler.joblib')
         sigma_file = os.path.join(folder_path, 'sigma.npy')
+        
         if self.scaler is not None:
             joblib.dump(self.scaler, scaler_file)
             self.logger.log(f"✅ [Scaler:save] Scaler saved to: {scaler_file}")
+        
         else:
             self.logger.error("❌ [Scaler:save] No scaler available to save.", ValueError)
+        
         if self.sigma is not None:
             np.save(sigma_file, np.array(self.sigma, dtype=np.float64))
             self.logger.log(f"✅ [Scaler:save] Sigma saved to: {sigma_file}")
         else:
             self.logger.error("❌ [Scaler:save] No sigma available to save.", ValueError)
+
     @classmethod
     def load(cls, folder_path):
         """
@@ -331,10 +371,12 @@ class Scaler:
         logger = Logger(verbose=1) 
         scaler_file = os.path.join(folder_path, 'scaler.joblib')
         sigma_file = os.path.join(folder_path, 'sigma.npy')
+        
         if not os.path.exists(scaler_file):
             logger.error(f"❌ [Scaler:load] Scaler file not found at: {scaler_file}", FileNotFoundError)
         if not os.path.exists(sigma_file):
             logger.error(f"❌ [Scaler:load] Sigma file not found at: {sigma_file}", FileNotFoundError)
+        
         # Load scaler and sigma
         scaler = joblib.load(scaler_file)
         sigma = np.load(sigma_file)

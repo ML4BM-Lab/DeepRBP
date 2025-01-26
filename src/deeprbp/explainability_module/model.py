@@ -64,7 +64,7 @@ class ExplainerModel():
         data['scaled_rbp_expr_log2p_tpm_df'] = self.scaler.transform(data['rbp_expr_log2p_tpm_df'])
         self.logger.log("✅ Data loaded and processed successfully.")
         return data
-    
+   
     def load_trained_predictor_model(self):  
         """Load the trained predictor model."""  
         self.logger.log("📦 Loading the trained predictor model...") 
@@ -74,7 +74,7 @@ class ExplainerModel():
         )  
         self.logger.log("✅ Model loaded successfully.")  
         return model  
-
+    
     def initialize_explainer_handler(self, model, data):
         """Initialize the ExplainerHandler with the loaded model and data."""
         self.logger.log("🔍 Initializing explainer handler...")
@@ -87,11 +87,11 @@ class ExplainerModel():
             self.logger.warn("⚠️ Pseudoknocking method is still in development.")
             # Handle other explanation methods as needed
         return explainer_handler
-
+    
     def perform_explainer(self):
         """Perform the explanation method based on the configured explainer handler and return the results."""
         self.logger.log("🚀 Starting the explanation process...")
-
+        
         # Load and process the data for explainability
         data = self.load_and_process_data()
         
@@ -117,14 +117,14 @@ class ExplainerModel():
         self.logger.log("🔍 Filtering scores for low-expressed transcripts...")
         df_scores_TxRBP = explainer_handler.filter_scores_for_low_expressed_transcripts(
             deeplift_scores=df_scores_TxRBP,
-            trans_expr_df=self.data['trans_expr_tpm_df']
+            trans_expr_df=data['trans_expr_tpm_df']
         )
-
+        
         # Filter scores for low-expressed genes
         self.logger.log("🔍 Filtering scores for low-expressed genes...")
         df_scores_TxRBP = explainer_handler.filter_scores_for_low_expressed_genes(
             deeplift_scores=df_scores_TxRBP,
-            gene_expr_df=self.data['gn_expr_each_iso_tpm_df'], 
+            gene_expr_df=data['gn_expr_each_iso_tpm_df'], 
             threshold=1
         )
         
@@ -135,7 +135,6 @@ class ExplainerModel():
         # Save results as CSV files
         self.save_results(df_scores_TxRBP, df_scores_GxRBP, result_table)
         self.logger.log("✅ Explanation process completed successfully.")
-
         return {
             'df_scores_TxRBP': df_scores_TxRBP,
             'df_scores_GxRBP': df_scores_GxRBP,

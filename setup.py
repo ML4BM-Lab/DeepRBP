@@ -36,7 +36,7 @@ setup(
         'console_scripts': [
             'prepare-model-inputs=src.deeprbp.data_preprocessing.prep_model_inputs:main',
             'run-deeprbp-predictor=src.deeprbp.training_module.main_predictor:main',
-            #'run-deeprbp-explainer-postar=src.deeprbp.explainer_postar_pipeline:main'
+            'run-deeprbp-explainer-postar=src.deeprbp.explainability_module.main_explainer:main'
         ],
     },
     zip_safe=False,

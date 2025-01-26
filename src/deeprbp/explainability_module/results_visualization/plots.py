@@ -1,5 +1,8 @@
+# src/deeprbp/explainability_module/results_visualization/plots.py
+ 
+import matplotlib.pyplot as plt   
+import seaborn as sns 
 
-# explain
 def plot_distributions_and_roc_with_thresholds(df_current_rbp, rbp_id, optimal_threshold, fpr, tpr, optimal_idx, auc_score, path_save):
     """
     Plots the distributions of scores and the ROC curve with the optimal threshold.
@@ -17,10 +20,12 @@ def plot_distributions_and_roc_with_thresholds(df_current_rbp, rbp_id, optimal_t
     # Validate input DataFrame
     if not {'Score', 'Postar_Score'}.issubset(df_current_rbp.columns):
         raise ValueError("DataFrame must contain 'Score' and 'Postar_Score' columns.")
+    
     plt.figure(figsize=(12, 4))
     sns.set(style="whitegrid")
     color_group1 = '#7fc97f'   
     color_group0 = '#beaed4'  
+    
     # Plot distribution of 0s and 1s
     plt.subplot(1, 2, 1)
     sns.kdeplot(data=df_current_rbp, x='Score', hue='Postar_Score', fill=True, 
@@ -32,6 +37,7 @@ def plot_distributions_and_roc_with_thresholds(df_current_rbp, rbp_id, optimal_t
     plt.ylabel('Density')
     plt.legend(title='Postar', labels=['Class-1', 'Class-0'])
     plt.grid(False)
+    
     # Plot ROC curve
     plt.subplot(1, 2, 2)
     plt.plot(fpr, tpr, label=f'AUC = {auc_score:.2f}')
@@ -44,8 +50,8 @@ def plot_distributions_and_roc_with_thresholds(df_current_rbp, rbp_id, optimal_t
     plt.legend()
     plt.grid(False)
     plt.tight_layout()
+    
     # Save the figure
     plt.savefig(f'{path_save}/figure_{rbp_id}.png', transparent=True)
-    plt.show()
     plt.close()
     

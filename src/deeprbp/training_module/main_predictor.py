@@ -1,7 +1,7 @@
 # src/deeprbp/training_module/main_predictor.py
 
 import argparse
-from .pipeline import DeepRBPredictorPipeline  # Adjust the import based on your module structure
+from .pipeline import DeepRBPredictorPipeline   
 
 def parse_args():   
     parser = argparse.ArgumentParser(description='Run the DeepRBP predictor training pipeline.')
