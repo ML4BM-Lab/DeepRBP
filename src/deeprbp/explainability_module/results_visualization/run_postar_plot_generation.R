@@ -1,67 +1,75 @@
 # Load necessary libraries
 rm(list = ls())
 
-chooseCRANmirror(graphics = FALSE, ind = 1)  # Selecciona el primer espejo disponible
+# Set a default CRAN mirror
 options(repos = c(CRAN = "https://cloud.r-project.org/"))
-install.packages("readr")
 
-#install.packages("tidyverse")
-#install.packages("ggplot2")
-#install.packages("ggpubr")
-#install.packages("rstatix")
-#install.packages("latex2exp")
-#install.packages("dplyr")
+required_packages <- c("data.table", "dplyr", "ggpubr", "rstatix", "ggplot2", "optparse")
 
-library(tidyverse)
-library(ggplot2)
+install_if_missing <- function(packages) {
+  missing_packages <- packages[!(packages %in% installed.packages()[, "Package"])]
+  if (length(missing_packages)) {
+    install.packages(missing_packages, dependencies = TRUE)
+  }
+}
+
+install_if_missing(required_packages)
+install.packages("ggpubr")
+install.packages("rstatix")
+install.packages("ggplot2")
+
+library(data.table)
+library(dplyr)
 library(ggpubr)
 library(rstatix)
-library(latex2exp)
-library(dplyr)
-
-# Load necessary libraries
-chooseCRANmirror(graphics = FALSE, ind = 1)  # Selecciona el primer espejo disponible
-options(repos = c(CRAN = "https://cloud.r-project.org/"))
-install.packages("readr")
-install.packages("BiocManager")
-BiocManager::install("GenomicRanges")
-library(readr)
-library(GenomicRanges)
-
+library(ggplot2)
+library(optparse)
 
 # Load the create_postar_plots function
-source("postar_plot_generator.R")
+source(paste0(getwd(),"/generate_postar_plots.R"))
 
-# Set paths and filenames
-input_path <- '/Users/joseba/Desktop'
-output_path <- '/Users/joseba/Desktop'
-output_filename <- 'plot_score_results.pdf'
-results_filename <- 'df_results_summary.csv'
-list_rbps_postar_filename <- 'list_rbps_postar_ordered.csv'  
-list_genes_postar_filename <- 'list_genes_postar_ordered.csv'  
-getBM_filename <- 'getBM.csv'
-save_plot <- TRUE
-index_start <- 1
-index_end <- 4
-max_iterations <- 5
+# Define the command-line options
+option_list <- list(
+  make_option(c("--input_path"), type = "character", default = NULL, 
+              help = "Path to the input files", metavar = "character"),
+  make_option(c("--output_path"), type = "character", default = NULL, 
+              help = "Path to save output files", metavar = "character"),
+  make_option(c("--output_filename"), type = "character", default = "plot_score_results.pdf", 
+              help = "Name of the output file (with extension)", metavar = "character"),
+  make_option(c("--results_filename"), type = "character", default = "df_results_summary.csv", 
+              help = "Results file name (CSV)", metavar = "character"),
+  make_option(c("--list_rbps_postar_filename"), type = "character", default = "list_rbps_postar_ordered.csv", 
+              help = "RBP list file name (CSV)", metavar = "character"),
+  make_option(c("--list_genes_postar_filename"), type = "character", default = "list_genes_postar_ordered.csv", 
+              help = "Gene list file name (CSV)", metavar = "character"),
+  make_option(c("--getBM_filename"), type = "character", default = "getBM.csv", 
+              help = "Gene ID mapping file name (CSV)", metavar = "character"),
+  make_option(c("--save_plot"), type = "logical", default = FALSE, 
+              help = "Whether to save the plot as a PDF", metavar = "logical"),
+  make_option(c("--index_start"), type = "integer", default = 1, 
+              help = "Starting index for slicing the RBP and gene lists for plotting", metavar = "integer"),
+  make_option(c("--index_end"), type = "integer", default = 4, 
+              help = "Ending index for slicing the RBP and gene lists for plotting", metavar = "integer"),
+  make_option(c("--max_iterations"), type = "integer", default = 1, 
+              help = "Maximum number of iterations for processing RBPs and genes for plotting", metavar = "integer")
+)
 
-# Get command-line arguments if needed
-args <- commandArgs(trailingOnly = TRUE)
+# Parse the command-line options
+parser <- OptionParser(option_list = option_list)
+args <- parse_args(parser)
 
-# Assign arguments to variables if running from the command line
-if (length(args) > 0) {
-  input_path <- args[1]
-  results_filename <- args[2]
-  list_rbps_postar_filename <- args[3]
-  list_genes_postar_filename <- args[4]
-  getBM_filename <- args[5]
-  output_path <- args[6]
-  output_filename <- args[7]
-  save_plot <- as.logical(args[8])  
-  index_start <- args[9]
-  index_end <- args[10]
-  max_iterations <- args[11]
-} 
+# Assign arguments to variables
+input_path <- args$input_path
+output_path <- args$output_path
+output_filename <- args$output_filename
+results_filename <- args$results_filename
+list_rbps_postar_filename <- args$list_rbps_postar_filename
+list_genes_postar_filename <- args$list_genes_postar_filename
+getBM_filename <- args$getBM_filename
+save_plot <- args$save_plot
+index_start <- args$index_start
+index_end <- args$index_end
+max_iterations <- args$max_iterations
 
 # Call the function with the main arguments
 plotlist <- create_postar_plots(
@@ -73,8 +81,8 @@ plotlist <- create_postar_plots(
       output_path = output_path, 
       output_filename = output_filename,
       save_plot = save_plot,
-      index_start = index_start,  # Default value for index_start
-      index_end = index_end,    # Default value for index_end
+      index_start = index_start,  
+      index_end = index_end,    
       max_iterations = max_iterations
 )
 

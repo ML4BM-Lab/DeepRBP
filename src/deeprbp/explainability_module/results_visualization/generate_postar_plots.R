@@ -59,6 +59,20 @@ create_postar_plots <- function(
     max_iterations = 4
 ){
   
+  ###
+#input_path <- '/Users/joseba/Desktop/R_plots'
+#output_path <- '/Users/joseba/Desktop/R_plots'
+#output_filename <- 'plot_score_results.pdf'
+#results_filename <- 'df_results_summary.csv'
+#list_rbps_postar_filename <- 'list_rbps_postar_ordered.csv'
+#list_genes_postar_filename <- 'list_genes_postar_ordered.csv'
+#getBM_filename <- 'getBM.csv' 
+#save_plot <- TRUE 
+#index_start <- 1
+#index_end <- 4
+#max_iterations <- 7
+  ###
+  
   path_summary_results <- file.path(input_path, results_filename)
   path_list_rbps_postar <- file.path(input_path, list_rbps_postar_filename)
   path_list_genes_postar <- file.path(input_path, list_genes_postar_filename)
@@ -139,10 +153,27 @@ create_postar_plots <- function(
     rstatix::wilcox_test(Score ~ Postar_Score, comparisons = list(c("1","0"))) %>%
     add_xy_position(fun = "max", x = "Gene_ID") %>% 
     adjust_pvalue(method = "bonferroni") %>%
-    add_significance("p.adj") 
+    add_significance("p.adj")  
   #%>% filter(Gene_ID %in% actual_genes) 
   
-  # Adapt the y position for the plot 
+  stat.test_rbps <- stat.test_rbps %>%
+    mutate(
+      adjustment = (row_number() - 1) %/% 4 * 4,  
+      x = x - adjustment,                          
+      xmin = xmin - adjustment,                    
+      xmax = xmax - adjustment                    
+    ) %>%
+    select(-adjustment) 
+  
+  stat.test_genes <- stat.test_genes %>%
+    mutate(
+      adjustment = (row_number() - 1) %/% 4 * 4,  
+      x = x - adjustment,                          
+      xmin = xmin - adjustment,                    
+      xmax = xmax - adjustment                    
+    ) %>%
+    select(-adjustment)
+  
   stat.test_genes <- merge(stat.test_genes, 
                            df_results_summary2 %>% filter(Postar_Score %in% c("1", "0")) %>% 
                              group_by(Gene_ID) %>% summarise(y.position.2 = max(Score)+2))
@@ -169,36 +200,12 @@ create_postar_plots <- function(
     filtered_stat_rbps <- stat.test_rbps %>%
       filter(RBP_name %in% actual_rbps)
     
+    filtered_stat_rbps <- filtered_stat_rbps %>%
+      mutate(y.position = y.position - 0.5)
+    
     filtered_stat_genes <- stat.test_genes %>%
       filter(Gene_ID %in% actual_genes)
     
-    # Calculate p-values onto the bar plots across RBPs
-    # Add p-values onto the bar plots
-    #stat.test_rbps <- actual_df_results_summary1 %>%
-    #  group_by(RBP_name) %>%
-    #  rstatix::wilcox_test(Score ~ Postar_Score, comparisons = list(c("1","0"))) %>%
-      # %>%#, dodge = 0.8)# %>%
-      # filter(group1 == "1") %>% filter(group2 == "0")  %>%
-    #  add_xy_position(fun = "max", x = "RBP_name") %>% 
-    #  adjust_pvalue(method = "bonferroni") %>%
-    #  add_significance("p.adj")
-    
-    # Add p-values onto the bar plots across Genes
-    #stat.test_genes <- actual_df_results_summary2 %>%
-    #  group_by(Gene_ID) %>%
-    #  rstatix::wilcox_test(Score ~ Postar_Score, comparisons = list(c("1","0"))) %>%
-      # %>%#, dodge = 0.8)# %>%
-      # filter(group1 == "1") %>% filter(group2 == "0")  %>%
-    #  add_xy_position(fun = "max", x = "Gene_ID") %>% 
-    #  adjust_pvalue(method = "bonferroni") %>%
-    #  add_significance("p.adj") %>%
-    #  filter(Gene_ID %in% actual_genes) 
-    
-    # Adapt the y position for the plot 
-    #stat.test_genes <- merge(stat.test_genes, 
-    #                         actual_df_results_summary2 %>% filter(Postar_Score %in% c("1", "0")) %>% 
-    #                           group_by(Gene_ID) %>% summarise(y.position.2 = max(Score)+2))
-   
     # Plotting
     plotlist <- list()
     
