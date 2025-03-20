@@ -221,7 +221,7 @@ def find_gene_ids_from_synonyms(dfs: list[pd.DataFrame], synonyms_col: str, getB
 
 def match_dataframe_with_getBM(df_genes_names: Union[pd.DataFrame, List[pd.DataFrame]], 
                                getBM: pd.DataFrame, 
-                               parm_match_colums: dict) -> pd.DataFrame:
+                               parm_match_columns: dict) -> pd.DataFrame:
     """
     Matches the genes from a given DataFrame (or a list of DataFrames) with the corresponding Gene IDs in the getBM DataFrame, 
     including those found by matching synonyms (if applicable).
@@ -229,7 +229,7 @@ def match_dataframe_with_getBM(df_genes_names: Union[pd.DataFrame, List[pd.DataF
     Args:
     - df_genes_names (DataFrame or List[DataFrame]): DataFrame or list of DataFrames containing gene names to be matched.
     - getBM (DataFrame): DataFrame containing the mapping of gene names and gene IDs.
-    - parm_match_colums (dict): Dictionary containing column name mappings for the various datasets:
+    - parm_match_columns (dict): Dictionary containing column name mappings for the various datasets:
         - "df_gene_name_col": Column name in df_genes_names that contains the gene names to be matched (default: 'HGNC symbol').
         - "getBM_gene_name_col": Column name in getBM that contains the gene names to be matched (default: 'Gene_name').
         - "gene_id_col": Column name in getBM that contains the gene IDs (default: 'Gene_ID').
@@ -240,10 +240,10 @@ def match_dataframe_with_getBM(df_genes_names: Union[pd.DataFrame, List[pd.DataF
     """
     if isinstance(df_genes_names, pd.DataFrame):
         df_genes_names = [df_genes_names]
-    df_gene_name_col = parm_match_colums['df_gene_name_col']
-    getBM_gene_name_col = parm_match_colums['getBM_gene_name_col']
-    gene_id_col = parm_match_colums['gene_id_col']
-    synonyms_col = parm_match_colums['synonyms_col']  
+    df_gene_name_col = parm_match_columns['df_gene_name_col']
+    getBM_gene_name_col = parm_match_columns['getBM_gene_name_col']
+    gene_id_col = parm_match_columns['gene_id_col']
+    synonyms_col = parm_match_columns['synonyms_col']  
     gene_names = pd.concat([df[df_gene_name_col] for df in df_genes_names]).unique().tolist()
     matched_gene_ids = getBM[getBM[getBM_gene_name_col].isin(gene_names)][gene_id_col].unique().tolist()
     synonym_ids = find_gene_ids_from_synonyms(dfs=df_genes_names, 
@@ -260,7 +260,8 @@ def select_genes_for_modeling(getBM: pd.DataFrame,
                               splicing_genes_file: str,
                               cancer_genes_file: str,
                               gene_census_file: str,
-                              parm_match_colums: dict) -> tuple[pd.DataFrame, list, list]:
+                              parm_match_columns: dict,
+                              gene_selection: bool) -> tuple[pd.DataFrame, list, list]:
     """
     Selects genes and their transcripts for modeling, either based on cancer-related genes or all protein-coding genes.
     Args:
@@ -269,29 +270,68 @@ def select_genes_for_modeling(getBM: pd.DataFrame,
     - splicing_genes_file (str): Filename for the splicing genes dataset.
     - cancer_genes_file (str): Filename for the cancer genes dataset.
     - gene_census_file (str): Filename for the gene census dataset.
-    - parm_match_colums (dict): Dictionary containing column name mappings for the various datasets. 
+    - parm_match_columns (dict): Dictionary containing column name mappings for the various datasets. 
         Refer to the `match_dataframe_with_getBM` function for details on the expected keys and their meanings.
+    - gene_selection (bool): Flag to indicate whether to perform gene selection based on specific files.
+
     Returns:
     - tuple:
         - getBM_filtered (DataFrame): Filtered DataFrame based on the selected genes.
         - list_transcripts (list): List of Transcript_IDs corresponding to the selected genes.
         - list_genes (list): List of Gene_IDs corresponding to the selected genes.
-        #- list_genes_mapped_to_trans (list): List of selected Gene_IDs mapped to each of Transcripts_IDs
     """
     print('[select_genes_for_modeling] Selecting the genes for modeling ...')
-    genes_s5_eyras = pd.read_excel(f'{selected_genes_dir}/{splicing_genes_file}', skiprows=2)
-    genes_s6_eyras = pd.read_excel(f'{selected_genes_dir}/{cancer_genes_file}', skiprows=2)
-    genes_cosmic = pd.read_csv(f'{selected_genes_dir}/{gene_census_file}', sep="\t")
-    selected_genes_dfs = [genes_s5_eyras, genes_s6_eyras, genes_cosmic]
-    getBM_filtered = match_dataframe_with_getBM(df_genes_names=selected_genes_dfs, 
-                                                getBM=getBM, 
-                                                parm_match_colums=parm_match_colums)
+    if gene_selection:
+        print('[select_genes_for_modeling] Gene selection is enabled. Loading selected gene datasets...')
+        # Load selected genes datasets
+        genes_s5_eyras = pd.read_excel(f'{selected_genes_dir}/{splicing_genes_file}', skiprows=2)
+        genes_s6_eyras = pd.read_excel(f'{selected_genes_dir}/{cancer_genes_file}', skiprows=2)
+        genes_cosmic = pd.read_csv(f'{selected_genes_dir}/{gene_census_file}', sep="\t")
+        selected_genes_dfs = [genes_s5_eyras, genes_s6_eyras, genes_cosmic]
+        getBM_filtered = match_dataframe_with_getBM(df_genes_names=selected_genes_dfs, 
+                                                    getBM=getBM, 
+                                                    parm_match_columns=parm_match_columns)
+        print('[select_genes_for_modeling] Successfully loaded selected genes datasets.')
+    
+    else:
+        getBM_filtered = getBM
+        print('[select_genes_for_modeling] Filtering completed. Only protein coding genes are selected.')
+
+    # Retrieve unique gene and transcript IDs
     list_genes = getBM_filtered['Gene_ID'].unique().tolist()
     list_transcripts = getBM_filtered['Transcript_ID'].tolist()
     print('[select_genes_for_modeling] Number of Genes:', len(list_genes))
     print('[select_genes_for_modeling] Number of Transcripts:', len(list_transcripts))
     print('\n')
     return getBM_filtered, list_transcripts, list_genes
+
+
+def select_rna_binding_proteins(selected_genes_dir: str,
+                                 rbp_genes_file: str,
+                                 getBM: pd.DataFrame,
+                                 parm_match_columns: dict) -> list:
+    """
+    Filters a list of RNA-binding proteins (RBPs) for modeling based on the provided gene list.
+
+    Args:
+    - selected_genes_dir (str): Directory path where the RNA-binding protein gene file is located.
+    - rbp_genes_file (str): Filename for the RNA-binding proteins dataset.
+    - getBM (DataFrame): DataFrame containing gene-to-transcript mappings.
+    - parm_match_columns (dict): Dictionary containing column name mappings for the various datasets. 
+        This is used for matching the gene names with the getBM DataFrame.
+
+    Returns:
+    - list: A list of unique Gene_IDs corresponding to the RNA-binding proteins.
+    """
+    # Load the RNA-binding proteins dataset
+    df_rbps_names = pd.read_excel(f'{selected_genes_dir}/{rbp_genes_file}', skiprows=2)
+    # Match the RNA-binding proteins with the getBM DataFrame
+    getBM_filtered = match_dataframe_with_getBM(df_genes_names=df_rbps_names, 
+                                                getBM=getBM, 
+                                                parm_match_columns=parm_match_columns)
+    # Retrieve unique Gene_IDs for the RNA-binding proteins
+    list_rbps = getBM_filtered['Gene_ID'].unique().tolist()
+    return list_rbps
 
 def generate_model_input_matrices(data: dict, 
                                   df_phenotype: pd.DataFrame, 
@@ -324,7 +364,6 @@ def generate_model_input_matrices(data: dict,
     This function filters and organizes expression data into separate matrices for RBP, transcript, and gene expression based on the provided study name. It ensures that only samples common to both the phenotype and expression data are included, enabling accurate modeling for downstream analysis.
     """
     print(f'[generate_model_input_matrices] Generating input matrices for study: {study_name}...')
-    
     df_phenotype_study = df_phenotype[df_phenotype.study == study_name].copy()
     patients_df_genes = data['df_genes'].columns
     patients_df_trans = data['df_trans'].columns 
@@ -372,12 +411,10 @@ def transform_expression_data(data: dict) -> dict:
     data['df_rbp_gene'] = np.power(2, data['df_rbp_gene']) - 0.001
     data['df_trans'] = np.power(2, data['df_trans']) - 0.001
     data['df_genes'] = np.power(2, data['df_genes']) - 0.001
-
     # Clip min tpm expression value to 0
     data['df_rbp_gene'] = data['df_rbp_gene'].clip(lower=0)
     data['df_trans'] = data['df_trans'].clip(lower=0)
     data['df_genes'] = data['df_genes'].clip(lower=0)
-
     # Transform counts and round
     data['df_counts'] = np.power(2, data['df_counts']) - 1
     data['df_counts'] = data['df_counts'].round().astype(int)
@@ -438,7 +475,7 @@ def save_processed_data(data: dict, df_phenotype_study: pd.DataFrame, output_dir
     df_phenotype_study.loc[data['df_rbp_gene'].index].to_csv(path_phenotype, mode='a', header=not os.path.exists(path_phenotype))
     print('[save_processed_data] Data saving completed.\n')
 
-def process_data_chunk( 
+def process_data_chunk(  
                     df_genes: pd.DataFrame,  
                     df_trans: pd.DataFrame,
                     df_counts: pd.DataFrame,
@@ -477,7 +514,7 @@ def process_data_chunk(
     # Step 0: Define and validate the column names used for gene matching.
     # This dictionary contains the default names of the columns used to match genes between
     # the input DataFrames and the getBM DataFrame.
-    parm_match_colums = {
+    parm_match_columns = {
         "df_gene_name_col" : "HGNC symbol",    # Column in df_genes_names containing gene names to match.
         "getBM_gene_name_col" : 'Gene_name',   # Column in getBM containing gene names for matching.
         "gene_id_col" : "Gene_ID",             # Column in getBM containing gene IDs corresponding to the gene names.
@@ -485,8 +522,8 @@ def process_data_chunk(
     }
 
     for key, value in kwargs.items():
-        if key in parm_match_colums:
-            parm_match_colums[key] = value
+        if key in parm_match_columns:
+            parm_match_columns[key] = value
         else:
             warnings.warn("Parameter " + key + " is not defined.")
 
@@ -497,23 +534,19 @@ def process_data_chunk(
     data = clean_expression_data(data)
     data, getBM_copy = filter_transcripts(data, getBM_copy)
 
-    # Step 2: Select genes for modeling (if applicable)
-    if gene_selection:
-        _, list_transcripts, list_genes = select_genes_for_modeling( 
-            getBM_copy, 
-            selected_genes_dir, 
-            splicing_genes_file, 
-            cancer_genes_file, 
-            gene_census_file,
-            parm_match_colums
-        )
+    # Step 2: Select genes for modeling
+    _, list_transcripts, list_genes = select_genes_for_modeling( 
+        getBM_copy, 
+        selected_genes_dir, 
+        splicing_genes_file, 
+        cancer_genes_file, 
+        gene_census_file,
+        parm_match_columns,
+        gene_selection
+    )
 
-    # Step 3: Filter a list of RNA-binding proteins (RBPs) for modeling
-    df_rbps_names = pd.read_excel(f'{selected_genes_dir}/{rbp_genes_file}', skiprows=2)
-    getBM_filtered = match_dataframe_with_getBM(df_genes_names=df_rbps_names, 
-                                                getBM=getBM, 
-                                                parm_match_colums=parm_match_colums)
-    list_rbps = getBM_filtered['Gene_ID'].unique().tolist()
+    # Step 3: Filter a list of RNA-binding proteins (RBPs) for modeling   
+    list_rbps = select_rna_binding_proteins(selected_genes_dir, rbp_genes_file, getBM, parm_match_columns)
 
     # Step 4: Generate input matrices for the model for each study (TCGA and GTEX) and save
     for study_name in ['TCGA', 'GTEX']:
@@ -524,8 +557,7 @@ def process_data_chunk(
 
         data_transformed = transform_expression_data(data_study)
         data_transformed = transpose_dataframes(data_transformed)
-        print(data_transformed) # remove afterwards this!!
-        
+         
         # Save the processed data and phenotype metadata
         save_processed_data(data_transformed, df_phenotype_study, output_dir, study_name)
         print('\n')
@@ -550,7 +582,7 @@ def parse_args():
     parser.add_argument('--chunk_size', type=int, default=1000, 
                         help='Number of rows to process per chunk for memory efficiency.')
     parser.add_argument('--gene_selection', type=bool, default=True, 
-                        help='Boolean flag to indicate whether gene selection should be performed.')
+                        help='Boolean flag to indicate whether gene selection should be performed. Otherwise all protein-coding genes with more than one isoform will be used')
     parser.add_argument('--gene_transcript_mapping_file', type=str, default='getBM.csv', 
                         help='Filename for gene-transcript mapping data.')
     parser.add_argument('--splicing_genes_file', type=str, default='Table_S5_Cancer_splicing_gene_eyras.xlsx', 

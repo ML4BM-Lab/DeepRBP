@@ -2,9 +2,14 @@
 rm(list = ls())
 
 # Set a default CRAN mirror
+chooseCRANmirror(graphics = FALSE, ind = 1)  # Selecciona el primer espejo disponible
 options(repos = c(CRAN = "https://cloud.r-project.org/"))
 
-required_packages <- c("data.table", "dplyr", "ggpubr", "rstatix", "ggplot2", "optparse")
+
+packageurl <- "https://cran.r-project.org/src/contrib/Archive/Matrix/Matrix_1.6-4.tar.gz"
+install.packages(packageurl, repos=NULL, type="source")
+
+required_packages <- c("data.table", "dplyr",  "rstatix", "ggplot2", "ggpubr","optparse")
 
 install_if_missing <- function(packages) {
   missing_packages <- packages[!(packages %in% installed.packages()[, "Package"])]
@@ -14,6 +19,7 @@ install_if_missing <- function(packages) {
 }
 
 install_if_missing(required_packages)
+install.packages("dplyr")
 install.packages("ggpubr")
 install.packages("rstatix")
 install.packages("ggplot2")

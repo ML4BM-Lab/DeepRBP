@@ -46,7 +46,7 @@ pip install -e .
 
 # Prediction Module
 ## Datasets Information
-In this project, we have used several datasets, including TCGA and GTEx samples. The TCGA samples are used to train the DeepRBP predictor that learns transcript abundances, while GTEx samples are used to evaluate generalization.
+In this project, we utilized multiple datasets, including samples from The Cancer Genome Atlas (TCGA) and the Genotype-Tissue Expression (GTEx) project. We used 80% of the TCGA samples to train the DeepRBP predictor, which learns to predict transcript abundances. The remaining TCGA samples, along with the GTEx samples, were employed to assess the model's generalization capabilities.
 
 ## Data Download
 You can download the necessary datasets from the [UCSC Xena platform](https://xenabrowser.net/) (Goldman et al., 2020). To automate the process, execute (approx. 20 minutes):
@@ -69,7 +69,7 @@ The following files will be downloaded and stored in the `/data/training_module/
   This text file contains important clinical and biological information about the samples from the TCGA, GTEx, and TARGET datasets.
 
 ## Data Preprocessing
-In this step, we will load and preprocess the raw data files to prepare input matrices for both TCGA and GTEX datasets. Specifically, we will generate and save in `output_dir`:
+In this step, we will load and preprocess the raw data files to prepare input matrices for both TCGA and GTEX datasets. Specifically, we will generate and save in `output_dir`, in this case we suggest to save them in `data/training_module/processed`:
 
 - **RBP expression matrix**: `RBPs_tpm.csv` (in TPM) derived from the gene expression data, with dimensions `n_patients x num_RBPs`.
 - **Transcript expression matrix**: `trans_tpm.csv` (in TPM) with dimensions `n_patients x num_transcripts`.
@@ -118,7 +118,7 @@ prepare-model-inputs --raw_data_dir "/scratch/jsanchoz/DeepRBP/data/training_mod
 - **gene_counts_file (str)**: Filename for gene-level expected counts data ('genes x n_patients' matrix) in log2(expected_count+1).
 - **phenotype_data_file (str)**: Filename for phenotype data (patients x phenotype features).
 - **chunk_size (int)**: Rows to process per chunk for memory efficiency.
-- **gene_selection (bool)**: Flag to indicate gene selection; True uses cancer and alternative splicing-related genes.
+- **gene_selection (bool)**: Flag to indicate gene selection; True uses cancer and alternative splicing-related genes. False uses all protein-coding genes with more than one isoform.
 - **gene_transcript_mapping_file (str)**: Output file mapping transcript IDs/names to gene IDs/names and biotypes.
 - **splicing_genes_file (str)**: Excel file with genes implicated in alternative splicing in cancer.
 - **cancer_genes_file (str)**: Excel file listing ~900 predicted cancer-driver genes based on mutations or copy number alterations.
@@ -343,7 +343,7 @@ There are three options:
 
 ---
 
-### **Option 1: Running the Python Script**  
+### **Option 1: Running the Scripts**  
 To execute DeepRBP Explainer on the **TCGA** test dataset, use a `.yaml` configuration file. Below is an example configuration file:
 
 #### **Example Configuration File (`config_path_explain.yaml`)**
@@ -452,9 +452,6 @@ The above script takes care of executing the DeepRBP Explainer, validating the r
 ### Option 3: Running with Docker
 ## (work to do here)
 --- -->
-
-
-
 
 
 
