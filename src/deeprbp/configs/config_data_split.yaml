@@ -1,0 +1,18 @@
+# /scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_data_split.yaml
+source_name: "TCGA"
+
+# Paths for the data files
+data_paths:
+  rbp_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/RBPs_tpm.csv"
+  isoform_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/trans_tpm.csv"
+  gene_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/gn_tpm.csv"
+  metadata_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/phenotype_metadata.csv"
+
+# Sample selection
+sample_category: "detailed_category"  # The column in metadata to stratify on 
+select_samples: ["all"]  # Can be ['all'] or a list of specific sample types: ['Lung_Squamous_Cell_Carcinoma', 'Rectum_Adenocarcinoma']
+train_test_split: true 
+test_fraction: 0.2
+seed: 42
+
+

@@ -71,8 +71,8 @@ The following files will be downloaded and stored in the `/data/training_module/
 ## Data Preprocessing
 In this step, we will load and preprocess the raw data files to prepare input matrices for both TCGA and GTEX datasets. Specifically, we will generate and save in `output_dir`, in this case we suggest to save them in `data/training_module/processed`:
 
-- **RBP expression matrix**: `RBPs_tpm.csv` (in TPM) derived from the gene expression data, with dimensions `n_patients x num_RBPs`.
-- **Transcript expression matrix**: `trans_tpm.csv` (in TPM) with dimensions `n_patients x num_transcripts`.
+- **RBP expression matrix**: `RBPs_log2p_tpm.csv` (in log2(TPM+1)) derived from the gene expression data, with dimensions `n_patients x num_RBPs`.
+- **Transcript expression matrix**: `trans_log2p_tpm.csv` (in log2(TPM+1)) with dimensions `n_patients x num_transcripts`.
 - **Gene expression matrix**: `gn_tpm.csv` (in TPM) with dimensions `n_patients x num_transcripts`.
 - **Metadata file**: `phenotype_metadata.csv`, containing phenotype information for each sample, indicating tissue or tumor type.
 - **Gene count matrix**: `gn_counts.csv` (in counts) with dimensions `n_patients x num_RBPs`. For further differential expression analysis.
@@ -109,7 +109,7 @@ prepare-model-inputs --raw_data_dir "/scratch/jsanchoz/DeepRBP/data/training_mod
                      --rbp_genes_file "Table_S2_list_RBPs_eyras.xlsx"
 ```
 
-# Command Arguments
+### Command Arguments
 - **raw_data_dir (str)**: Directory containing raw data files.
 - **selected_genes_dir (str)**: Directory with lists of RNA-binding proteins (RBPs) and selected genes for modeling.
 - **output_dir (str)**: Directory for saving processed files.
@@ -132,12 +132,83 @@ Alternatively, you can submit this command on an HPC system with Slurm:
 sbatch slurm/generate_model_inputs.sh
 ```
 
+## Model Training from Scratch (Optional)
+### Selecting Tumor Samples and Stratifying Processed Data into Training and Testing Sets
+To ensure that different tumor types are equally represented in both the training and testing sets, we will perform a stratified split. This method maintains the proportion of each class in the splits, providing a more reliable evaluation of the model's generalization capabilities.
+
+We will use the processed data from The Cancer Genome Atlas (TCGA) for this task. The training set will consist of 80% of the data, while the remaining 20% will be reserved for testing the model's generalization and explainability module. The training set will later be utilized in hyperparameter optimization with Optuna.
+
+In this step before splitting data we will select specific tumor types (defined in config file).
+
+## Execution Command
+To execute this, run:
+
+```bash
+split-and-save --config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_data_split.yaml" \
+               --output_dir "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets" 
+                
+```
+### Command Arguments
+- **config_path (str)**: Path to the config file with the processed data files, sample selection, tumor types (categories), train-test fraction and source name.
+- **output_dir (str)**: Directory to save the splitted datasets.
+
+The configuration file should look like this:
+
+#### **Example Configuration File (`config_data_split.yaml`)**
+
+```yaml
+# /scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_data_split.yaml
+source_name: "TCGA"
+
+# Paths for the data files
+data_paths:
+  rbp_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/RBPs_tpm.csv"
+  isoform_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/trans_tpm.csv"
+  gene_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/gn_tpm.csv"
+  metadata_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/phenotype_metadata.csv"
+
+# Sample selection
+sample_category: "detailed_category"  # The column in metadata to stratify on
+select_samples: ["all"]  # Can be ['all'] or a list of specific sample types: ['Lung_Squamous_Cell_Carcinoma' 'Rectum_Adenocarcinoma']
+train_test_split: true 
+test_fraction: 0.2
+seed: 42
+```
+
+## HPC Execution
+Alternatively, you can submit this command on an HPC system with Slurm:
+
+```bash
+sbatch slurm/split_and_save.sh
+```
+
+
+
+#### HERE!!!
+
+
+
+
+
+
+
+# Hyperparameter Optimization with Optuna
+In this section, we will implement hyperparameter optimization for the DeepRBP predictor using Optuna, a hyperparameter optimization framework designed for machine learning. This process aims to find the best set of hyperparameters that maximize model performance.
+
+
+
+
+
+
+
+# If you want to use an already trained model (...)
+
+#####
 ## Executing DeepRBP Predictor
 There are three options:
 * Running the Python script 
 * Submitting a job to a HPC queue
 * Running with Docker
-
 ---
 
 ### **Option 1: Running the Python Script**  
@@ -158,8 +229,8 @@ data_paths:
 
 # Model predictor configuration
 model:
-  input_size: 1348               # Number of input features
-  output_size: 11459             # Number of output isoforms
+  input_size: 1348               # Number of input features (joseba ojo: las primeras dos caracteristicas podrian sobrar porque se sacan del data que uses.)
+  output_size: 11459             # Number of output isoforms (las primeras dos caracteristicas podrian sobrar porque se sacan del data que uses.)
   num_hidden_layers: 2           # Number of hidden layers
   max_node: 1024                 # Maximum nodes per layer
   uniform_nodes: true            # Uniform node distribution across layers

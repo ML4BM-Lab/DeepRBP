@@ -1,0 +1,11 @@
+name: r_env  # Nombre del entorno
+channels:
+  - conda-forge  # Canal donde se buscarán los paquetes
+dependencies:
+  - r-base=4.3.1  # Especifica la versión de R que prefieras
+  - r-data.table
+  - r-ggpubr
+  - r-dplyr
+  - r-rstatix
+
+# conda env create -f environment_R.yml -p /data/jsanchoz/conda-env/

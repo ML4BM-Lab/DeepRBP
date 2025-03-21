@@ -401,20 +401,29 @@ def generate_model_input_matrices(data: dict,
 
 def transform_expression_data(data: dict) -> dict:
     """
-    Transforms gene expression and transcript expression to TPM and counts
+    Transforms expression data for RBPs, transcripts, and genes.
+
     Args:
     - data (dict): Dictionary containing cleaned 'df_genes' and 'df_trans' DataFrames.
     Returns:
     - dict: Dictionary with transformed gene and transcript DataFrames.
     """
-    print('Transforming expression data to TPM and counts...')
+    print('Transforming transcript and RBP expression data to log2p(TPM), gene to TPM and counts...')
+    
+    # Transform first to TPM
     data['df_rbp_gene'] = np.power(2, data['df_rbp_gene']) - 0.001
     data['df_trans'] = np.power(2, data['df_trans']) - 0.001
     data['df_genes'] = np.power(2, data['df_genes']) - 0.001
+    
     # Clip min tpm expression value to 0
     data['df_rbp_gene'] = data['df_rbp_gene'].clip(lower=0)
     data['df_trans'] = data['df_trans'].clip(lower=0)
     data['df_genes'] = data['df_genes'].clip(lower=0)
+    
+    # Transform RBP and transcript to log2p(tpm)
+    data['df_rbp_gene'] = np.log2(data["df_rbp_gene"] + 1)
+    data['df_trans'] = np.log2(data["df_trans"] + 1)
+
     # Transform counts and round
     data['df_counts'] = np.power(2, data['df_counts']) - 1
     data['df_counts'] = data['df_counts'].round().astype(int)
@@ -453,8 +462,8 @@ def save_processed_data(data: dict, df_phenotype_study: pd.DataFrame, output_dir
     path = os.path.join(output_dir, study_name)
     os.makedirs(path, exist_ok=True)
     
-    path_rbp = os.path.join(path, 'RBPs_tpm.csv')
-    path_trans = os.path.join(path, 'trans_tpm.csv')
+    path_rbp = os.path.join(path, 'RBPs_log2p_tpm.csv')
+    path_trans = os.path.join(path, 'trans_log2p_tpm.csv')
     path_gn = os.path.join(path, 'gn_tpm.csv')
     path_gn_counts = os.path.join(path, 'gn_counts.csv')
     path_phenotype = os.path.join(path, 'phenotype_metadata.csv')
@@ -557,7 +566,7 @@ def process_data_chunk(
 
         data_transformed = transform_expression_data(data_study)
         data_transformed = transpose_dataframes(data_transformed)
-         
+
         # Save the processed data and phenotype metadata
         save_processed_data(data_transformed, df_phenotype_study, output_dir, study_name)
         print('\n')
