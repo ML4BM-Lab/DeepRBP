@@ -210,18 +210,14 @@ class DataSplitter:
         - Performing stratified splits to ensure that each subset (training, validation, and test) 
           maintains the same distribution of categories as in the full dataset.
         - Assigning labels to samples to indicate their respective sets (training, validation, testing).
-        - Providing mappings from patient IDs to indices for easier data handling during the splitting process.
-
+    
         Parameters:
         - data (Dict[str, pd.DataFrame]): A dictionary containing the datasets, with 'metadata_df' being a 
           DataFrame that holds metadata relevant for stratification during data splitting.
           
         - config (Dict): A configuration dictionary that contains settings for data splitting. This includes 
           parameters for train/test and train/validation splitting, such as:
-          - 'train_test_split': A boolean indicating if a train/test split should be performed.
-          - 'train_val_split': A boolean indicating if a train/validation split should be performed.
-          - 'test_fraction': The fraction of the dataset to be used as the test set.
-          - 'val_fraction': The fraction of the training set to be used as the validation set.
+          - 'test_fraction': The fraction of the dataset to be used as the test set (or 'validation set').
           
         - sample_category (str, optional): The column name in 'metadata_df' used for stratification. 
           Default is 'detailed_category'. This determines how samples are divided to ensure proportional 
