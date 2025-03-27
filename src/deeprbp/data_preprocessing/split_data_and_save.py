@@ -38,16 +38,30 @@ def main():
     # Split the data into training and test sets
     print("Splitting data into training and test sets...")
     splitter = DataSplitter(data, config)
-    train_data, _, test_data = splitter.split_data_sets()
+    train_data, test_data = splitter.split_data_sets()
     print("Data split successfully.")
 
     # Save the training and test datasets to the specified output directory
     print(f"Saving training data to: {os.path.join(args.output_dir, 'Train')}")
-    save_data(train_data, os.path.join(args.output_dir, 'Train'))
+    save_data(train_data, 
+              os.path.join(args.output_dir, 'Train'), 
+              custom_names = {
+                            'rbp_df': 'train_RBPs_log2p_tpm.csv',
+                            'isoform_df': 'train_trans_log2p_tpm.csv',
+                            'gene_df': 'train_gn_tpm.csv',
+                            'metadata_df': 'train_phenotype_metadata.csv'}
+                            )
     print("Training data saved successfully.")
 
     print(f"Saving test data to: {os.path.join(args.output_dir, 'Test')}")
-    save_data(test_data, os.path.join(args.output_dir, 'Test'))
+    save_data(test_data, 
+              os.path.join(args.output_dir, 'Test'), 
+              custom_names = {
+                            'rbp_df': 'test_RBPs_log2p_tpm.csv',
+                            'isoform_df': 'test_trans_log2p_tpm.csv',
+                            'gene_df': 'test_gn_tpm.csv',
+                            'metadata_df': 'test_phenotype_metadata.csv'}
+                            )
     print("Test data saved successfully.")
 
 def parse_args():

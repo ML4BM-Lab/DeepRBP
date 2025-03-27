@@ -162,8 +162,8 @@ source_name: "TCGA"
 
 # Paths for the data files
 data_paths:
-  rbp_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/RBPs_tpm.csv"
-  isoform_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/trans_tpm.csv"
+  rbp_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/RBPs_log2p_tpm.csv"
+  isoform_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/trans_log2p_tpm.csv"
   gene_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/gn_tpm.csv"
   metadata_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/phenotype_metadata.csv"
 
@@ -182,18 +182,19 @@ Alternatively, you can submit this command on an HPC system with Slurm:
 sbatch slurm/split_and_save.sh
 ```
 
-
+### Hyperparameter Optimization with Optuna
+In this section, we will implement hyperparameter optimization for the DeepRBP predictor using Optuna, a hyperparameter optimization framework designed for machine learning. This process aims to find the best set of hyperparameters that maximize model performance.
 
 #### HERE!!!
 
+para ello vamos a cargar los datos de training sacados de '/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train' y aiming to optimize time and computational resources se coge con un stratified split por tipo tumoral el 
 
 
 
 
 
 
-# Hyperparameter Optimization with Optuna
-In this section, we will implement hyperparameter optimization for the DeepRBP predictor using Optuna, a hyperparameter optimization framework designed for machine learning. This process aims to find the best set of hyperparameters that maximize model performance.
+
 
 
 

@@ -200,7 +200,6 @@ class DataImporter:
 #         # Filter the data by the selected samples
 #         return filter_data_by_sample_ids(data, sel_sample_ids)
 
-##### de aqui para arriba está sujeto a cambios.
 class DataSplitter:
     def __init__(self, data: Dict[str, pd.DataFrame], config: Dict, sample_category: str = "detailed_category"):
         """
@@ -233,28 +232,26 @@ class DataSplitter:
         self.config = config
         self.sample_category = sample_category
         self.sample_ids = self.data['metadata_df'].index
-        self.id2index_mapping = self._generate_id2index_mapping()
-
-    def _generate_id2index_mapping(self) -> Dict[str, int]:
-        """Generate the mapping from patient IDs to indices."""
-        self.logger.log("🔄 Generating ID to index mapping...")
-        return {patient_id: idx for idx, patient_id in enumerate(self.sample_ids)}
     
     def split_data(self, data, test_size):
         """Perform a stratified train-test split based on the detailed_category in metadata."""
         sample_category = data['metadata_df'][self.sample_category]
         self.logger.log(f'📊 [split_data] Performing a stratified data split with fraction division equal to {test_size}...')
-        # Step 1: Perform the stratified split based on patient IDs (still strings at this point) and sample category
-        train_idx, test_idx = sk_train_test_split(
+        
+        # Perform the stratified split based on patient IDs (still strings at this point) and sample category
+        train_id, test_id = sk_train_test_split(
             data['metadata_df'].index,
             test_size=test_size,
             stratify=sample_category,
             random_state=self.config['seed']
         )
-        # Step 2: Convert string indices (train_idx, test_idx) to integer indices
-        train_idx = [self.id2index_mapping[patient_id] for patient_id in train_idx]
-        test_idx = [self.id2index_mapping[patient_id] for patient_id in test_idx]
-        return train_idx, test_idx
+        return train_id, test_id
+    
+    @classmethod
+    def split_data_class(cls, data: Dict[str, pd.DataFrame], config: Dict, sample_category: str = "detailed_category", test_size: float = 0.2) -> Tuple[list, list]:
+        """Class method to split data, instantiating the class and calling the instance method."""
+        instance = cls(data, config, sample_category)
+        return instance.split_data(data, test_size)
     
     def add_sample_set_label(self, set_name: str, samples: list):
         """ Add a column to the metadata DataFrame indicating whether samples belong to the training or test set."""
@@ -263,35 +260,36 @@ class DataSplitter:
             self.data['metadata_df']['set_type'] = 'unknown'
         self.data['metadata_df'].loc[self.data['metadata_df'].index.isin(sample_set), 'set_type'] = set_name
         self.logger.log(f"🏷️ Added sample set label '{set_name}' for {len(samples)} samples.")
-
-    def split_data_sets(self) -> Tuple[Dict[str, pd.DataFrame], Dict[str, pd.DataFrame], Dict[str, pd.DataFrame]]:
+    
+    def split_data_sets(self, test_name='testing') -> Tuple[Dict[str, pd.DataFrame], Dict[str, pd.DataFrame]]:
         """
-        This function handles the splitting of data into train, validation, and test sets based on the config.
+        This function handles the splitting of data into training and testing (or 'validation') sets based on config test fraction.
         """
-        train_data, valid_data, test_data = {}, {}, {}
-        if self.config.get("train_test_split", False):
+        train_data, test_data = {}, {}
+        
+        # Determine the type of split and log the corresponding message
+        if test_name == 'testing':
             self.logger.log("🔄 Performing train/test split...")
-            self.train_idx, self.test_idx = self.split_data(data=self.data, test_size=self.config['test_fraction'])
-            self.logger.log("📝 Writing set_type in metadata after train/test split")
-            self.add_sample_set_label(set_name='training', samples=index2id(self.id2index_mapping, self.train_idx))
-            self.add_sample_set_label(set_name='testing', samples=index2id(self.id2index_mapping, self.test_idx))
-            train_data = filter_data_by_sample_ids(self.data, index2id(self.id2index_mapping, self.train_idx))
-            test_data = filter_data_by_sample_ids(self.data, index2id(self.id2index_mapping, self.test_idx))
-
-        if self.config.get("train_val_split", False): 
+            log_message = "📝 Writing set_type in metadata after train/test split"
+        else:
             self.logger.log("🔄 Performing train/val split...")
-            training_data = filter_data_by_sample_ids(self.data, index2id(self.id2index_mapping, self.train_idx)) 
-            self.train_idx, self.valid_idx = self.split_data(data=training_data, test_size=self.config['val_fraction'])
-            self.logger.log("📝 Writing set_type in metadata after train/val split")
-            self.add_sample_set_label(set_name='training', samples=index2id(self.id2index_mapping, self.train_idx))
-            self.add_sample_set_label(set_name='validation', samples=index2id(self.id2index_mapping, self.valid_idx))
-            valid_data = filter_data_by_sample_ids(self.data, index2id(self.id2index_mapping, self.valid_idx))
-            
-        if not train_data and not valid_data and not test_data:
-            self.logger.warn("⚠️ No splits performed, returning only test data.")
-            test_data = self.data  # Return all data as test data
-        return train_data, valid_data, test_data
-
+            log_message = "📝 Writing set_type in metadata after train/val split"
+        
+        # Perform the data splitting
+        self.train_id, self.test_id = self.split_data(data=self.data, test_size=self.config['test_fraction'])
+        
+        # Log the corresponding message in a single line
+        self.logger.log(log_message)
+        
+        # Add labels to the sample sets
+        self.add_sample_set_label(set_name='training', samples=self.train_id)
+        self.add_sample_set_label(set_name=test_name, samples=self.test_id)
+        
+        # Filter the data by sample IDs
+        train_data = filter_data_by_sample_ids(self.data, self.train_id)
+        test_data = filter_data_by_sample_ids(self.data, self.test_id)
+        return train_data, test_data
+        
 class Scaler:
     def __init__(self, existing_scaler=None, existing_sigma=None):
         """

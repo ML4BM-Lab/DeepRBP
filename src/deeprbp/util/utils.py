@@ -51,11 +51,14 @@ def index2id(id_to_index_mapping: Dict[str, int], index_list: List[int]) -> pd.I
     """ Converts a list of indices into their corresponding sample IDs based on the id_to_index_mapping."""
     return pd.Index([key for key, idx in id_to_index_mapping.items() if idx in index_list])
 
-def save_data(data, path):
+def save_data(data, path, custom_names=None):
     os.makedirs(path, exist_ok=True)
+    if custom_names is None:
+        custom_names = {}
     for key, df in data.items():
         if isinstance(df, pd.DataFrame):
-            df.to_csv(os.path.join(path, f'{key}.csv'))
+            file_name = custom_names.get(key, f'{key}.csv')
+            df.to_csv(os.path.join(path, file_name))
 
 def load_data(path):
     data = {}
