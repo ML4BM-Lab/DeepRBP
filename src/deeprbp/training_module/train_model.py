@@ -28,7 +28,7 @@ class TrainPredictor:
         self.model.to(self.device)
         self.input_features = input_features  # Features to be used as inputs
         self.output_features = output_features  # Features to be predicted
-
+        
     def prepare_batch(self, batch):
         """
         Extracts inputs and targets from the given batch.

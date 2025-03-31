@@ -1,5 +1,4 @@
 # /scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_data_split.yaml
-source_name: "TCGA"
 
 # Paths for the data files
 data_paths:

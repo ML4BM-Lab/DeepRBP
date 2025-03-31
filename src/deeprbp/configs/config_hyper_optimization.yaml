@@ -1,5 +1,4 @@
-# /scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_data_split.yaml
-source_name: "TCGA"
+# /scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_hyper_optimization.yaml
 
 # Paths for the data files
 data_paths:
@@ -9,10 +8,12 @@ data_paths:
   metadata_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train/train_phenotype_metadata.csv"
 
 # Sample selection
-#sample_category: "detailed_category"  # The column in metadata to stratify on 
-#select_samples: ["all"]  # Can be ['all'] or a list of specific sample types: ['Lung_Squamous_Cell_Carcinoma', 'Rectum_Adenocarcinoma']
-#train_val_split: true 
-#test_fraction: 0.2
+sample_category: "detailed_category"  # The column in metadata to stratify on 
+sample_fraction: 0.5
+test_fraction: 0.2
+getBM_path: "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/getBM.csv"
+gene_col_name: "Gene_ID"
+trans_col_name: "Transcript_ID"
 seed: 42
-
-
+cuda: True
+ 

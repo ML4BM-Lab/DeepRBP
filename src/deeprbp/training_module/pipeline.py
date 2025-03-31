@@ -187,11 +187,11 @@ class DeepRBPredictorPipeline:
             output_path=f'{self.path_save_results}/{set_name}_metrics_summary_per_category.csv')
         self.logger.log(f"✅ Metrics for {set_name} evaluated.", level=1)
 
-    def run(self):
+    def run(self): # obsolote, revisar
         self.logger.log("🚀 Starting the pipeline run...", level=1)
 
         # Load and process data
-        data, external_data = self.load_and_process_data()
+        data, external_data = self.load_and_process_data() 
 
         # Split training data
         train_data, valid_data, test_data = self.split_data(data)

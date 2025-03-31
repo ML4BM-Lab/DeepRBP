@@ -73,7 +73,7 @@ In this step, we will load and preprocess the raw data files to prepare input ma
 
 - **RBP expression matrix**: `RBPs_log2p_tpm.csv` (in log2(TPM+1)) derived from the gene expression data, with dimensions `n_patients x num_RBPs`.
 - **Transcript expression matrix**: `trans_log2p_tpm.csv` (in log2(TPM+1)) with dimensions `n_patients x num_transcripts`.
-- **Gene expression matrix**: `gn_tpm.csv` (in TPM) with dimensions `n_patients x num_transcripts`.
+- **Gene expression matrix**: `gn_tpm.csv` (in TPM) with dimensions `n_patients x num_genes`.
 - **Metadata file**: `phenotype_metadata.csv`, containing phenotype information for each sample, indicating tissue or tumor type.
 - **Gene count matrix**: `gn_counts.csv` (in counts) with dimensions `n_patients x num_RBPs`. For further differential expression analysis.
 
@@ -158,7 +158,6 @@ The configuration file should look like this:
 
 ```yaml
 # /scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_data_split.yaml
-source_name: "TCGA"
 
 # Paths for the data files
 data_paths:
@@ -168,9 +167,8 @@ data_paths:
   metadata_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/phenotype_metadata.csv"
 
 # Sample selection
-sample_category: "detailed_category"  # The column in metadata to stratify on
-select_samples: ["all"]  # Can be ['all'] or a list of specific sample types: ['Lung_Squamous_Cell_Carcinoma' 'Rectum_Adenocarcinoma']
-train_test_split: true 
+sample_category: "detailed_category"  # The column in metadata to stratify on 
+select_samples: ["all"]  # Can be ['all'] or a list of specific sample types: ['Lung_Squamous_Cell_Carcinoma', 'Rectum_Adenocarcinoma']
 test_fraction: 0.2
 seed: 42
 ```
@@ -187,7 +185,9 @@ In this section, we will implement hyperparameter optimization for the DeepRBP p
 
 #### HERE!!!
 
-para ello vamos a cargar los datos de training sacados de '/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train' y aiming to optimize time and computational resources se coge con un stratified split por tipo tumoral el 
+para ello vamos a cargar los datos de training sacados de '/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train' y aiming to optimize time and computational resources se coge una porcion de los datos de entrenamiento
+
+con un stratified split por tipo tumoral el 
 
 
 

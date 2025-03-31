@@ -16,6 +16,7 @@ class ConfigParser:
         - config_path (str): Path to the YAML configuration file.
         """
         self.config_path = config_path
+        
     def load_config(self):
         """
         Loads the configuration data from the YAML file.

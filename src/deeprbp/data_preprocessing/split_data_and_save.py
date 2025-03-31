@@ -39,7 +39,7 @@ def main():
     print("Splitting data into training and test sets...")
     splitter = DataSplitter(data, config)
     train_data, test_data = splitter.split_data_sets()
-    print("Data split successfully.")
+    print("Data splitted successfully.")
 
     # Save the training and test datasets to the specified output directory
     print(f"Saving training data to: {os.path.join(args.output_dir, 'Train')}")

@@ -30,7 +30,8 @@ setup(
         "optuna",        
         "joblib",
         "pydeseq2",
-        "sanbomics"
+        "sanbomics",
+        "colorama"
     ],
     entry_points={
         'console_scripts': [

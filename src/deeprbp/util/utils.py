@@ -7,16 +7,43 @@ from typing import List, Dict, Optional
 import os
 
 class CustomTensorDataset(Dataset):
-    def __init__(self, data, features_data=('scaled_rbp_expr_log2p_tpm', 'gn_expr_each_iso_tpm', 'trans_expr_log2p_tpm')):
+    def __init__(self, data, 
+                 getBM, 
+                 rbp_data_key='scaled_rbp_expr_log2p_tpm', 
+                 gene_data_key='gn_expr_each_iso_tpm', 
+                 transcript_data_key='trans_expr_log2p_tpm',
+                 trans_col_name='Transcript_ID',
+                 gene_col_name='Gene_ID'
+                 ):
         """
         Custom dataset for loading RBP, gene, and transcript expressions
+        Parameters:
+        - data: Dictionary containing the DataFrames for RBP, gene, and transcript expressions.
+        - getBM: DataFrame containing Transcript_IDs and associated Gene_IDs.
+        - rbp_data_key: The name of the DataFrame column for RBP features.
+        - gene_data_key: The name of the DataFrame column for gene expression features.
+        - transcript_data_key: The name of the DataFrame column for transcript expression features.
+        - gene_col_name: The name of the column in getBM that contains the Gene IDs.
+        - trans_col_name: The name of the column in getBM that contains the Transcript IDs.
         """
-        self.features = {feature: torch.tensor(data[f"{feature}_df"].values, dtype=torch.float64) for feature in features_data}
+        for key in [rbp_data_key, gene_data_key, transcript_data_key]:
+            if key not in data:
+                raise KeyError(f"{key} not found in data.")
+        trans_names = data[transcript_data_key].columns.tolist()
+        genes_names_each_trans = getBM[getBM[trans_col_name].isin(trans_names)][gene_col_name]
+
+        # Expand the gene matrix data to match the transcript shape data 
+        data[gene_data_key] = data[gene_data_key].loc[:,genes_names_each_trans]
+
+        features_data = (rbp_data_key, gene_data_key, transcript_data_key)
+        self.features = {feature: torch.tensor(data[f"{feature}"].values, dtype=torch.float64) for feature in features_data}
+    
     def __len__(self) -> int:
         return len(next(iter(self.features.values())))
+
     def __getitem__(self, idx: int):
         return {feature: values[idx] for feature, values in self.features.items()}
-       
+  
 def select_sample_ids_by_type(metadata_df: pd.DataFrame, sample_category_col: str, sample_types):
     """
     Select sample IDs from the metadata based on the provided sample types.
@@ -140,3 +167,30 @@ def get_gene_info(gene_ids_or_names: List[str], getBM: pd.DataFrame, return_type
         return gene_ids
     else:
         raise ValueError("Invalid return_type. Use 'names' or 'ids'.")
+
+def calculate_category_proportions(data: Dict[str, pd.DataFrame]) -> pd.DataFrame:
+    """
+    Calculate the proportions of different tumor types samples based on the 'detailed_category' in the metadata. To 
+    be sure that the stratified split is always done correctly.
+
+    Parameters:
+    - data (Dict[str, pd.DataFrame]): A dictionary containing the dataset, including 'metadata_df' 
+      with tumor type information.
+
+    Returns:
+    - pd.DataFrame: A DataFrame containing the proportion of each tumor type.
+    """
+    # Access the metadata DataFrame
+    metadata_df = data['metadata_df']
+
+    # Count the number of samples by tumor type
+    category_counts = metadata_df['detailed_category'].value_counts()
+
+    # Calculate the proportion of each tumor type over the total samples
+    total_samples = len(metadata_df)
+    category_proportions = category_counts / total_samples
+    
+    # Prepare the results as a DataFrame
+    category_proportions = category_proportions.reset_index()
+    category_proportions.columns = ['detailed_category', 'proportion']
+    return category_proportions
