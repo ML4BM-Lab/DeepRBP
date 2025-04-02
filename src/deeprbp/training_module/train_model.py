@@ -46,6 +46,7 @@ class TrainPredictor:
             torch.cuda.manual_seed(seed)
             torch.backends.cudnn.deterministic = True
             torch.backends.cudnn.benchmark = False  
+
     def prepare_batch(self, batch):
         """
         Extracts inputs and targets from the given batch.
@@ -67,6 +68,7 @@ class TrainPredictor:
         rbp_expr, gen_expr = inputs
         targets = torch.stack(targets).squeeze(0)
         return rbp_expr, targets, gen_expr
+    
     def train_one_epoch(self, train_loader):
         """
         Trains the model for one epoch using the provided DataLoader.
@@ -87,6 +89,7 @@ class TrainPredictor:
             loss = self.model.train_step(rbp_expr, targets, gen_expr)  # Training step
             losses.append(loss)
         return torch.stack(losses).mean().item()  # Average loss over the epoch
+    
     def validate_one_epoch(self, val_loader):
         """
         Validates the model for one epoch using the provided DataLoader.
@@ -108,6 +111,7 @@ class TrainPredictor:
                 val_loss = self.model.validate_step(rbp_expr, targets, gen_expr)  # Validation step
                 val_losses.append(val_loss)
         return torch.stack(val_losses).mean().item() # Average validation loss
+    
     def fit(self, train_loader, val_loader, epochs, path_save_results=None):
         """
         Trains the model for a specified number of epochs.
@@ -143,11 +147,13 @@ class TrainPredictor:
         # Raise an error if attempting to save the best model without a specified path
         if save_best_model and path_save_results is None:
             raise ValueError("When 'save_best_model' is True, 'path_save_results' must be specified to save the model.")
+        
         train_history = []
         val_history = []
         print_every = self.config.get('print_every', 1)
         best_val_mse = float('inf')  # Initialize with infinity
         print(f"\nStarting training for {epochs} epochs...")
+        
         for epoch in tqdm(range(epochs), desc="Training", unit="epoch"):
             # Training Phase
             train_loss = self.train_one_epoch(train_loader)
@@ -165,6 +171,7 @@ class TrainPredictor:
                 if path_save_results:
                     self.model.save_model(path_save_results, 'best_model.pt')
                     print(f'💾 Best model saved at epoch {epoch + 1} with validation loss: {best_val_mse:.4f}')  # Print when saving the model
+        
         # Load the best model after training if configured to do so
         if save_best_model and path_save_results:
             print("🔄 Loading the best model...")
@@ -173,6 +180,7 @@ class TrainPredictor:
         self.is_trained = True
         print("\n🏁 Training completed!")
         return train_history, val_history, self.model
+    
     def generate_predictions(self, data_loader):
         """
         Generates log2(tpm+1) predictions from the model using the provided DataLoader.
@@ -197,12 +205,14 @@ class TrainPredictor:
         true_values = []
         predictions = []
         self.model.eval()  # Set the model to evaluation mode
+        
         with torch.no_grad():
             for batch in data_loader:
                 rbp_expr, targets, gen_expr = self.prepare_batch(batch)
                 out = self.model(rbp_expr, gen_expr) # Generate predictions
                 true_values.append(targets.cpu().numpy())
                 predictions.append(out.detach().cpu().numpy())
+        
         true_values = np.concatenate(true_values).flatten()
         concatenated_predictions = np.concatenate(predictions)
         pred_values = concatenated_predictions.flatten()

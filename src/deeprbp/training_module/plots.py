@@ -6,7 +6,6 @@ import seaborn as sns
 import numpy as np
 from typing import Dict, List, Union
 #from sklearn.metrics import auc
-from ..util.utils import ensure_directory_exists
 
 def scatter_real_vs_pred(
     category: str,
@@ -60,7 +59,7 @@ def scatter_real_vs_pred(
         bbox=dict(boxstyle="round", edgecolor="black", facecolor="white")
     )
     sns.set_style("whitegrid")
-    ensure_directory_exists(output_dir)
+    os.makedirs(output_dir, exist_ok=True)
     output_path = os.path.join(output_dir, f"{category}-{source_name}.png")
     plt.tight_layout()
     plt.savefig(output_path, dpi=300)
@@ -69,7 +68,8 @@ def scatter_real_vs_pred(
 
 def plot_loss_curve(train_history: List[float], val_history: List[float], 
                     title: str = 'Training and Validation Loss', 
-                    output_dir: str = None) -> None:
+                    output_dir: str = None, 
+                    plot_name: str = 'loss_curve') -> None:
     """
     Plots the training and validation loss curves to visualize the performance of the model over time.
 
@@ -78,11 +78,12 @@ def plot_loss_curve(train_history: List[float], val_history: List[float],
     - val_history (List[float]): List of validation loss values for each epoch.
     - title (str): Title of the plot (default is 'Training and Validation Loss').
     - output_dir (str): Path to save the plot as a .png file.
+    - plot_name (str): Name of the plot file (default is 'loss_curve').
 
     Returns:
     - None: The function will save the plot.
     """
-    ensure_directory_exists(output_dir)
+    os.makedirs(output_dir, exist_ok=True)
     plt.style.use('seaborn-v0_8-muted')
     plt.figure(figsize=(12, 8))
     # Plot both training and validation loss
@@ -94,9 +95,10 @@ def plot_loss_curve(train_history: List[float], val_history: List[float],
     plt.grid(True, linestyle='--', alpha=0.6)
     plt.legend(fontsize=14, loc='upper right', frameon=True, shadow=True, fancybox=True)
     plt.tight_layout(pad=2)
-    plt.savefig(os.path.join(output_dir, 'loss_curve.png'), dpi=300)
+    # Save the plot with the specified name
+    plt.savefig(os.path.join(output_dir, f'{plot_name}.png'), dpi=300)
     plt.close()
-    print(f"Plot saved to {output_dir}")
+    print(f"Plot saved to {output_dir}/{plot_name}.png")
 
 def plot_transcript_to_gene_ratio_distributions(
     ratios_pred: np.ndarray,
@@ -136,6 +138,6 @@ def plot_transcript_to_gene_ratio_distributions(
     plt.text(mean_label + 0.1, plt.ylim()[1] * 0.9, f'Mean: {mean_label:.3f}\nSTD: {std_label:.3f}', color=color_label, fontsize=9)
     # Adjust layout
     plt.tight_layout()
-    ensure_directory_exists(os.path.dirname(output_path))
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
     plt.savefig(output_path, dpi=300)
     plt.close()

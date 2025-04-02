@@ -14,7 +14,8 @@ from .plots import scatter_real_vs_pred, plot_transcript_to_gene_ratio_distribut
 
 def calculate_metrics(predictions, true_values):
     """
-    Calculates general metrics like Spearman Correlation, MSE, and Pearson Correlation.
+    Calculates general metrics like Spearman Correlation, MSE, and Pearson Correlation for two
+    vectors.
     Args:
         predictions: Predicted values (in log2(tpm+1))
         true_values: True labels (in log2(tpm+1))
@@ -32,7 +33,8 @@ def calculate_metrics(predictions, true_values):
         'r2': r2
     }
 
-### Here we need to create the calculate of the correlation for each gen using getBM: the ranking really matters for the transcripts within each gene as opposed to all the transcripts across all genes.
+### Here we need to create the calculate of the correlation for each gen using getBM: the ranking 
+# really matters for the transcripts within each gene as opposed to all the transcripts across all genes.
 
 
 

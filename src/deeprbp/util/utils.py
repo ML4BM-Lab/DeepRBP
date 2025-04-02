@@ -108,22 +108,6 @@ def adjust_batch_size(dataset, batch_size):
     """
     return min(len(dataset), batch_size)
 
-def ensure_directory_exists(directory: str) -> None:
-    """
-    Ensures the given directory exists. If it doesn't, it creates it.
-
-    Parameters:
-    -----------
-    directory : str
-        Path of the directory to check/create.
-    
-    Returns:
-    --------
-    None
-    """
-    if directory and not os.path.exists(directory):
-        os.makedirs(directory, exist_ok=True)
-
 def get_gene_info(gene_ids_or_names: List[str], getBM: pd.DataFrame, return_type: str = 'names') -> List[Optional[str]]:
     """
     Retrieves Gene_names from Gene_IDs or Gene_IDs from Gene_names using the getBM DataFrame.

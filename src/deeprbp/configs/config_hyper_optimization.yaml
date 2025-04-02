@@ -17,4 +17,4 @@ trans_col_name: "Transcript_ID"
 seed: 42
 cuda: True
 print_every: 5
-save_best_model: True
+save_best_model: False

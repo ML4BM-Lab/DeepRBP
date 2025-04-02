@@ -9,96 +9,127 @@ import optuna
 from optuna.samplers import TPESampler
 import optuna.visualization.matplotlib as optuna_plt
 import optuna.logging
+import time
 
 from ..util.logger import Logger
 from torch.utils.data import DataLoader
 from ..data_loading.config_loader import ConfigParser
-from ..data_loading.data_loader import DataImporter, DataSplitter
+from ..data_loading.data_loader import DataImporter, DataSplitter, Scaler
 from .train_model import TrainPredictor
 from .model import PredictorModel
 from .plots import plot_loss_curve
-from .evaluation import calculate_metrics, save_metrics_summary, calculate_metrics_per_category
+from .evaluation import calculate_metrics, calculate_metrics_per_category
 
 from ..util.utils import CustomTensorDataset, filter_data_by_sample_ids, save_data, adjust_batch_size
 
-# Define the default configuration path
-config_path = '/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_hyper_optimization.yaml'
-output_dir = 'results/'
+# Define the default configuration path and output directory
+default_config_path = '/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_hyper_optimization.yaml'
+default_output_dir = '/scratch/jsanchoz/DeepRBP/stuff/'
 
-#args = parse_args()
+def main(
+        config_path_file: str,
+        n_trials: int,
+        val_batch_size: int,
+        output_dir: str
+    ):
+    
+    print(f"[*] Loading configuration from: {config_path_file}...")
+    config_parser = ConfigParser(config_path_file)
+    config = config_parser.load_config()
+    print("[*] Configuration loaded successfully.")
 
-# Load configuration settings from the specified YAML file
-print("Loading configuration from:", config_path)
-config_parser = ConfigParser(config_path)
-config = config_parser.load_config()
-print("Configuration loaded successfully.")
+    # Load the data using the data importer and getBM that relates transcript_id with gene_id info
+    print("[*] Loading data...")
+    data_importer = DataImporter(config['data_paths'])
+    data = data_importer.load()
+    getBM = pd.read_csv(config['getBM_path'])
+    print("[*] Data loaded successfully.")
+    
+    # Filter a portion of the samples to optimize time and computational resources
+    print("[*] Filtering samples to optimize time and resources...")
+    subset_idx, _ = DataSplitter.split_data_class(
+        data=data, 
+        config=config, 
+        sample_category=config['sample_category'], 
+        test_size=config['sample_fraction']
+    )
+    data_subset = filter_data_by_sample_ids(data, subset_idx)
+    print("[*] Samples filtered successfully.")
 
-# Load the data using the data importer
-print("Loading data...")
-data_importer = DataImporter(config['data_paths'])
-data = data_importer.load()
-print("Data loaded successfully")
+    # Perform a train/validation split with the data subset
+    print("[*] Splitting data into training and validation sets...")
+    splitter = DataSplitter(data_subset, config)
+    train_data, valid_data = splitter.split_data_sets(test_name='validation')
+    print("[*] Data splitting completed.")
 
-# Filter a portion of the samples to optimize time and computational resources
-subset_idx, _ = DataSplitter.split_data_class(
-                                            data=data, 
-                                            config=config, 
-                                            sample_category=config['sample_category'], 
-                                            test_size=config['sample_fraction']
-                                            )
-data_subset = filter_data_by_sample_ids(data, subset_idx)
+    # Save the training and validation samples used in the optimization to the specified output directory
+    data_to_save = [
+    (train_data, os.path.join(output_dir, 'data/Train'), {
+        'rbp_df': 'train_RBPs_log2p_tpm.csv',
+        'isoform_df': 'train_trans_log2p_tpm.csv',
+        'gene_df': 'train_gn_tpm.csv',
+        'metadata_df': 'train_phenotype_metadata.csv'
+    }),
+    (valid_data, os.path.join(output_dir, 'data/Validation'), {
+        'rbp_df': 'val_RBPs_log2p_tpm.csv',
+        'isoform_df': 'val_trans_log2p_tpm.csv',
+        'gene_df': 'val_gn_tpm.csv',
+        'metadata_df': 'val_phenotype_metadata.csv'
+    })
+    ]
 
-# Perform a train/validation split with the data subset
-splitter = DataSplitter(data_subset, config)
-train_data, valid_data = splitter.split_data_sets(test_name='validation')
+    for data, save_path, custom_names in data_to_save:
+        print(f"[*] Saving data to: {save_path}...")
+        save_data(data, save_path, custom_names)
+        print(f"[*] Data saved successfully at: {save_path}.")
 
-# Save the training and val samples used in the optimization to the specified output directory
-print(f"Saving training data to: {os.path.join(output_dir, 'hyper_opt_data/Train')}")
-save_data(train_data, 
-            os.path.join(output_dir, 'hyper_opt_data/Train'), 
-            custom_names = {
-                        'rbp_df': 'train_RBPs_log2p_tpm.csv',
-                        'isoform_df': 'train_trans_log2p_tpm.csv',
-                        'gene_df': 'train_gn_tpm.csv',
-                        'metadata_df': 'train_phenotype_metadata.csv'}
-                        )
-print("Training data saved successfully.")
+    # Scale the data
+    print("[*] Scaling data...")
+    scaler = Scaler()
+    train_data['scaled_rbp_df'] = scaler.fit_transform(train_data['rbp_df'])
+    valid_data['scaled_rbp_df'] = scaler.transform(valid_data['rbp_df'])
+    print("[*] Data scaled successfully.")
 
-print(f"Saving test data to: {os.path.join(output_dir, 'hyper_opt_data/Val')}")
-save_data(valid_data, 
-            os.path.join(output_dir, 'hyper_opt_data/Val'), 
-            custom_names = {
-                        'rbp_df': 'val_RBPs_log2p_tpm.csv',
-                        'isoform_df': 'val_trans_log2p_tpm.csv',
-                        'gene_df': 'val_gn_tpm.csv',
-                        'metadata_df': 'val_phenotype_metadata.csv'}
-                        )
-print("Test data saved successfully.")
+    # Create custom data sets
+    print("[*] Creating custom datasets...")
+    train_dataset, valid_dataset = [
+            CustomTensorDataset(
+                data,
+                getBM,
+                rbp_data_key='scaled_rbp_df', 
+                gene_data_key='gene_df', 
+                transcript_data_key='isoform_df',
+                trans_col_name=config['trans_col_name'],
+                gene_col_name=config['gene_col_name']
+            ) for data in [train_data, valid_data]]
+    print("[*] Custom datasets created successfully.")
 
-# Scale data
-scaler = Scaler()
-train_data['scaled_rbp_df'] = scaler.fit_transform(train_data['rbp_df'])
-valid_data['scaled_rbp_df'] = scaler.transform(valid_data['rbp_df'])
+    # Optimization with Optuna using TPESampler
+    print("[*] Starting optimization with Optuna...")
+    study_name = "DeepRBPredictor-optimization"
+    optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
+    study = optuna.create_study(study_name=study_name, 
+                                sampler=TPESampler(seed=config["seed"]), 
+                                direction='minimize') #pruner=pruner) 
+                # Recommended budgets with this sampler (#trials: 100-1000)
 
-# Create data loaders
+    # Execute the optimization
+    print(f"[*] Running {n_trials} trials...")
+    study.optimize(lambda trial: objective(trial, config, train_dataset, valid_dataset, val_batch_size, output_dir), 
+                   n_trials=n_trials) 
+    
+    # Print the results of the best trial
+    print(f'Best trial: {study.best_trial}, with parameters: {study.best_params} '
+      f'and objective value: {study.best_value}')
 
-# el gene_df de alguna forma tienes que convertirse en gn_expr_each_iso_tpm dentro de la función de forward que ahora está reducida!
-# tendré que poner de alguna manera los nombres de los genes y los nombres de los transcritos en el tensorDataset y hacer a continuación 
-# la operación
-getBM = pd.read_csv(config['getBM_path'])
-train_dataset, valid_dataset = [
-        CustomTensorDataset(
-            data,
-            getBM,
-            rbp_data_key='scaled_rbp_df', 
-            gene_data_key='gene_df', 
-            transcript_data_key='isoform_df',
-            trans_col_name=config['trans_col_name'],
-            gene_col_name=config['gene_col_name']
-        ) for data in [train_data, valid_data]]
+    # Save the results to a CSV file
+    df_results = study.trials_dataframe()
+    results_file_path = os.path.join(output_dir, f'results_{study_name}.csv')
+    df_results.to_csv(results_file_path, index=False)
+    print(f"[*] Results saved to: {results_file_path}")
 
-## objective
-def objective(trial, config, train_dataset, valid_dataset, val_batch_size=512):
+
+def objective(trial, config, train_dataset, valid_dataset, val_batch_size, output_dir):
     ### Suggest Optuna: Sample hyperparameters for this Trial 
     # Select hyperparameters
     num_hidden_layers = trial.suggest_int('num_hidden_layers', 0, 4)
@@ -149,22 +180,20 @@ def objective(trial, config, train_dataset, valid_dataset, val_batch_size=512):
         train_history, val_history, _ = trainer.fit(train_loader, 
                                                     val_loader, 
                                                     epochs=config["num_epochs"],
-                                                    path_save_results='/scratch/jsanchoz/DeepRBP/stuff')
+                                                    path_save_results=output_dir)
 
+        # Create a unique plot name
+        timestamp = time.strftime("%Y-%m-%d_%H:%M:%S")   
+        plot_name = f'trial_{trial.number}_{timestamp}'  
+        plot_loss_curve(train_history, val_history, output_dir=output_dir, plot_name=plot_name)
 
-        ## pseudo try code:
-        trainer.generate_predictions(val_loader)
-            
-        #preds_labels = [trainer.generate_predictions(loader) for loader in [train_loader, val_loader, test_loader]]
-        #metrics = [calculate_metrics(pred, label) for pred, label, _ in preds_labels]
+        # Evaluate the actual model
+        preds_labels = [trainer.generate_predictions(loader) for loader in [train_loader, val_loader]]
+        train_metrics, val_metrics = [calculate_metrics(pred, label) for pred, label, _ in preds_labels]
 
-
-        plot_loss_curve(train_history, val_history, output_dir=self.path_save_results)
-        self.logger.log("✅ Model and history saved.", level=1)
-
-        # Here calculate other metrics with the trained model
-        
-
+        ## HERE TENDRIA QUE METER LAS NUEVAS MÉTRICAS DE: 
+        ### Here we need to create the calculate of the correlation for each gen using getBM: the ranking 
+        # really matters for the transcripts within each gene as opposed to all the transcripts across all genes.
         return val_history[-1]
     
     except ValueError as e:
@@ -173,11 +202,26 @@ def objective(trial, config, train_dataset, valid_dataset, val_batch_size=512):
         return float('inf')  # Return a high value to indicate this trial was unsuccessful
     
 
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Hyperparameter optimization using Optuna.')
+    parser.add_argument('-c', '--config_path_file', type=str, 
+                        default=default_config_path,
+                        help='Path to the configuration YAML file (default: %(default)s)')   
+    parser.add_argument('-n', '--n_trials', type=int, required=True, help='Number of trials for Optuna')
+    parser.add_argument('-vbs', '--val_batch_size', type=int, required=True, help='Validation batch size')
+    parser.add_argument('-o', '--output_dir', type=str, 
+                        default=default_output_dir, 
+                        help='Output directory for results (default: %(default)s)')
+    args = parser.parse_args()
+
+    main(args.config_path_file,
+         args.n_trials,
+         args.val_batch_size, 
+         args.output_dir)
+    
+
 # The authors should provide the full table of results for the hyperparameter optimization runs
 # to be able to validate the claim that more complex models (more hidden layers) are necessary.
- 
-
-
     # Verify that the suggested trial is elegible
     # 1) si num_hidden_layers == 0 -> hidden1_nodes, uniform_nodes, node_shrink_factor y activation_func no aplican "not_used" (bien)
     # 2) si num_hidden_layers == 1 -> uniform_nodes y node_shrink_factor no aplican "not_used" (bien)
@@ -186,94 +230,3 @@ def objective(trial, config, train_dataset, valid_dataset, val_batch_size=512):
     # 5) si num_hidden_layers == 4 -> si hidden1_nodes es 64 y node_shrink_factor es 8, 128, 256, 512, 1024, 2048 error! (con uniform_nodes = False)
     # return model parameters (esto mejorar luego)
    
-config["save_best_model" ] = True
-config["num_hidden_layers"] = 3
-config["hidden1_nodes"] = 128
-config["uniform_nodes"] = False
-config["node_shrink_factor"] = 2
-config["activation_func"] = "relu"
-config["learning_rate"] = 0.0001
-config["optimizer_name"] = 'adamW'
-config["batch_size"] = train_batch_size = 256
-config["num_epochs"] = 300
-val_batch_size = 256  
-
-
-
-
-
-
-
-
-
-     
-## hacer aqui las mias y mirar en el paper y en la revision cuantas tengo que pedir!
-    # Put the actual suggestion in Config (aqui en el config tengo que comprobar que lo que está sugeriendo "
-    # es plausible y si no lo es pasar a un nuevo trial o modificar las variables que no se vayan a UserWarning
-    # como por ejemplo num_hidden_layers = 0 con todo lo demás. )"
-
-
-## grid-Search with Optuna TPESampler
-path_save_results = f'../results/optuna/{sample_id}'
-study_name = "DeepRBP_Predictor-optimization"
-optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
-study = optuna.create_study(study_name=study_name, sampler=TPESampler(seed=config["seed"]), direction='minimize') # Recommended budgets with this sampler (#trials: 100-1000)
-study.optimize(lambda trial: objective(trial, ), n_trials=n_trials) 
-
-
-
-
-
-
-
-
-    print(f"Best trial: {study.best_trial}, with parameters: {study.best_params} and objective value:{study.best_value}")
-    trials_df = study.trials_dataframe()
-    trials_df.to_csv(path_save_results+f'/trials_df_{config["loss_func"]}_loss.csv', index=False)
-
-    ### Visualize study history to analayze the hyperparams-performance relationship
-    plt.rcParams['figure.figsize'] = (16*3.3, 9*3.3)
-    plt.rcParams['figure.dpi'] = 300
-    visualize_study_history(study, path_save_results)
-    torch.cuda.empty_cache()
-
-
-# Definir batch sizes
-train_batch_size = 256   
-val_batch_size = 256  
-
-# Crear loaders
-train_loader, val_loader = [
-    DataLoader(
-        dataset,
-        batch_size=adjust_batch_size(dataset, (train_batch_size if idx == 0 else val_batch_size)),
-        shuffle=(idx == 0),  # Solo hacer shuffle en el conjunto de entrenamiento
-        drop_last=(idx == 0) # Solo drop_last en el conjunto de entrenamiento
-    )
-    for idx, dataset in enumerate([train_dataset, valid_dataset])   
-]
-
-
-
-
-
-
-
-
-model = PredictorModel(
-            input_size=next(iter(train_loader))['scaled_rbp_df'].shape[1],
-            output_size=next(iter(train_loader))['isoform_df'].shape[1],
-            config=config
-        )
-
- # Train the model
-       # train_history, val_history, trainer = self.train_model(train_loader, val_loader)
-       # self.save_model_and_history(trainer, train_history, val_history)
-
-trainer = TrainPredictor(model=model, config=config)
-train_history, val_history = trainer.fit(train_loader, val_loader, epochs=self.training_config['epochs'])
-       
-
-## ESTARIA GUAY QUE LA CLASE DeepRBPredictorPipeline fuera lo que usara aquí directamente, porque sino vamos 
-# a repetir el mismo código dos veces
-
