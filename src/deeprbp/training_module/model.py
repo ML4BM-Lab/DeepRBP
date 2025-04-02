@@ -1,6 +1,7 @@
 # src/deeprbp/training_module/model.py
 
 import os
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -51,9 +52,11 @@ class PredictorModel(nn.Module):
         super(PredictorModel, self).__init__()
         self.logger = Logger(verbose=verbose)
         init(autoreset=True)
+        
         # Default configuration if none provided
         if config is None:
             config = {}
+        
         # Model configuration
         self.input_size = input_size 
         self.output_size = output_size
@@ -64,6 +67,7 @@ class PredictorModel(nn.Module):
         self.activation_func = config.get('activation_func', 'relu')
         self.learning_rate = config.get('learning_rate', 0.001)
         self.optimizer_name = config.get('optimizer_name', 'adamW')
+        
         # Initialize the variable usage tracking
         self.variable_usage = {
             'hidden1_nodes': False,
@@ -81,7 +85,7 @@ class PredictorModel(nn.Module):
         self._print_unused_variables()
         self._print_used_variables()
         self._update_unused_variables()
-    # new
+
     def _configure_layers(self):
         """Configures the hidden and output layers based on model configuration."""
         if self.num_hidden_layers > 0:
@@ -113,6 +117,7 @@ class PredictorModel(nn.Module):
         # Add the activation layer for the output
         self.output_activation = nn.Sigmoid()
         self.add_module('output_activation', self.output_activation)
+    
     def _check_layer_outputs(self):
         """
         Checks that no layer in the model has out_features equal to 0.
@@ -127,6 +132,7 @@ class PredictorModel(nn.Module):
                     f"Please try increasing 'hidden1_nodes' or decreasing 'node_shrink_factor' "
                     f"based on the number of hidden layers ('num_hidden_layers') you are using."
                 )
+    
     def _mark_used_variables(self):
         """Marks the variables as used based on the current configuration."""
         self.variable_usage['hidden1_nodes'] = True   
@@ -135,6 +141,7 @@ class PredictorModel(nn.Module):
             self.variable_usage['node_shrink_factor'] = True   
         if self.num_hidden_layers >= 3:
             self.variable_usage['uniform_nodes'] = True   
+    
     def _print_unused_variables(self):
         """Prints the variables that are not being used."""
         init(autoreset=True)
@@ -151,6 +158,7 @@ class PredictorModel(nn.Module):
         else:
             print(Fore.GREEN + "✅ All relevant variables are in use.")
         print(Fore.CYAN + separator)
+    
     def _print_used_variables(self):
         """Prints the variables that are being used."""
         used_vars = {  # Only include variables that are marked True in variable_usage
@@ -171,6 +179,7 @@ class PredictorModel(nn.Module):
             if value is not None:  # Only print values that are not None
                 print(Fore.LIGHTGREEN_EX + f"🔹 {var}: {value}")
         print(Fore.CYAN + separator)
+    
     def _update_unused_variables(self):
         """Updates unused variables with a placeholder character."""
         for var in self.variable_usage:
@@ -183,6 +192,7 @@ class PredictorModel(nn.Module):
                     self.node_shrink_factor = None
                 elif var == 'activation_func':
                     self.activation_func = None
+    
     def _configure_optimizer(self, optimizer_name, learning_rate):
         """Configures the optimizer based on the provided name and learning rate.
         Args:
@@ -205,6 +215,7 @@ class PredictorModel(nn.Module):
             return torch.optim.AdamW(self.parameters(), lr=learning_rate)
         else:
             self.logger.error(f"Unsupported optimizer '{optimizer_name}'. Valid options: ['sgd90', 'asgd', 'adam', 'adagrad', 'adadelta', 'adamW']")
+    
     def _get_activation_module(self, activation_name):
         """Returns the activation layer based on the given name."""
         if activation_name == "relu":
@@ -215,6 +226,7 @@ class PredictorModel(nn.Module):
             return nn.Sigmoid()
         else:
             self.logger.error("Invalid activation_layer. Supported options are 'relu', 'tanh', and 'sigmoid'.")
+    
     def forward(self, xb, gb):
         """Defines the forward pass of the model.
         
@@ -232,6 +244,7 @@ class PredictorModel(nn.Module):
         # Apply the output activation function and the specified transformation
         out = torch.log2((self.output_activation(x) * gb) + 1)
         return out
+    
     def train_step(self, inputs, targets, gen_expr):
         """Performs a single training step (forward + backward pass).
         Args:
@@ -247,6 +260,7 @@ class PredictorModel(nn.Module):
         self.optimizer.step() # Update weights
         self.optimizer.zero_grad() # Reset gradients
         return loss.detach()
+    
     def validate_step(self, inputs, targets, gen_expr):
         """Performs a single validation step (forward pass only).
         Args:
@@ -260,12 +274,14 @@ class PredictorModel(nn.Module):
             out = self(inputs, gen_expr) # Forward pass
             val_loss = F.mse_loss(out, targets)  # Calculate loss
         return val_loss.detach()
+    
     def save_model(self, output_dir, model_name):
         """Saves the model to the specified directory."""
         self.logger.log(f"Saving model to {output_dir} with name {model_name}...")
         os.makedirs(output_dir, exist_ok=True)
         torch.save(self.state_dict(), os.path.join(output_dir, model_name))
         self.logger.log(f"Model saved successfully in {output_dir}")
+    
     @classmethod
     def load_model(cls, path_to_weights, config: Any, input_size: int = None, output_size: int = None):
         """

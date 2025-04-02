@@ -16,8 +16,8 @@ def calculate_metrics(predictions, true_values):
     """
     Calculates general metrics like Spearman Correlation, MSE, and Pearson Correlation.
     Args:
-        predictions: Predicted values
-        true_values: True labels
+        predictions: Predicted values (in log2(tpm+1))
+        true_values: True labels (in log2(tpm+1))
     Returns:
         A dictionary with the calculated metrics
     """
@@ -31,6 +31,12 @@ def calculate_metrics(predictions, true_values):
         'mse': mse,
         'r2': r2
     }
+
+### Here we need to create the calculate of the correlation for each gen using getBM: the ranking really matters for the transcripts within each gene as opposed to all the transcripts across all genes.
+
+
+
+
 
 def save_metrics_summary(
     set_names_list: List[str], 
@@ -122,13 +128,13 @@ def calculate_metrics_per_category(
     plot_results: bool = False,
     getBM: str = None) -> List[Dict[str, float]]:
     """
-    Calculates metrics for each category in the test dataset, including:
-    - Performance metrics for each category (e.g., accuracy, precision, recall).
+    Calculates metrics for each category in the any dataset, including:
+    - Performance metrics for each category  
     - Visualization of predicted vs actual values with scatter plots.
     - Distribution of transcript-to-gene ratios via histograms.
 
     Args:
-        test_data (Dict[str, pd.DataFrame]): Test dataset including metadata, scaled features, and true labels.
+        test_data (Dict[str, pd.DataFrame]): dataset to test including metadata, scaled features, and true labels.
         trainer (Any): Trainer object with `generate_predictions`.
         output_dir (str): Directory path to save results and plots.
         set_name (str): Name of the dataset being processed.
@@ -179,11 +185,6 @@ def calculate_metrics_per_category(
                 output_dir=os.path.join(output_dir, 'scat_plot_real_vs_pred_value', source_name, set_name, category),
             )
             if getBM is not None:  # Ensure getBM is not None
-                print(getBM)
-                print(pred_df)
-                print(labels_df)
-                print(genes_df)
-                print(category)
                 analyze_transcript_to_gene_ratios(
                     getBM=getBM,
                     pred_df=pred_df,

@@ -16,4 +16,5 @@ gene_col_name: "Gene_ID"
 trans_col_name: "Transcript_ID"
 seed: 42
 cuda: True
- 
+print_every: 5
+save_best_model: True

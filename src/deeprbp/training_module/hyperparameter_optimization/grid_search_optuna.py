@@ -16,6 +16,8 @@ from ..data_loading.config_loader import ConfigParser
 from ..data_loading.data_loader import DataImporter, DataSplitter
 from .train_model import TrainPredictor
 from .model import PredictorModel
+from .plots import plot_loss_curve
+from .evaluation import calculate_metrics, save_metrics_summary, calculate_metrics_per_category
 
 from ..util.utils import CustomTensorDataset, filter_data_by_sample_ids, save_data, adjust_batch_size
 
@@ -96,7 +98,7 @@ train_dataset, valid_dataset = [
         ) for data in [train_data, valid_data]]
 
 ## objective
-def objective(trial, config, train_dataset, valid_dataset):
+def objective(trial, config, train_dataset, valid_dataset, val_batch_size=512):
     ### Suggest Optuna: Sample hyperparameters for this Trial 
     # Select hyperparameters
     num_hidden_layers = trial.suggest_int('num_hidden_layers', 0, 4)
@@ -138,9 +140,31 @@ def objective(trial, config, train_dataset, valid_dataset):
             )
             
         # Proceed with training the model
-        # Implement your training loop here and calculate validation loss
-        trainer = TrainPredictor(model=model, config=config, input_features = ('scaled_rbp_df', 'gene_df'), output_features = 'isoform_df')
-        train_history, val_history = trainer.fit(train_loader, val_loader, epochs=config["num_epochs"])
+        trainer = TrainPredictor(
+                model=model,
+                config=config,
+                input_features=('scaled_rbp_df', 'gene_df'), 
+                output_features=('isoform_df',)
+        )
+        train_history, val_history, _ = trainer.fit(train_loader, 
+                                                    val_loader, 
+                                                    epochs=config["num_epochs"],
+                                                    path_save_results='/scratch/jsanchoz/DeepRBP/stuff')
+
+
+        ## pseudo try code:
+        trainer.generate_predictions(val_loader)
+            
+        #preds_labels = [trainer.generate_predictions(loader) for loader in [train_loader, val_loader, test_loader]]
+        #metrics = [calculate_metrics(pred, label) for pred, label, _ in preds_labels]
+
+
+        plot_loss_curve(train_history, val_history, output_dir=self.path_save_results)
+        self.logger.log("✅ Model and history saved.", level=1)
+
+        # Here calculate other metrics with the trained model
+        
+
         return val_history[-1]
     
     except ValueError as e:
@@ -149,7 +173,9 @@ def objective(trial, config, train_dataset, valid_dataset):
         return float('inf')  # Return a high value to indicate this trial was unsuccessful
     
 
-
+# The authors should provide the full table of results for the hyperparameter optimization runs
+# to be able to validate the claim that more complex models (more hidden layers) are necessary.
+ 
 
 
     # Verify that the suggested trial is elegible
@@ -160,7 +186,7 @@ def objective(trial, config, train_dataset, valid_dataset):
     # 5) si num_hidden_layers == 4 -> si hidden1_nodes es 64 y node_shrink_factor es 8, 128, 256, 512, 1024, 2048 error! (con uniform_nodes = False)
     # return model parameters (esto mejorar luego)
    
-
+config["save_best_model" ] = True
 config["num_hidden_layers"] = 3
 config["hidden1_nodes"] = 128
 config["uniform_nodes"] = False
@@ -169,6 +195,7 @@ config["activation_func"] = "relu"
 config["learning_rate"] = 0.0001
 config["optimizer_name"] = 'adamW'
 config["batch_size"] = train_batch_size = 256
+config["num_epochs"] = 300
 val_batch_size = 256  
 
 

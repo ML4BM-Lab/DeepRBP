@@ -61,7 +61,6 @@ def scatter_real_vs_pred(
     )
     sns.set_style("whitegrid")
     ensure_directory_exists(output_dir)
-
     output_path = os.path.join(output_dir, f"{category}-{source_name}.png")
     plt.tight_layout()
     plt.savefig(output_path, dpi=300)
