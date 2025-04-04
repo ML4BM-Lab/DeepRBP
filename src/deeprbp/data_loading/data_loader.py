@@ -9,7 +9,7 @@ from sklearn.model_selection import train_test_split as sk_train_test_split
 from typing import Dict, Tuple
 
 from ..util.logger import Logger
-from ..util.utils import filter_data_by_sample_ids
+from ..util.utils import print_section_separator, filter_data_by_sample_ids
 
 class DataImporter:
     def __init__(self, paths):
@@ -42,6 +42,7 @@ class DataImporter:
                 if path:  # Only load if the path is provided
                     self.data[f"{key.split('_')[0]}_df"] = pd.read_csv(path, index_col=0)
                     self.logger.log(f"✅ Loaded {key} data.")
+            print_section_separator()
         except FileNotFoundError as e:
             self.logger.error(f"❌ Error loading file: {e}", FileNotFoundError)
         return self.data  # Return raw loaded data
@@ -102,6 +103,7 @@ class DataSplitter:
             self.data['metadata_df']['set_type'] = 'unknown'
         self.data['metadata_df'].loc[self.data['metadata_df'].index.isin(sample_set), 'set_type'] = set_name
         self.logger.log(f"🏷️ Added sample set label '{set_name}' for {len(samples)} samples.")
+        print_section_separator()
     
     def split_data_sets(self, test_name='testing') -> Tuple[Dict[str, pd.DataFrame], Dict[str, pd.DataFrame]]:
         """
@@ -116,6 +118,7 @@ class DataSplitter:
         else:
             self.logger.log("🔄 Performing train/val split...")
             log_message = "📝 Writing set_type in metadata after train/val split"
+        print_section_separator()
         
         # Perform the data splitting
         self.train_id, self.test_id = self.split_data(data=self.data, test_size=self.config['test_fraction'])
@@ -149,6 +152,8 @@ class Scaler:
             self.logger.log("✅ [Scaler] Existing scaler and sigma loaded. Ready for transformation.")
         else:
             self.logger.warn("⚠️ [Scaler] No existing scaler or sigma provided. Please fit before using.")
+        print_section_separator()
+
     def fit(self, train_set):
         """
         Fit a StandardScaler to the training dataset and compute the standard deviation (sigma) for clipping.
@@ -164,6 +169,7 @@ class Scaler:
         self.scaler.fit(train_set)
         self.sigma = np.std(self.scaler.transform(train_set).flatten().astype(np.float64))
         self.logger.log(f"✅ [Scaler:fit] Sigma computed: {self.sigma:.4f}")
+        print_section_separator()
     
     def fit_transform(self, train_set):
         """
@@ -253,6 +259,7 @@ class Scaler:
             self.logger.log(f"✅ [Scaler:save] Sigma saved to: {sigma_file}")
         else:
             self.logger.error("❌ [Scaler:save] No sigma available to save.", ValueError)
+        print_section_separator()
 
     @classmethod
     def load(cls, folder_path):
@@ -282,6 +289,7 @@ class Scaler:
         sigma = np.load(sigma_file)
         logger.log(f"✅ [Scaler:load] Scaler loaded from: {scaler_file}")
         logger.log(f"✅ [Scaler:load] Sigma loaded from: {sigma_file}")
+        print_section_separator()
         return cls(existing_scaler=scaler, existing_sigma=sigma)
     
     # You can load the scaler later from disk if needed

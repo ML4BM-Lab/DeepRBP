@@ -2,6 +2,7 @@
 
 import pandas as pd
 import torch
+from torchinfo import summary
 from torch.utils.data import Dataset
 from typing import List, Dict, Optional
 import os
@@ -44,6 +45,17 @@ class CustomTensorDataset(Dataset):
     def __getitem__(self, idx: int):
         return {feature: values[idx] for feature, values in self.features.items()}
   
+def print_section_separator(char="═", width=50):
+    """
+    Prints a decorative separator line with a minimalist design.
+    
+    Parameters:
+        char (str): The character to use for the separator line.
+        width (int): The width of the separator line.
+    """
+    line = char * width
+    print(f"\n{line}\n")
+    
 def select_sample_ids_by_type(metadata_df: pd.DataFrame, sample_category_col: str, sample_types):
     """
     Select sample IDs from the metadata based on the provided sample types.
@@ -178,3 +190,26 @@ def calculate_category_proportions(data: Dict[str, pd.DataFrame]) -> pd.DataFram
     category_proportions = category_proportions.reset_index()
     category_proportions.columns = ['detailed_category', 'proportion']
     return category_proportions
+
+def summarize_model(model, train_loader, batch_size, device='cpu'):
+    """
+    Generates dummy inputs based on the training data and summarizes the model.
+
+    Args:
+        model: The model to summarize.
+        train_loader: The DataLoader for the training dataset.
+        batch_size: The batch size to use for the dummy inputs.
+        device: The device to which the inputs should be sent ('cpu' or 'cuda').
+
+    Returns:
+        None
+    """
+    # Create dummy inputs
+    rbp_input_size = next(iter(train_loader))['scaled_rbp_df'].shape[1]  # Number of features for rbp_df
+    gene_input_size = next(iter(train_loader))['gene_df'].shape[1]      # Number of features for gene_df
+    # Generate dummy inputs
+    dummy_rbp = torch.randn(batch_size, rbp_input_size).to(device)  # Use 'cpu' or 'cuda' based on your setup
+    dummy_gene = torch.randn(batch_size, gene_input_size).to(device)  # Use 'cpu' or 'cuda' based on your setup
+    # Use torchinfo to summarize the model
+    summary(model, input_data=(dummy_rbp, dummy_gene))
+

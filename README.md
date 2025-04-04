@@ -191,6 +191,17 @@ con un stratified split por tipo tumoral el
 
 
 
+```bash
+run-hyper-optimization-optuna --config_path_file '/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_hyper_optimization.yaml' \
+                              --output_dir '/scratch/jsanchoz/DeepRBP/stuff/' \
+                              --val_batch_size 512 \
+                              --n_trials 1
+```
+```bash
+sbatch slurm/run_hyper_optimization_optuna.sh
+```
+
+
 
 
 

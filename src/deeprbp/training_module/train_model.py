@@ -4,6 +4,7 @@ import os
 import torch
 import numpy as np
 from tqdm import tqdm
+import optuna
 
 from .model import PredictorModel
 
@@ -112,7 +113,7 @@ class TrainPredictor:
                 val_losses.append(val_loss)
         return torch.stack(val_losses).mean().item() # Average validation loss
     
-    def fit(self, train_loader, val_loader, epochs, path_save_results=None):
+    def fit(self, train_loader, val_loader, epochs, path_save_results=None, optuna_trial=None):
         """
         Trains the model for a specified number of epochs.
 
@@ -126,6 +127,7 @@ class TrainPredictor:
             epochs (int): The number of epochs to train the model.
             path_save_results (str, optional): Directory path where the best model will be saved. 
                                                 If None, the best model will not be saved.
+            optuna_trial (optuna.Trial, optional): The Optuna trial object for reporting metrics and pruning.
 
         Returns:
             tuple: A tuple containing:
@@ -152,19 +154,29 @@ class TrainPredictor:
         val_history = []
         print_every = self.config.get('print_every', 1)
         best_val_mse = float('inf')  # Initialize with infinity
-        print(f"\nStarting training for {epochs} epochs...")
+        print(f"\nStarting training for {epochs} epochs... 🚀")
         
         for epoch in tqdm(range(epochs), desc="Training", unit="epoch"):
             # Training Phase
             train_loss = self.train_one_epoch(train_loader)
             train_history.append(train_loss)
+            
             # Validation Phase
             val_loss = self.validate_one_epoch(val_loader)
             val_history.append(val_loss)
+            
+            # Report the validation loss to Optuna if optuna_trial is provided
+            if optuna_trial is not None:
+                optuna_trial.report(val_loss, epoch)  # Report the current validation loss
+                if optuna_trial.should_prune():  # Check if the trial should be pruned
+                     print(f"🚫 Pruning the current trial due to poor performance at epoch {epoch + 1}.")   
+                     raise optuna.TrialPruned()
+                
             # Display progress
             if epoch % print_every == 0:
-                tqdm.write(f'Epoch {epoch}/{epochs} - Training Loss: {train_loss:.4f} 📉, '
-                           f'Validation Loss: {val_loss:.4f} 📉')
+                tqdm.write(f'Epoch {epoch}/{epochs} - Training Loss: {train_loss:.4f}, '
+                           f'Validation Loss: {val_loss:.4f}')
+
             # Save the best model if configured to do so
             if save_best_model and val_loss < best_val_mse:
                 best_val_mse = val_loss

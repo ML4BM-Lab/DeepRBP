@@ -36,7 +36,13 @@ def calculate_metrics(predictions, true_values):
 ### Here we need to create the calculate of the correlation for each gen using getBM: the ranking 
 # really matters for the transcripts within each gene as opposed to all the transcripts across all genes.
 
+# ni me lo he mirado pero chaty ya me empieza a decir cositas: 
+# # Calcular la correlación de Spearman general
+# spearman_corr_general = calculate_spearman_correlation(all_transcripts_predictions, all_transcripts_labels)
 
+# Calcular la correlación de Spearman considerando el orden por gen
+# spearman_corr_per_gene = {gene: calculate_spearman_correlation(transcript_predictions, transcript_labels) 
+#                           for gene, (transcript_predictions, transcript_labels) in gene_transcript_data.items()}
 
 
 

@@ -31,15 +31,18 @@ setup(
         "joblib",
         "pydeseq2",
         "sanbomics",
-        "colorama"
+        "colorama",
+        "torchinfo"
     ],
     entry_points={
         'console_scripts': [
             'prepare-model-inputs=src.deeprbp.data_preprocessing.prep_model_inputs:main',
             'split-and-save=src.deeprbp.data_preprocessing.split_data_and_save:main',
+            'run-hyper-optimization-optuna=src.deeprbp.training_module.hyperparameter_optimization.grid_search_optuna:main',
             'run-deeprbp-predictor=src.deeprbp.training_module.main_predictor:main',
             'run-deeprbp-explainer-postar=src.deeprbp.explainability_module.main_explainer:main'
         ],
     },
     zip_safe=False,
 )
+

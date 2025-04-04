@@ -13,10 +13,6 @@
 module load Python
 conda activate /data/jsanchoz/conda-env/DeepRBP
 
-# python /scratch/jsanchoz/DeepRBP/src/deeprbp/predictor_pipeline.py \
-#   --config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_tcga_train.yaml" \
-#   --external_config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_gtex.yaml"
-
 export PYTHONPATH="/scratch/jsanchoz/DeepRBP/src:$PYTHONPATH"
 python -c "import deeprbp; print('Package found')"
 
