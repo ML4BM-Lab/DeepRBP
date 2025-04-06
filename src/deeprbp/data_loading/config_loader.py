@@ -30,36 +30,32 @@ class ConfigParser:
 
 
 
-
-
-
-
 # old
-@dataclass
-class Config:
-    """
-    Represents the configuration loaded from a YAML file.
-    """
-    source_name: str
-    data_paths: Dict[str, str]
-    getBM_path: str
-    sample_category: str
-    select_samples: List[str]
-    model: Dict[str, Any]
-    training: Dict[str, Any] = field(default_factory=dict)
-    explainability: Dict[str, Any] = field(default_factory=dict)
-    output_dir: str = field(default_factory=str)
-    seed: int = 0
-    plot_results: bool = False
-    def __getitem__(self, key: str) -> Any:
-        """ Access configuration values using dictionary-style indexing. """
-        return self.get(key)
-    def get(self, key: str, default=None) -> Any:
-        """ Retrieve a value for a given key, or raise an exception if key does not exist. """
-        value = self[key]
-        if value is None and default is None:
-            raise KeyError(f"Key '{key}' not found in configuration.")
-        return value
+# @dataclass
+# class Config:
+#     """
+#     Represents the configuration loaded from a YAML file.
+#     """
+#     source_name: str
+#     data_paths: Dict[str, str]
+#     getBM_path: str
+#     sample_category: str
+#     select_samples: List[str]
+#     model: Dict[str, Any]
+#     training: Dict[str, Any] = field(default_factory=dict)
+#     explainability: Dict[str, Any] = field(default_factory=dict)
+#     output_dir: str = field(default_factory=str)
+#     seed: int = 0
+#     plot_results: bool = False
+#     def __getitem__(self, key: str) -> Any:
+#         """ Access configuration values using dictionary-style indexing. """
+#         return self.get(key)
+#     def get(self, key: str, default=None) -> Any:
+#         """ Retrieve a value for a given key, or raise an exception if key does not exist. """
+#         value = self[key]
+#         if value is None and default is None:
+#             raise KeyError(f"Key '{key}' not found in configuration.")
+#         return value
 
 # class ConfigParser:
 #     def __init__(self, config_path: str):

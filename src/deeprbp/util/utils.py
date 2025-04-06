@@ -30,18 +30,24 @@ class CustomTensorDataset(Dataset):
         for key in [rbp_data_key, gene_data_key, transcript_data_key]:
             if key not in data:
                 raise KeyError(f"{key} not found in data.")
-        trans_names = data[transcript_data_key].columns.tolist()
-        genes_names_each_trans = getBM[getBM[trans_col_name].isin(trans_names)][gene_col_name]
+
+        self.data = data # Original data
+        # Automatically detect the feature names from the DataFrames
+        self.rbp_names = data[rbp_data_key].columns.tolist()
+        self.gene_names = data[gene_data_key].columns.tolist()
+        self.trans_names = data[transcript_data_key].columns.tolist()
 
         # Expand the gene matrix data to match the transcript shape data 
-        data[gene_data_key] = data[gene_data_key].loc[:,genes_names_each_trans]
+        genes_names_each_trans = getBM[getBM[trans_col_name].isin(self.trans_names)][gene_col_name]
+        data[gene_data_key] = data[gene_data_key].loc[:, genes_names_each_trans]
 
+        # Store tensors for each feature
         features_data = (rbp_data_key, gene_data_key, transcript_data_key)
         self.features = {feature: torch.tensor(data[f"{feature}"].values, dtype=torch.float64) for feature in features_data}
-    
+
     def __len__(self) -> int:
         return len(next(iter(self.features.values())))
-
+    
     def __getitem__(self, idx: int):
         return {feature: values[idx] for feature, values in self.features.items()}
   

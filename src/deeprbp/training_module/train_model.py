@@ -31,14 +31,20 @@ class TrainPredictor:
         """
         Initializes the TrainPredictor class with a model, configuration, and feature specifications.
         """
+        self.device = torch.device('cuda' if config['cuda'] and torch.cuda.is_available() else 'cpu')
+        print(f"🖥️  Using device: {self.device} for training.")
         self.model = model
         self.is_trained = False 
         self.config = config
-        self.device = torch.device('cuda' if config['cuda'] and torch.cuda.is_available() else 'cpu')
-        self.model.to(self.device)
+        
         # Set default input and output features if not provided
         self.input_features = input_features if input_features is not None else ('scaled_rbp_expr_log2p_tpm', 'gn_expr_each_iso_tpm')  # Feature keys to be used as inputs
         self.output_features = output_features if output_features is not None else ('trans_expr_log2p_tpm',) # Features keys to be predicted
+        
+        # Sent the model to the device
+        self.model.to(self.device)
+        print(f"✅ Model has been moved to: {next(self.model.parameters()).device}")
+        
         # Set random seed for reproducibility
         seed = config.get('seed', 42)
         torch.manual_seed(seed)
@@ -68,6 +74,7 @@ class TrainPredictor:
         targets = [batch[feature].to(self.device).float() for feature in self.output_features]
         rbp_expr, gen_expr = inputs
         targets = torch.stack(targets).squeeze(0)
+        #print(f"📦 Batch data moved to device: {rbp_expr.device}")
         return rbp_expr, targets, gen_expr
     
     def train_one_epoch(self, train_loader):
@@ -146,6 +153,7 @@ class TrainPredictor:
         """
         # Check if saving the best model is configured
         save_best_model = self.config.get('save_best_model', False)
+        
         # Raise an error if attempting to save the best model without a specified path
         if save_best_model and path_save_results is None:
             raise ValueError("When 'save_best_model' is True, 'path_save_results' must be specified to save the model.")
@@ -171,12 +179,12 @@ class TrainPredictor:
                 if optuna_trial.should_prune():  # Check if the trial should be pruned
                      print(f"🚫 Pruning the current trial due to poor performance at epoch {epoch + 1}.")   
                      raise optuna.TrialPruned()
-                
+            
             # Display progress
             if epoch % print_every == 0:
                 tqdm.write(f'Epoch {epoch}/{epochs} - Training Loss: {train_loss:.4f}, '
                            f'Validation Loss: {val_loss:.4f}')
-
+            
             # Save the best model if configured to do so
             if save_best_model and val_loss < best_val_mse:
                 best_val_mse = val_loss
@@ -192,7 +200,7 @@ class TrainPredictor:
         self.is_trained = True
         print("\n🏁 Training completed!")
         return train_history, val_history, self.model
-    
+   
     def generate_predictions(self, data_loader):
         """
         Generates log2(tpm+1) predictions from the model using the provided DataLoader.
@@ -205,9 +213,8 @@ class TrainPredictor:
 
         Returns:
             tuple: A tuple containing:
-                - np.ndarray: Flattened array of predicted values.
-                - np.ndarray: Flattened array of true values.
-                - np.ndarray: Concatenated array of predictions for all batches.
+                - np.ndarray: batched predictions
+                - np.ndarray: batched labels
 
         Raises:
             Warning: If the model has not been trained yet, indicating that predictions may not be reliable.
@@ -217,17 +224,18 @@ class TrainPredictor:
         true_values = []
         predictions = []
         self.model.eval()  # Set the model to evaluation mode
-        
         with torch.no_grad():
             for batch in data_loader:
                 rbp_expr, targets, gen_expr = self.prepare_batch(batch)
                 out = self.model(rbp_expr, gen_expr) # Generate predictions
                 true_values.append(targets.cpu().numpy())
                 predictions.append(out.detach().cpu().numpy())
-        
-        true_values = np.concatenate(true_values).flatten()
-        concatenated_predictions = np.concatenate(predictions)
-        pred_values = concatenated_predictions.flatten()
-        return pred_values, true_values, concatenated_predictions
+        #true_values = np.concatenate(true_values).flatten()
+        #pred_values = concatenated_predictions.flatten()
+        true_values = np.concatenate(true_values)
+        predictions = np.concatenate(predictions)
+        return predictions, true_values
+    
+        ## IGUAL ESTA ULTIMA FUNCION HABRIA QUE DEVOLVER SOLO LOS CONCATENED_PREDICTIONS Y LOS CONCATENED_LABELS Y LUEGO YA HAREMOS EL FLATTEN FUERA JOSEBA!!
 
 

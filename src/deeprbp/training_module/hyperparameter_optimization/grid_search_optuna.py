@@ -7,7 +7,7 @@ import argparse
 import pandas as pd
 import optuna
 from optuna.samplers import TPESampler
-import optuna.visualization.matplotlib as optuna_plt
+#import optuna.visualization.matplotlib as optuna_plt ESTO PUEDO INTENTAR DESARROLLARLO TB DEL ARCHIVO DE LUIS
 import optuna.logging
 import time
 import torch
@@ -18,7 +18,7 @@ from ...data_loading.data_loader import DataImporter, DataSplitter, Scaler
 from ..train_model import TrainPredictor
 from ..model import PredictorModel
 from ..plots import plot_loss_curve
-from ..evaluation import calculate_metrics, calculate_metrics_per_category
+from ..evaluation import calculate_metrics, calculate_spearman_corr_per_gene
 from ...util.utils  import (
     CustomTensorDataset,
     filter_data_by_sample_ids,
@@ -68,7 +68,7 @@ def main():
 
     # Execute the optimization
     print(f"[*] Running {args.n_trials} trials...")
-    study.optimize(lambda trial: objective(trial, config, train_dataset, valid_dataset, args.val_batch_size, args.output_dir), 
+    study.optimize(lambda trial: objective(trial, config, train_dataset, valid_dataset, args.val_batch_size, getBM, args.output_dir), 
                    n_trials=args.n_trials)
     
     # Print the results of the best trial
@@ -99,7 +99,6 @@ def load_and_process_data(config, output_dir):
     data = data_importer.load()
     getBM = pd.read_csv(config['getBM_path'])
     print("[*] Data loaded successfully\n.")
-    
     # Filter a portion of the samples to optimize time and computational resources
     print("[*] Filtering samples to optimize time and resources...")
     subset_idx, _ = DataSplitter.split_data_class(
@@ -110,13 +109,11 @@ def load_and_process_data(config, output_dir):
     )
     data_subset = filter_data_by_sample_ids(data, subset_idx)
     print("[*] Samples filtered successfully\n.")
-
     # Perform a train/validation split with the data subset
     print("[*] Splitting data into training and validation sets...")
     splitter = DataSplitter(data_subset, config)
     train_data, valid_data = splitter.split_data_sets(test_name='validation')
     print("[*] Data splitting completed\n.")
-
     # Save the training and validation samples used in the optimization to the specified output directory
     #print("[*] Saving the training and validation data used ...")
     data_to_save = [
@@ -133,22 +130,19 @@ def load_and_process_data(config, output_dir):
             'metadata_df': 'val_phenotype_metadata.csv'
         })
     ]
-
     # for data, save_path, custom_names in data_to_save: ## UNCOMMENT
     #     print(f"[*] Saving data to: {save_path}...")
     #     save_data(data, save_path, custom_names)
     #     print(f"[*] Data saved successfully at: {save_path}.")
     #print("[*] Saved the training and validation data succesfully\n")
-
     # Scale the data
     print("[*] Scaling data...")
     scaler = Scaler()
     train_data['scaled_rbp_df'] = scaler.fit_transform(train_data['rbp_df'])
     valid_data['scaled_rbp_df'] = scaler.transform(valid_data['rbp_df'])
     print("[*] Data scaled successfully\n.")
-
     # Create custom data sets
-    print("[*] Creating custom datasets...")
+    print("[*] Creating custom datasets...") # CREO QUE EN ESTA CLASE HAY QUE GUARDAR LOS TRANS_NAMES, GENES_NAMES Y RBP_NAMES 
     train_dataset, valid_dataset = [
         CustomTensorDataset(
             data,
@@ -183,15 +177,16 @@ def extract_metrics(metrics, train_metrics, val_metrics, metric_mapping=None):
             'train_spearman_corr_general': ('spearman_corr', 'spearman_corr'),
             'train_pearson_corr': ('pearson_corr', 'pearson_corr'),
             'train_mse': ('mse', 'mse'),
-            'train_r2': ('r2', 'r2')
+            'train_r2': ('r2', 'r2'),
+            'train_spearman_corr_per_gene': ('train_spearman_corr_per_gene', 'val_spearman_corr_per_gene'),
+            'train_spearman_corr_per_gene_max_trans': ('train_spearman_corr_per_gene_max_trans', 'val_spearman_corr_per_gene_max_trans')
         }
-
     for key, (train_key, val_key) in metric_mapping.items():
         metrics[key] = train_metrics.get(train_key)
         metrics[key.replace('train_', 'val_')] = val_metrics.get(val_key)
     return metrics
 
-def objective(trial, config, train_dataset, valid_dataset, val_batch_size, output_dir):
+def objective(trial, config, train_dataset, valid_dataset, val_batch_size, getBM, output_dir):
     
     # Define the additional metrics to calculate
     metrics = {
@@ -202,8 +197,12 @@ def objective(trial, config, train_dataset, valid_dataset, val_batch_size, outpu
         'val_spearman_corr_general': None,
         'val_pearson_corr': None,
         'val_mse': None,
-        'val_r2': None
-    } # faltan: train_spearman_corr_per_gene, val_spearman_corr_per_gene
+        'val_r2': None,
+        'train_spearman_corr_per_gene': None,
+        'train_spearman_corr_per_gene_max_trans': None,
+        'val_spearman_corr_per_gene': None,
+        'val_spearman_corr_per_gene_max_trans': None,
+    } 
     
     # Suggest Optuna: Sample hyperparameters for this Trial 
     num_hidden_layers = trial.suggest_int('num_hidden_layers', 0, 4)
@@ -283,16 +282,22 @@ def objective(trial, config, train_dataset, valid_dataset, val_batch_size, outpu
 
         # Evaluate the actual model
         preds_labels = [trainer.generate_predictions(loader) for loader in [train_loader, val_loader]]
-        train_metrics_general, val_metrics_general = [calculate_metrics(pred, label) for pred, label, _ in preds_labels]
         
+        # General metrics
+        train_metrics_general, val_metrics_general = [calculate_metrics(pred.flatten(), label.flatten()) for pred, label in preds_labels]  
+        
+        # Correlation per gene
+        train_corr_per_gene, val_corr_per_gene = [calculate_spearman_corr_per_gene(train_dataset, pred, label, getBM) for pred, label in preds_labels]
+        # Add new entries from train_corr_per_gene to train_metrics_general
+        train_metrics_general['train_spearman_corr_per_gene'] = train_corr_per_gene['mean_corr']
+        train_metrics_general['train_spearman_corr_per_gene_max_trans'] = train_corr_per_gene['mean_corr_max_trans']
+        val_metrics_general['val_spearman_corr_per_gene'] = val_corr_per_gene['mean_corr']
+        val_metrics_general['val_spearman_corr_per_gene_max_trans'] = val_corr_per_gene['mean_corr_max_trans']
+
         # Update the metrics dictionary with training and validation metrics
-        metrics = extract_metrics(metrics, train_metrics_general, val_metrics_general)
+        metrics = extract_metrics(metrics, train_metrics_general, val_metrics_general) # actualizar para meter la correlacion por gen en el trans y gen
         
-        ## HERE TENDRIA QUE METER LAS NUEVAS MÉTRICAS DE: ## Calculate Spearman correlation per gene
-        ### Here we need to create the calculate of the correlation for each gen using getBM: the ranking 
-        # train_spearman_corr_per_gene
-        # val_spearman_corr_per_gene
-        # really matters for the transcripts within each gene as opposed to all the transcripts across all genes.
+       
         print("\n")
         return val_history[-1]
     
@@ -316,12 +321,7 @@ if __name__ == "__main__":
     main()
 
     
-# python grid_search_optuna.py \
-#     --config_path_file '/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_hyper_optimization.yaml' \
-#     --output_dir '/scratch/jsanchoz/DeepRBP/stuff/' \
-#     --val_batch_size 32 \
-#     --n_trials 4
-
+ 
 # The authors should provide the full table of results for the hyperparameter optimization runs
 # to be able to validate the claim that more complex models (more hidden layers) are necessary.
 # Verify that the suggested trial is elegible
@@ -333,6 +333,4 @@ if __name__ == "__main__":
 # return model parameters (esto mejorar luego)
 
 
-# CREO QUE SIGUE MAL LA extract_metrics además que trial.set_user_attrs parece no existir. 
-# metrics
-#{'train_spearman_corr_general': None, 'train_pearson_corr_general': None, 'train_mse': 10.373593, 'train_r2': -1.2121915817260742, 'val_spearman_corr_general': None, 'val_pearson_corr_general': None, 'val_mse': 10.373593, 'val_r2': -1.2121915817260742}
+ 

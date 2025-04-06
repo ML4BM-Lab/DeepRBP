@@ -75,26 +75,31 @@ class PredictorModel(nn.Module):
             'node_shrink_factor': False,
             'activation_func': False
         }
+        
         # Configure layers and optimizer
         self.logger.log("Initializing layers and optimizer...")
         self._configure_layers()
         self.optimizer = self._configure_optimizer(self.optimizer_name, self.learning_rate)
+        
         # Check the model layers to ensure there are no layers with out_features equal to 0
         self._check_layer_outputs()
+        
         # Print and update unused variables and print used variables
         self._print_unused_variables()
         self._print_used_variables()
         self._update_unused_variables()
-
+    
     def _configure_layers(self):
         """Configures the hidden and output layers based on model configuration."""
         if self.num_hidden_layers > 0:
             node_count = self.hidden1_nodes  # Number of nodes for the first hidden layer
             self._mark_used_variables()
+            
             # First hidden layer
             self.add_module('hidden_linear_0', nn.Linear(self.input_size, node_count)) # Input size to first layer
             self.add_module('batch_norm_0', nn.BatchNorm1d(node_count))
             self.add_module('activation_0', self._get_activation_module(self.activation_func))
+            
             # Subsequent hidden layers
             for i in range(1, self.num_hidden_layers):
                 input_size = node_count  # Use the output size of the previous layer
@@ -104,6 +109,7 @@ class PredictorModel(nn.Module):
                 else:
                     # Reduce the number of nodes in each layer if `uniform_nodes` is False
                     node_count = round(node_count / self.node_shrink_factor)
+                
                 # Add the layer, batch normalization, and activation
                 layer = nn.Linear(input_size, node_count)
                 self.add_module(f'hidden_linear_{i}', layer)
@@ -111,13 +117,15 @@ class PredictorModel(nn.Module):
                 self.add_module(f'activation_{i}', self._get_activation_module(self.activation_func))
         else:
             node_count = self.input_size  # No hidden layers, use input size directly
+        
         # Configure the output layer
         self.linear_output = nn.Linear(node_count, self.output_size)
         self.add_module('linear_output', self.linear_output)
+        
         # Add the activation layer for the output
         self.output_activation = nn.Sigmoid()
         self.add_module('output_activation', self.output_activation)
-    
+
     def _check_layer_outputs(self):
         """
         Checks that no layer in the model has out_features equal to 0.
@@ -132,7 +140,7 @@ class PredictorModel(nn.Module):
                     f"Please try increasing 'hidden1_nodes' or decreasing 'node_shrink_factor' "
                     f"based on the number of hidden layers ('num_hidden_layers') you are using."
                 )
-    
+            
     def _mark_used_variables(self):
         """Marks the variables as used based on the current configuration."""
         self.variable_usage['hidden1_nodes'] = True   
@@ -141,7 +149,7 @@ class PredictorModel(nn.Module):
             self.variable_usage['node_shrink_factor'] = True   
         if self.num_hidden_layers >= 3:
             self.variable_usage['uniform_nodes'] = True   
-    
+
     def _print_unused_variables(self):
         """Prints the variables that are not being used."""
         init(autoreset=True)
@@ -158,7 +166,7 @@ class PredictorModel(nn.Module):
         else:
             print(Fore.GREEN + "✅ All relevant variables are in use.")
         print(Fore.CYAN + separator)
-    
+
     def _print_used_variables(self):
         """Prints the variables that are being used."""
         used_vars = {  # Only include variables that are marked True in variable_usage
@@ -179,7 +187,7 @@ class PredictorModel(nn.Module):
             if value is not None:  # Only print values that are not None
                 print(Fore.LIGHTGREEN_EX + f"🔹 {var}: {value}")
         print(Fore.CYAN + separator)
-    
+
     def _update_unused_variables(self):
         """Updates unused variables with a placeholder character."""
         for var in self.variable_usage:
@@ -192,7 +200,7 @@ class PredictorModel(nn.Module):
                     self.node_shrink_factor = None
                 elif var == 'activation_func':
                     self.activation_func = None
-    
+
     def _configure_optimizer(self, optimizer_name, learning_rate):
         """Configures the optimizer based on the provided name and learning rate.
         Args:
@@ -215,7 +223,7 @@ class PredictorModel(nn.Module):
             return torch.optim.AdamW(self.parameters(), lr=learning_rate)
         else:
             self.logger.error(f"Unsupported optimizer '{optimizer_name}'. Valid options: ['sgd90', 'asgd', 'adam', 'adagrad', 'adadelta', 'adamW']")
-    
+
     def _get_activation_module(self, activation_name):
         """Returns the activation layer based on the given name."""
         if activation_name == "relu":
@@ -226,7 +234,7 @@ class PredictorModel(nn.Module):
             return nn.Sigmoid()
         else:
             self.logger.error("Invalid activation_layer. Supported options are 'relu', 'tanh', and 'sigmoid'.")
-    
+
     def forward(self, xb, gb):
         """Defines the forward pass of the model.
         
@@ -281,7 +289,7 @@ class PredictorModel(nn.Module):
         os.makedirs(output_dir, exist_ok=True)
         torch.save(self.state_dict(), os.path.join(output_dir, model_name))
         self.logger.log(f"Model saved successfully in {output_dir}")
-    
+        
     @classmethod
     def load_model(cls, path_to_weights, config: Any, input_size: int = None, output_size: int = None):
         """

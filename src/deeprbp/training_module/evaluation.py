@@ -12,17 +12,32 @@ from tqdm import tqdm
 from ..util.utils import CustomTensorDataset, adjust_batch_size, filter_data_by_sample_ids
 from .plots import scatter_real_vs_pred, plot_transcript_to_gene_ratio_distributions
 
+def calculate_spearmanr(predictions, true_values):
+    """
+    Calculate Spearman correlation coefficient value between predicted and true values.
+
+    Parameters:
+    predictions (ndarray): Array of predicted values (flattened).
+    true_values (ndarray): Array of true values (flattened).
+
+    Returns:
+    float: Spearman correlation coefficient.
+    """
+    spearman_corr = spearmanr(predictions, true_values)[0]
+    return spearman_corr
+
 def calculate_metrics(predictions, true_values):
     """
-    Calculates general metrics like Spearman Correlation, MSE, and Pearson Correlation for two
-    vectors.
+    Calculates general metrics like Spearman Correlation, MSE, and Pearson Correlation between flattened model 
+    log2(tpm+1) predictions vs real values
+   
     Args:
         predictions: Predicted values (in log2(tpm+1))
         true_values: True labels (in log2(tpm+1))
     Returns:
         A dictionary with the calculated metrics
     """
-    spearman_corr = spearmanr(predictions, true_values)[0]
+    spearman_corr = calculate_spearmanr(predictions, true_values)
     pearson_corr = pearsonr(predictions, true_values)[0]
     mse = mean_squared_error(predictions, true_values)
     r2 = r2_score(predictions, true_values)
@@ -33,18 +48,61 @@ def calculate_metrics(predictions, true_values):
         'r2': r2
     }
 
-### Here we need to create the calculate of the correlation for each gen using getBM: the ranking 
-# really matters for the transcripts within each gene as opposed to all the transcripts across all genes.
+def calculate_spearman_corr_per_gene(dataset, pred, label, getBM):
+    """
+    Calculate Spearman correlation between flattened model log2(tpm+1) predictions and real values for 
+    the transcripts within each gene. This function calculates the correlation based on the ranking of 
+    transcripts specific to each gene, rather than across all transcripts globally.
 
-# ni me lo he mirado pero chaty ya me empieza a decir cositas: 
-# # Calcular la correlación de Spearman general
-# spearman_corr_general = calculate_spearman_correlation(all_transcripts_predictions, all_transcripts_labels)
+    Parameters:
+    dataset (CustomTensorDataset): A dataset object containing gene and transcript information.
+        - attribute gene_names (list): A list of gene IDs.
+        - attribute trans_names (list): A list of transcript IDs.
+        
+    pred (ndarray): Array of predicted values (log2(tpm+1)).
+    label (ndarray): Array of true values (log2(tpm+1)).
+    getBM (DataFrame): DataFrame containing mapping of Gene_ID to Transcript_ID.
 
-# Calcular la correlación de Spearman considerando el orden por gen
-# spearman_corr_per_gene = {gene: calculate_spearman_correlation(transcript_predictions, transcript_labels) 
-#                           for gene, (transcript_predictions, transcript_labels) in gene_transcript_data.items()}
-
-
+    Returns:
+    dict: A dictionary containing:
+        - mean_corr (float): The mean Spearman correlation across all genes.
+        - gene_corrs_dict (dict): A dictionary where keys are gene IDs and values are their 
+          corresponding Spearman correlation coefficients.
+        - mean_corr_max_trans (float): The mean Spearman correlation for the most expressed 
+          transcripts of each gene.
+        - gene_corrs_dict_max_trans (dict): A dictionary where keys are gene-transcript pairs 
+          and values are their Spearman correlation coefficients for the most expressed transcripts.
+    """
+    gene_corrs_dict = {}
+    gene_corrs_dict_max_trans = {}
+    for gene_id in dataset.gene_names:
+        related_transcripts = getBM[getBM['Gene_ID'] == gene_id]['Transcript_ID'].values
+        if len(related_transcripts) > 0:
+            # Find the indices of the related transcripts in the dataset and filter the predictions and true values for the related transcripts
+            index = [np.where(np.array(dataset.trans_names) == transcript)[0][0] 
+                     for transcript in related_transcripts if transcript in dataset.trans_names]
+            filtered_preds = pred[:, index]
+            filtered_true = label[:, index]
+            # Step 1: Calculate Spearman's correlation for the current gene
+            spearman_corr = calculate_spearmanr(filtered_preds.flatten(), filtered_true.flatten())
+            gene_corrs_dict[gene_id] = spearman_corr
+            # Step 2: Calculate the Spearman correlation for the most expressed transcript
+            mean_expressions = np.mean(filtered_true, axis=0) # Calculate the true mean expression for each transcript
+            max_trans_index = np.argmax(mean_expressions) # Find the index of the transcript with the highest mean expression
+            spearman_corr_max_trans = calculate_spearmanr(filtered_preds[:, max_trans_index], filtered_true[:, max_trans_index])
+            gene_corrs_dict_max_trans[f'{gene_id}-{related_transcripts[max_trans_index]}'] = spearman_corr_max_trans
+    # Step 3: Calculate the mean correlation across all genes
+    mean_corr = np.mean(list(gene_corrs_dict.values()))   
+    # Step 4: Calculate the mean correlation for the most expressed transcripts
+    mean_corr_max_trans = np.mean(list(gene_corrs_dict_max_trans.values()))  
+    print("Mean Spearman Correlation across all genes:", mean_corr)
+    print("Mean Spearman Correlation for the most expressed transcripts:", mean_corr_max_trans)
+    return {
+        'mean_corr': mean_corr,
+        'gene_corrs_dict': gene_corrs_dict,
+        'mean_corr_max_trans': mean_corr_max_trans,
+        'gene_corrs_dict_max_trans': gene_corrs_dict_max_trans,
+    }   
 
 def save_metrics_summary(
     set_names_list: List[str], 
