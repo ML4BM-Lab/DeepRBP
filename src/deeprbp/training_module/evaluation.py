@@ -10,7 +10,7 @@ from typing import List, Dict, Any
 from tqdm import tqdm 
 
 from ..util.utils import CustomTensorDataset, adjust_batch_size, filter_data_by_sample_ids
-from .plots import scatter_real_vs_pred, plot_transcript_to_gene_ratio_distributions
+from ..util.plots import scatter_real_vs_pred, plot_transcript_to_gene_ratio_distributions
 
 def calculate_spearmanr(predictions, true_values):
     """
@@ -98,32 +98,33 @@ def calculate_spearman_corr_per_gene(dataset, pred, label, getBM):
     print("Mean Spearman Correlation across all genes:", mean_corr)
     print("Mean Spearman Correlation for the most expressed transcripts:", mean_corr_max_trans)
     return {
-        'mean_corr': mean_corr,
+        'mean_corr_per_gene': mean_corr,
         'gene_corrs_dict': gene_corrs_dict,
-        'mean_corr_max_trans': mean_corr_max_trans,
+        'mean_corr_max_trans_per_gene': mean_corr_max_trans,
         'gene_corrs_dict_max_trans': gene_corrs_dict_max_trans,
     }   
 
-def save_metrics_summary(
-    set_names_list: List[str], 
-    metrics_list: List[Dict[str, float]], 
-    output_path: str = None) -> pd.DataFrame:
-    """
-    Generates and saves a DataFrame from metrics for different keys.
+# def save_metrics_summary(
+#     set_names_list: List[str], 
+#     metrics_list: Dict[str, List[float]], 
+#     output_path: str = None) -> pd.DataFrame:
+#     """
+#     Generates and saves a DataFrame from metrics for different keys.
 
-    Args:
-        set_names_list (List[str]): List of names for the key index.
-        metrics_list (List[Dict[str, float]]): List of dictionaries containing metrics for each set.
-        output_path (str, optional): Path to save the DataFrame as a CSV file. Default is None.
+#     Args:
+#         set_names_list (List[str]): List of names for the key index.
+#         metrics_list (Dict[str, List[float]]): Dictionary containing lists of metrics for each set.
+#         output_path (str, optional): Path to save the DataFrame as a CSV file. Default is None.
 
-    Returns:
-        pd.DataFrame: DataFrame with metrics as columns and sets as rows.
-    """
-    all_metrics = {set_name: metrics for set_name, metrics in zip(set_names_list, metrics_list)}
-    df = pd.DataFrame(all_metrics).T
-    df.index.name = "Set"
-    if output_path:
-        df.to_csv(output_path, index=True)
+#     Returns:
+#         pd.DataFrame: DataFrame with metrics as columns and sets as rows.
+#     """
+#     #all_metrics = {set_name: metrics for set_name, metrics in zip(set_names_list, metrics_list)}
+#     #df = pd.DataFrame(all_metrics).T
+#     df = pd.DataFrame(metrics_list, index=set_names_list)
+#     df.index.name = "Set"
+#     if output_path:
+#         df.to_csv(output_path, index=True)
 
 def map_transcripts_and_filter_gene_matrix(
     gene_df: pd.DataFrame, getBM: pd.DataFrame, min_mean_expr: float = 5) -> pd.DataFrame:
@@ -183,7 +184,7 @@ def analyze_transcript_to_gene_ratios(
     output_path = os.path.join(output_dir, f"histogram_ratio_{category}-{source_name}.png")
     plot_transcript_to_gene_ratio_distributions(pred_ratios, label_ratios, source_name, output_path)
 
-def calculate_metrics_per_category(
+def calculate_metrics_per_category( # ESTA FUNCION HAY QUE ACTUALIZAR!!
     test_data: Dict[str, pd.DataFrame], 
     trainer: Any,
     output_dir: str,
@@ -240,6 +241,7 @@ def calculate_metrics_per_category(
                     columns=list(test_subset['trans_expr_log2p_tpm_df'].columns), 
                     index=category_samples)
         genes_df = test_subset['gn_expr_each_iso_tpm_df'] #gn_expr_tpm_each_iso_df
+        ###
         # Optional: Plot results
         if plot_results:
             scatter_real_vs_pred(

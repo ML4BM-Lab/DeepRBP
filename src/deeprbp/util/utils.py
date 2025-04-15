@@ -10,9 +10,9 @@ import os
 class CustomTensorDataset(Dataset):
     def __init__(self, data, 
                  getBM, 
-                 rbp_data_key='scaled_rbp_expr_log2p_tpm', 
-                 gene_data_key='gn_expr_each_iso_tpm', 
-                 transcript_data_key='trans_expr_log2p_tpm',
+                 rbp_data_key='scaled_rbp_df', 
+                 gene_data_key='gene_df', 
+                 transcript_data_key='isoform_df',
                  trans_col_name='Transcript_ID',
                  gene_col_name='Gene_ID'
                  ):
@@ -30,27 +30,22 @@ class CustomTensorDataset(Dataset):
         for key in [rbp_data_key, gene_data_key, transcript_data_key]:
             if key not in data:
                 raise KeyError(f"{key} not found in data.")
-
         self.data = data # Original data
         # Automatically detect the feature names from the DataFrames
         self.rbp_names = data[rbp_data_key].columns.tolist()
         self.gene_names = data[gene_data_key].columns.tolist()
         self.trans_names = data[transcript_data_key].columns.tolist()
-
         # Expand the gene matrix data to match the transcript shape data 
         genes_names_each_trans = getBM[getBM[trans_col_name].isin(self.trans_names)][gene_col_name]
         data[gene_data_key] = data[gene_data_key].loc[:, genes_names_each_trans]
-
         # Store tensors for each feature
         features_data = (rbp_data_key, gene_data_key, transcript_data_key)
         self.features = {feature: torch.tensor(data[f"{feature}"].values, dtype=torch.float64) for feature in features_data}
-
     def __len__(self) -> int:
         return len(next(iter(self.features.values())))
-    
     def __getitem__(self, idx: int):
         return {feature: values[idx] for feature, values in self.features.items()}
-  
+    
 def print_section_separator(char="═", width=50):
     """
     Prints a decorative separator line with a minimalist design.
@@ -61,7 +56,7 @@ def print_section_separator(char="═", width=50):
     """
     line = char * width
     print(f"\n{line}\n")
-    
+
 def select_sample_ids_by_type(metadata_df: pd.DataFrame, sample_category_col: str, sample_types):
     """
     Select sample IDs from the metadata based on the provided sample types.
@@ -169,7 +164,7 @@ def get_gene_info(gene_ids_or_names: List[str], getBM: pd.DataFrame, return_type
         return gene_ids
     else:
         raise ValueError("Invalid return_type. Use 'names' or 'ids'.")
-
+    
 def calculate_category_proportions(data: Dict[str, pd.DataFrame]) -> pd.DataFrame:
     """
     Calculate the proportions of different tumor types samples based on the 'detailed_category' in the metadata. To 
@@ -184,14 +179,11 @@ def calculate_category_proportions(data: Dict[str, pd.DataFrame]) -> pd.DataFram
     """
     # Access the metadata DataFrame
     metadata_df = data['metadata_df']
-
     # Count the number of samples by tumor type
     category_counts = metadata_df['detailed_category'].value_counts()
-
     # Calculate the proportion of each tumor type over the total samples
     total_samples = len(metadata_df)
     category_proportions = category_counts / total_samples
-    
     # Prepare the results as a DataFrame
     category_proportions = category_proportions.reset_index()
     category_proportions.columns = ['detailed_category', 'proportion']

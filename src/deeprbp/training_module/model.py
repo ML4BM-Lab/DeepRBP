@@ -33,7 +33,7 @@ class PredictorModel(nn.Module):
     transcript abundances also in TPMs. 
 
     Args:
-        config (Dict[str, Any]): Dictionary-like object with the model configuration.
+        config (object class): Class object with the model configuration.
         input_size (int): Size of the input features.
         output_size (int): Size of the output features.
 
@@ -48,26 +48,23 @@ class PredictorModel(nn.Module):
         optimizer_name (str): Name of the optimizer to use (e.g., 'adam', 'sgd90').
         learning_rate (float): Learning rate for the optimizer.
     """
-    def __init__(self, config: Dict[str, Any], input_size: int = None, output_size: int = None, verbose: int = 1):
+    def __init__(self, config, input_size: int = None, output_size: int = None, verbose: int = 1):
         super(PredictorModel, self).__init__()
         self.logger = Logger(verbose=verbose)
         init(autoreset=True)
-        
         # Default configuration if none provided
         if config is None:
             config = {}
-        
         # Model configuration
         self.input_size = input_size 
         self.output_size = output_size
-        self.num_hidden_layers = config.get('num_hidden_layers', 2)
-        self.hidden1_nodes = config.get('hidden1_nodes', 64)
-        self.uniform_nodes = config.get('uniform_nodes', False)
-        self.node_shrink_factor = config.get('node_shrink_factor', 2) 
-        self.activation_func = config.get('activation_func', 'relu')
-        self.learning_rate = config.get('learning_rate', 0.001)
-        self.optimizer_name = config.get('optimizer_name', 'adamW')
-        
+        self.num_hidden_layers = config.get('num_hidden_layers')
+        self.hidden1_nodes = config.get('hidden1_nodes')
+        self.uniform_nodes = config.get('uniform_nodes')
+        self.node_shrink_factor = config.get('node_shrink_factor') 
+        self.activation_func = config.get('activation_func')
+        self.learning_rate = config.get('learning_rate')
+        self.optimizer_name = config.get('optimizer_name')
         # Initialize the variable usage tracking
         self.variable_usage = {
             'hidden1_nodes': False,
@@ -75,31 +72,25 @@ class PredictorModel(nn.Module):
             'node_shrink_factor': False,
             'activation_func': False
         }
-        
         # Configure layers and optimizer
         self.logger.log("Initializing layers and optimizer...")
         self._configure_layers()
         self.optimizer = self._configure_optimizer(self.optimizer_name, self.learning_rate)
-        
         # Check the model layers to ensure there are no layers with out_features equal to 0
         self._check_layer_outputs()
-        
         # Print and update unused variables and print used variables
         self._print_unused_variables()
         self._print_used_variables()
         self._update_unused_variables()
-    
     def _configure_layers(self):
         """Configures the hidden and output layers based on model configuration."""
         if self.num_hidden_layers > 0:
             node_count = self.hidden1_nodes  # Number of nodes for the first hidden layer
             self._mark_used_variables()
-            
             # First hidden layer
             self.add_module('hidden_linear_0', nn.Linear(self.input_size, node_count)) # Input size to first layer
             self.add_module('batch_norm_0', nn.BatchNorm1d(node_count))
             self.add_module('activation_0', self._get_activation_module(self.activation_func))
-            
             # Subsequent hidden layers
             for i in range(1, self.num_hidden_layers):
                 input_size = node_count  # Use the output size of the previous layer
@@ -109,7 +100,6 @@ class PredictorModel(nn.Module):
                 else:
                     # Reduce the number of nodes in each layer if `uniform_nodes` is False
                     node_count = round(node_count / self.node_shrink_factor)
-                
                 # Add the layer, batch normalization, and activation
                 layer = nn.Linear(input_size, node_count)
                 self.add_module(f'hidden_linear_{i}', layer)
@@ -117,15 +107,12 @@ class PredictorModel(nn.Module):
                 self.add_module(f'activation_{i}', self._get_activation_module(self.activation_func))
         else:
             node_count = self.input_size  # No hidden layers, use input size directly
-        
         # Configure the output layer
         self.linear_output = nn.Linear(node_count, self.output_size)
         self.add_module('linear_output', self.linear_output)
-        
         # Add the activation layer for the output
         self.output_activation = nn.Sigmoid()
         self.add_module('output_activation', self.output_activation)
-
     def _check_layer_outputs(self):
         """
         Checks that no layer in the model has out_features equal to 0.
@@ -139,8 +126,7 @@ class PredictorModel(nn.Module):
                     f"Error: Layer '{name}' has out_features equal to 0, which is invalid for training. "
                     f"Please try increasing 'hidden1_nodes' or decreasing 'node_shrink_factor' "
                     f"based on the number of hidden layers ('num_hidden_layers') you are using."
-                )
-            
+                )    
     def _mark_used_variables(self):
         """Marks the variables as used based on the current configuration."""
         self.variable_usage['hidden1_nodes'] = True   
@@ -149,11 +135,10 @@ class PredictorModel(nn.Module):
             self.variable_usage['node_shrink_factor'] = True   
         if self.num_hidden_layers >= 3:
             self.variable_usage['uniform_nodes'] = True   
-
     def _print_unused_variables(self):
         """Prints the variables that are not being used."""
         init(autoreset=True)
-        not_used = [var for var, used in self.variable_usage.items() if not used]
+        not_used = [var for var, used in self.variable_usage.items() if not used]  
         title = "📊 Unused Variables Report 📊"
         separator = "-----------------------------------"
         # Print title and separator
@@ -166,7 +151,6 @@ class PredictorModel(nn.Module):
         else:
             print(Fore.GREEN + "✅ All relevant variables are in use.")
         print(Fore.CYAN + separator)
-
     def _print_used_variables(self):
         """Prints the variables that are being used."""
         used_vars = {  # Only include variables that are marked True in variable_usage
@@ -187,11 +171,10 @@ class PredictorModel(nn.Module):
             if value is not None:  # Only print values that are not None
                 print(Fore.LIGHTGREEN_EX + f"🔹 {var}: {value}")
         print(Fore.CYAN + separator)
-
     def _update_unused_variables(self):
         """Updates unused variables with a placeholder character."""
         for var in self.variable_usage:
-            if not self.variable_usage[var]:  # If the variable is marked as unused
+            if not self.variable_usage[var]:  # If the variable is marked as unused ###
                 if var == 'hidden1_nodes':
                     self.hidden1_nodes = None
                 elif var == 'uniform_nodes':
@@ -200,7 +183,6 @@ class PredictorModel(nn.Module):
                     self.node_shrink_factor = None
                 elif var == 'activation_func':
                     self.activation_func = None
-
     def _configure_optimizer(self, optimizer_name, learning_rate):
         """Configures the optimizer based on the provided name and learning rate.
         Args:
@@ -223,7 +205,6 @@ class PredictorModel(nn.Module):
             return torch.optim.AdamW(self.parameters(), lr=learning_rate)
         else:
             self.logger.error(f"Unsupported optimizer '{optimizer_name}'. Valid options: ['sgd90', 'asgd', 'adam', 'adagrad', 'adadelta', 'adamW']")
-
     def _get_activation_module(self, activation_name):
         """Returns the activation layer based on the given name."""
         if activation_name == "relu":
@@ -234,7 +215,6 @@ class PredictorModel(nn.Module):
             return nn.Sigmoid()
         else:
             self.logger.error("Invalid activation_layer. Supported options are 'relu', 'tanh', and 'sigmoid'.")
-
     def forward(self, xb, gb):
         """Defines the forward pass of the model.
         
@@ -252,7 +232,6 @@ class PredictorModel(nn.Module):
         # Apply the output activation function and the specified transformation
         out = torch.log2((self.output_activation(x) * gb) + 1)
         return out
-    
     def train_step(self, inputs, targets, gen_expr):
         """Performs a single training step (forward + backward pass).
         Args:
@@ -268,7 +247,6 @@ class PredictorModel(nn.Module):
         self.optimizer.step() # Update weights
         self.optimizer.zero_grad() # Reset gradients
         return loss.detach()
-    
     def validate_step(self, inputs, targets, gen_expr):
         """Performs a single validation step (forward pass only).
         Args:
@@ -282,22 +260,20 @@ class PredictorModel(nn.Module):
             out = self(inputs, gen_expr) # Forward pass
             val_loss = F.mse_loss(out, targets)  # Calculate loss
         return val_loss.detach()
-    
     def save_model(self, output_dir, model_name):
         """Saves the model to the specified directory."""
         self.logger.log(f"Saving model to {output_dir} with name {model_name}...")
         os.makedirs(output_dir, exist_ok=True)
         torch.save(self.state_dict(), os.path.join(output_dir, model_name))
         self.logger.log(f"Model saved successfully in {output_dir}")
-        
     @classmethod
-    def load_model(cls, path_to_weights, config: Any, input_size: int = None, output_size: int = None):
+    def load_model(cls, path_to_weights, config, input_size: int = None, output_size: int = None):
         """
         Class method to initialize the model and load pre-trained weights.
 
         Args:
             path_to_weights (str): Path to the file containing the pre-trained weights.
-            config (Any): Configuration for the model.
+            config Configuration class for the model.
             input_size (int, optional): Input size of the model.
             output_size (int, optional): Output size of the model.
 

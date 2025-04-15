@@ -1,4 +1,5 @@
 # src/deeprbp/data_loading/config_loader.py
+import os
 import yaml
 from datetime import datetime
 import random
@@ -16,17 +17,40 @@ class ConfigParser:
         - config_path (str): Path to the YAML configuration file.
         """
         self.config_path = config_path
-        
-    def load_config(self):
+        self.config_data = self._load_config()  
+    def _load_config(self):
         """
         Loads the configuration data from the YAML file.
 
         Returns:
         - dict: The configuration data as a dictionary.
         """
+        if not os.path.exists(self.config_path):
+            raise FileNotFoundError(f"The configuration file {self.config_path} does not exist.")
         with open(self.config_path, 'r') as file:
             config_data = yaml.safe_load(file)
         return config_data
+    def get(self, key, default=None):
+        """
+        Retrieves the value for a given key from the configuration data.
+
+        Parameters:
+        - key (str): The key to retrieve from the configuration data.
+        - default: The default value to return if the key does not exist.
+
+        Returns:
+        - The value associated with the key, or the default value if not found.
+        """
+        return self.config_data.get(key, default)
+    def update(self, key, value):
+        """
+        Updates a specific key in the configuration data.
+
+        Parameters:
+        - key (str): The key to update.
+        - value: The new value to set for the key.
+        """
+        self.config_data[key] = value
 
 
 

@@ -18,7 +18,7 @@ class TrainPredictor:
 
     Args:
         model (PredictorModel): An instance of the PredictorModel to be trained and evaluated.
-        config (dict): Configuration dictionary containing settings for training, such as device (CPU/GPU) and logging options.
+        config (dict): Configuration object containing settings for training, such as device (CPU/GPU) and logging options.
         input_features (tuple, optional): Tuple of input feature names used for model training. These features represent
                                            the RNA-binding protein expression and gene expression data extracted from
                                            the DataLoader batches (default: ('scaled_rbp_expr_log2p_tpm', 
@@ -31,29 +31,25 @@ class TrainPredictor:
         """
         Initializes the TrainPredictor class with a model, configuration, and feature specifications.
         """
-        self.device = torch.device('cuda' if config['cuda'] and torch.cuda.is_available() else 'cpu')
+        self.config = config
+        self.device = torch.device('cuda' if self.config.get('cuda') and torch.cuda.is_available() else 'cpu')
         print(f"🖥️  Using device: {self.device} for training.")
         self.model = model
         self.is_trained = False 
-        self.config = config
-        
         # Set default input and output features if not provided
         self.input_features = input_features if input_features is not None else ('scaled_rbp_expr_log2p_tpm', 'gn_expr_each_iso_tpm')  # Feature keys to be used as inputs
         self.output_features = output_features if output_features is not None else ('trans_expr_log2p_tpm',) # Features keys to be predicted
-        
         # Sent the model to the device
         self.model.to(self.device)
         print(f"✅ Model has been moved to: {next(self.model.parameters()).device}")
-        
         # Set random seed for reproducibility
-        seed = config.get('seed', 42)
+        seed = self.config.get('seed', 42)
         torch.manual_seed(seed)
         np.random.seed(seed)
         if self.device.type == 'cuda':
             torch.cuda.manual_seed(seed)
             torch.backends.cudnn.deterministic = True
             torch.backends.cudnn.benchmark = False  
-
     def prepare_batch(self, batch):
         """
         Extracts inputs and targets from the given batch.
@@ -72,11 +68,10 @@ class TrainPredictor:
         """
         inputs = [batch[feature].to(self.device).float() for feature in self.input_features]
         targets = [batch[feature].to(self.device).float() for feature in self.output_features]
+        #print(f"📦 Batch data moved to device: {inputs[0].device}, targets: {targets[0].device}")
         rbp_expr, gen_expr = inputs
         targets = torch.stack(targets).squeeze(0)
-        #print(f"📦 Batch data moved to device: {rbp_expr.device}")
         return rbp_expr, targets, gen_expr
-    
     def train_one_epoch(self, train_loader):
         """
         Trains the model for one epoch using the provided DataLoader.
@@ -94,10 +89,12 @@ class TrainPredictor:
         losses = []
         for batch in train_loader:
             rbp_expr, targets, gen_expr = self.prepare_batch(batch)
+            assert rbp_expr.device == self.device, "rbp_expr is not on the correct device."
+            assert targets.device == self.device, "targets is not on the correct device."
+            assert gen_expr.device == self.device, "gen_expr is not on the correct device."
             loss = self.model.train_step(rbp_expr, targets, gen_expr)  # Training step
             losses.append(loss)
         return torch.stack(losses).mean().item()  # Average loss over the epoch
-    
     def validate_one_epoch(self, val_loader):
         """
         Validates the model for one epoch using the provided DataLoader.
@@ -119,7 +116,6 @@ class TrainPredictor:
                 val_loss = self.model.validate_step(rbp_expr, targets, gen_expr)  # Validation step
                 val_losses.append(val_loss)
         return torch.stack(val_losses).mean().item() # Average validation loss
-    
     def fit(self, train_loader, val_loader, epochs, path_save_results=None, optuna_trial=None):
         """
         Trains the model for a specified number of epochs.
@@ -153,45 +149,37 @@ class TrainPredictor:
         """
         # Check if saving the best model is configured
         save_best_model = self.config.get('save_best_model', False)
-        
         # Raise an error if attempting to save the best model without a specified path
         if save_best_model and path_save_results is None:
             raise ValueError("When 'save_best_model' is True, 'path_save_results' must be specified to save the model.")
-        
         train_history = []
         val_history = []
         print_every = self.config.get('print_every', 1)
         best_val_mse = float('inf')  # Initialize with infinity
         print(f"\nStarting training for {epochs} epochs... 🚀")
-        
         for epoch in tqdm(range(epochs), desc="Training", unit="epoch"):
             # Training Phase
             train_loss = self.train_one_epoch(train_loader)
             train_history.append(train_loss)
-            
             # Validation Phase
             val_loss = self.validate_one_epoch(val_loader)
             val_history.append(val_loss)
-            
             # Report the validation loss to Optuna if optuna_trial is provided
             if optuna_trial is not None:
                 optuna_trial.report(val_loss, epoch)  # Report the current validation loss
                 if optuna_trial.should_prune():  # Check if the trial should be pruned
                      print(f"🚫 Pruning the current trial due to poor performance at epoch {epoch + 1}.")   
                      raise optuna.TrialPruned()
-            
             # Display progress
             if epoch % print_every == 0:
                 tqdm.write(f'Epoch {epoch}/{epochs} - Training Loss: {train_loss:.4f}, '
                            f'Validation Loss: {val_loss:.4f}')
-            
             # Save the best model if configured to do so
             if save_best_model and val_loss < best_val_mse:
                 best_val_mse = val_loss
                 if path_save_results:
                     self.model.save_model(path_save_results, 'best_model.pt')
                     print(f'💾 Best model saved at epoch {epoch + 1} with validation loss: {best_val_mse:.4f}')  # Print when saving the model
-        
         # Load the best model after training if configured to do so
         if save_best_model and path_save_results:
             print("🔄 Loading the best model...")
@@ -199,8 +187,7 @@ class TrainPredictor:
                                                    input_size=self.model.input_size, output_size=self.model.output_size)
         self.is_trained = True
         print("\n🏁 Training completed!")
-        return train_history, val_history, self.model
-   
+        return train_history, val_history # not commited yet:, self.model
     def generate_predictions(self, data_loader):
         """
         Generates log2(tpm+1) predictions from the model using the provided DataLoader.
@@ -227,15 +214,14 @@ class TrainPredictor:
         with torch.no_grad():
             for batch in data_loader:
                 rbp_expr, targets, gen_expr = self.prepare_batch(batch)
+                assert rbp_expr.device == self.device, "rbp_expr is not on the correct device."
+                assert gen_expr.device == self.device, "gen_expr is not on the correct device."
                 out = self.model(rbp_expr, gen_expr) # Generate predictions
                 true_values.append(targets.cpu().numpy())
                 predictions.append(out.detach().cpu().numpy())
-        #true_values = np.concatenate(true_values).flatten()
-        #pred_values = concatenated_predictions.flatten()
         true_values = np.concatenate(true_values)
         predictions = np.concatenate(predictions)
         return predictions, true_values
     
-        ## IGUAL ESTA ULTIMA FUNCION HABRIA QUE DEVOLVER SOLO LOS CONCATENED_PREDICTIONS Y LOS CONCATENED_LABELS Y LUEGO YA HAREMOS EL FLATTEN FUERA JOSEBA!!
-
+        
 

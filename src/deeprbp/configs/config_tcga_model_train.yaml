@@ -1,0 +1,67 @@
+# src/deeprbp/configs/config_tcga_train.yaml
+
+# Paths for the data files
+data_paths:
+  rbp_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train/train_RBPs_log2p_tpm.csv"
+  isoform_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train/train_trans_log2p_tpm.csv"
+  gene_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train/train_gn_tpm.csv"
+  metadata_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train/train_phenotype_metadata.csv"
+
+sample_category: "detailed_category"  # The column in metadata to stratify on 
+test_fraction: 0.2
+getBM_path: "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/getBM.csv"
+gene_col_name: "Gene_ID"
+trans_col_name: "Transcript_ID"
+seed: 42
+cuda: True
+print_every: 5
+train_batch_size: 128
+val_batch_size: 256
+num_epochs: 500
+num_hidden_layers: 1
+hidden1_nodes: 64
+uniform_nodes: False
+node_shrink_factor: 4
+activation_func: relu
+learning_rate: 0.001
+optimizer_name: asgd
+plot_results: True
+save_results: True
+save_best_model: True
+
+
+
+# test_data_paths:
+#   - rbp_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Test/test_RBPs_log2p_tpm.csv"
+#     isoform_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Test/test_trans_log2p_tpm.csv"
+#     gene_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Test/test_gn_tpm.csv"
+#     metadata_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Test/test_phenotype_metadata.csv"
+#   # - rbp_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Test/another_test_RBPs_log2p_tpm.csv"
+#   #   isoform_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Test/another_test_trans_log2p_tpm.csv"
+#   #   gene_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Test/another_test_gn_tpm.csv"
+#   #   metadata_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Test/another_test_phenotype_metadata.csv"
+
+## de aqui que meter: 
+# # Model predictor configuration
+# model:
+#   input_size: 1348
+#   output_size: 11459
+#   num_hidden_layers: 2
+#   max_node: 1024
+#   uniform_nodes: True
+#   node_shrink_factor: 8
+#   activation_func: "relu"
+#   learning_rate: 0.001
+#   optimizer_name: "adamW"
+#   cuda: true  # Set to true if you want to use GPU
+
+# # Training configuration
+# training:
+#   epochs: 1000
+#   batch_size: 128
+#   print_every: 10  # Print progress every N epochs
+#   train_test_split: true #(esto va a ser deprecated)
+#   train_val_split: true
+#   test_fraction: 0.2  # Fraction of data to reserve for testing (esto va a ser deprecated)
+#   val_fraction: 0.15  # Fraction of training data to reserve for validation
+#   seed: 0

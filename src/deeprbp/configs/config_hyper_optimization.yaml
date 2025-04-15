@@ -7,7 +7,6 @@ data_paths:
   gene_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train/train_gn_tpm.csv"
   metadata_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train/train_phenotype_metadata.csv"
 
-# Sample selection
 sample_category: "detailed_category"  # The column in metadata to stratify on 
 sample_fraction: 0.5
 test_fraction: 0.2
@@ -17,4 +16,6 @@ trans_col_name: "Transcript_ID"
 seed: 42
 cuda: True
 print_every: 5
+plot_results: False
+save_results: False
 save_best_model: False

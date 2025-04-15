@@ -180,6 +180,8 @@ Alternatively, you can submit this command on an HPC system with Slurm:
 sbatch slurm/split_and_save.sh
 ```
 
+As a result, in the `--output_dir`, you will find two folders, Train and Test, containing the following `.csv` files: `gn_tpm`, `phenotype_metadata`,`RBPs_log2p_tpm`, `trans_log2p_tpm`.
+
 ### Hyperparameter Optimization with Optuna
 In this section, we will implement hyperparameter optimization for the DeepRBP predictor using Optuna, a hyperparameter optimization framework designed for machine learning. This process aims to find the best set of hyperparameters that maximize model performance.
 

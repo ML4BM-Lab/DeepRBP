@@ -38,7 +38,7 @@ def scatter_real_vs_pred(
     None
         The function saves a PNG image at the specified path.
     """
-    plt.figure(figsize=(12, 12))
+    plt.figure(figsize=(8, 6))
     plt.xlabel('Predicted Values', fontsize=16, fontweight='bold')
     plt.ylabel('Real Values', fontsize=16, fontweight='bold')
     plt.title(f'Real vs Predicted: {category} ({source_name})', fontsize=18, fontweight='bold')
@@ -85,15 +85,15 @@ def plot_loss_curve(train_history: List[float], val_history: List[float],
     """
     os.makedirs(output_dir, exist_ok=True)
     plt.style.use('seaborn-v0_8-muted')
-    plt.figure(figsize=(12, 8))
+    plt.figure(figsize=(8, 5))
     # Plot both training and validation loss
     plt.plot(train_history, label='Training Loss', color='royalblue', linestyle='-', linewidth=2.5)
     plt.plot(val_history, label='Validation Loss', color='darkorange', linestyle='--', linewidth=2.5)
-    plt.title(title, fontsize=20, fontweight='bold', pad=15)
-    plt.xlabel('Epoch', fontsize=16, labelpad=10)
-    plt.ylabel('Loss', fontsize=16, labelpad=10)
+    plt.title(title, fontsize=18, fontweight='bold', pad=10)
+    plt.xlabel('Epoch', fontsize=14, labelpad=8)
+    plt.ylabel('Loss', fontsize=14, labelpad=8)
     plt.grid(True, linestyle='--', alpha=0.6)
-    plt.legend(fontsize=14, loc='upper right', frameon=True, shadow=True, fancybox=True)
+    plt.legend(fontsize=12, loc='upper right', frameon=True, shadow=True, fancybox=True)
     plt.tight_layout(pad=2)
     # Save the plot with the specified name
     plt.savefig(os.path.join(output_dir, f'{plot_name}.png'), dpi=300)

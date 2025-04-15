@@ -26,12 +26,10 @@ class DataImporter:
           - 'metadata_path': Path to the metadata file, which is required.
         """
         self.logger = Logger(verbose=1)
-
         if "metadata_path" not in paths or not paths["metadata_path"]:
             self.logger.error("❌ The 'metadata_path' is required and must be provided.", ValueError)
         self.paths = paths
         self.data = {}
-
     def load(self):
         """
         Load data dictionary from the specified paths and store it in the object.
@@ -48,7 +46,7 @@ class DataImporter:
         return self.data  # Return raw loaded data
 
 class DataSplitter:
-    def __init__(self, data: Dict[str, pd.DataFrame], config: Dict, sample_category: str = "detailed_category"):
+    def __init__(self, data: Dict[str, pd.DataFrame], config, sample_category: str = "detailed_category"):
         """
         Initialize the DataSplitter class for splitting datasets into training, validation, and test sets.
 
@@ -62,7 +60,7 @@ class DataSplitter:
         - data (Dict[str, pd.DataFrame]): A dictionary containing the datasets, with 'metadata_df' being a 
           DataFrame that holds metadata relevant for stratification during data splitting.
           
-        - config (Dict): A configuration dictionary that contains settings for data splitting. This includes 
+        - config: A configuration object that contains settings for data splitting. This includes 
           parameters for train/test and train/validation splitting, such as:
           - 'test_fraction': The fraction of the dataset to be used as the test set (or 'validation set').
           
@@ -75,27 +73,23 @@ class DataSplitter:
         self.config = config
         self.sample_category = sample_category
         self.sample_ids = self.data['metadata_df'].index
-
     def split_data(self, data, test_size):
         """Perform a stratified train-test split based on the detailed_category in metadata."""
         sample_category = data['metadata_df'][self.sample_category]
         self.logger.log(f'📊 [split_data] Performing a stratified data split with fraction division equal to {test_size}...')
-        
         # Perform the stratified split based on patient IDs (still strings at this point) and sample category
         train_id, test_id = sk_train_test_split(
             data['metadata_df'].index,
             test_size=test_size,
             stratify=sample_category,
-            random_state=self.config['seed']
+            random_state=self.config.get('seed')
         )
         return train_id, test_id
-    
     @classmethod
-    def split_data_class(cls, data: Dict[str, pd.DataFrame], config: Dict, sample_category: str = "detailed_category", test_size: float = 0.2) -> Tuple[list, list]:
+    def split_data_class(cls, data: Dict[str, pd.DataFrame], config, sample_category: str = "detailed_category", test_size: float = 0.2) -> Tuple[list, list]:
         """Class method to split data, instantiating the class and calling the instance method."""
         instance = cls(data, config, sample_category)
         return instance.split_data(data, test_size)
-    
     def add_sample_set_label(self, set_name: str, samples: list):
         """ Add a column to the metadata DataFrame indicating whether samples belong to the training or test set."""
         sample_set = set(samples)
@@ -104,13 +98,11 @@ class DataSplitter:
         self.data['metadata_df'].loc[self.data['metadata_df'].index.isin(sample_set), 'set_type'] = set_name
         self.logger.log(f"🏷️ Added sample set label '{set_name}' for {len(samples)} samples.")
         print_section_separator()
-    
     def split_data_sets(self, test_name='testing') -> Tuple[Dict[str, pd.DataFrame], Dict[str, pd.DataFrame]]:
         """
         This function handles the splitting of data into training and testing (or 'validation') sets based on config test fraction.
         """
         train_data, test_data = {}, {}
-        
         # Determine the type of split and log the corresponding message
         if test_name == 'testing':
             self.logger.log("🔄 Performing train/test split...")
@@ -119,17 +111,13 @@ class DataSplitter:
             self.logger.log("🔄 Performing train/val split...")
             log_message = "📝 Writing set_type in metadata after train/val split"
         print_section_separator()
-        
         # Perform the data splitting
-        self.train_id, self.test_id = self.split_data(data=self.data, test_size=self.config['test_fraction'])
-        
+        self.train_id, self.test_id = self.split_data(data=self.data, test_size=self.config.get('test_fraction'))
         # Log the corresponding message in a single line
         self.logger.log(log_message)
-        
         # Add labels to the sample sets
         self.add_sample_set_label(set_name='training', samples=self.train_id)
         self.add_sample_set_label(set_name=test_name, samples=self.test_id)
-        
         # Filter the data by sample IDs
         train_data = filter_data_by_sample_ids(self.data, self.train_id)
         test_data = filter_data_by_sample_ids(self.data, self.test_id)
@@ -153,7 +141,6 @@ class Scaler:
         else:
             self.logger.warn("⚠️ [Scaler] No existing scaler or sigma provided. Please fit before using.")
         print_section_separator()
-
     def fit(self, train_set):
         """
         Fit a StandardScaler to the training dataset and compute the standard deviation (sigma) for clipping.
@@ -170,7 +157,6 @@ class Scaler:
         self.sigma = np.std(self.scaler.transform(train_set).flatten().astype(np.float64))
         self.logger.log(f"✅ [Scaler:fit] Sigma computed: {self.sigma:.4f}")
         print_section_separator()
-    
     def fit_transform(self, train_set):
         """
         Fit the scaler to the training set and transform it in one step.
@@ -183,7 +169,6 @@ class Scaler:
         """
         self.fit(train_set)
         return self.transform(train_set)
-    
     def transform(self, transform_set):
         """
         Normalize and clip the data using the fitted scaler and computed sigma.
@@ -199,7 +184,6 @@ class Scaler:
         """
         if self.scaler is None or self.sigma is None:
             self.logger.error("❌ [Scaler:transform] Scaler and sigma must be fitted or loaded before transformation.", ValueError)
-        
         # Scale the data
         scaled_set = pd.DataFrame(
             self.scaler.transform(transform_set),
@@ -208,14 +192,12 @@ class Scaler:
         )
         self.logger.log(f"[Scaler:transform] Mean after scaling: {scaled_set.mean().mean():.4f}")
         self.logger.log(f"[Scaler:transform] Std after scaling: {scaled_set.std().mean():.4f}")
-        
         # Clip and normalize
         self.logger.log("🔄 [Scaler:transform] Clipping the data...")
         scaled_set = np.clip(scaled_set, -2 * self.sigma, 2 * self.sigma, axis=1)
         scaled_set += 2 * self.sigma
         scaled_set /= 4 * self.sigma
         return scaled_set.astype(np.float64)
-    
     def transform_datasets(self, *datasets):
         """
         Transform multiple datasets using the fitted scaler.
@@ -230,7 +212,6 @@ class Scaler:
         for i, dataset in enumerate(datasets):
             transformed_data[f'transformed_dataset_{i}'] = self.transform(dataset)
         return transformed_data
-
     def save(self, folder_path):
         """
         Save the fitted scaler and the computed sigma to the specified directory.
@@ -243,24 +224,19 @@ class Scaler:
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
             self.logger.log(f"📁 [Scaler:save] Created directory: {folder_path}")
-        
         scaler_file = os.path.join(folder_path, 'scaler.joblib')
         sigma_file = os.path.join(folder_path, 'sigma.npy')
-        
         if self.scaler is not None:
             joblib.dump(self.scaler, scaler_file)
             self.logger.log(f"✅ [Scaler:save] Scaler saved to: {scaler_file}")
-        
         else:
             self.logger.error("❌ [Scaler:save] No scaler available to save.", ValueError)
-        
         if self.sigma is not None:
             np.save(sigma_file, np.array(self.sigma, dtype=np.float64))
             self.logger.log(f"✅ [Scaler:save] Sigma saved to: {sigma_file}")
         else:
             self.logger.error("❌ [Scaler:save] No sigma available to save.", ValueError)
         print_section_separator()
-
     @classmethod
     def load(cls, folder_path):
         """
@@ -278,12 +254,10 @@ class Scaler:
         logger = Logger(verbose=1) 
         scaler_file = os.path.join(folder_path, 'scaler.joblib')
         sigma_file = os.path.join(folder_path, 'sigma.npy')
-        
         if not os.path.exists(scaler_file):
             logger.error(f"❌ [Scaler:load] Scaler file not found at: {scaler_file}", FileNotFoundError)
         if not os.path.exists(sigma_file):
             logger.error(f"❌ [Scaler:load] Sigma file not found at: {sigma_file}", FileNotFoundError)
-        
         # Load scaler and sigma
         scaler = joblib.load(scaler_file)
         sigma = np.load(sigma_file)

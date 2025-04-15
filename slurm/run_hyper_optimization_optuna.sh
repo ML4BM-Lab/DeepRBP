@@ -1,9 +1,9 @@
 #!/bin/bash
-#SBATCH --qos=test
+#SBATCH --qos=regular
 #SBATCH --job-name=run_hyper_optuna
 #SBATCH --cpus-per-task=1
 #SBATCH --gres=gpu:1
-#SBATCH --mem=3gb
+#SBATCH --mem=15gb
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH -o /scratch/jsanchoz/DeepRBP/output/logs/run_hyper_optuna.out
@@ -20,6 +20,6 @@ python -m deeprbp.training_module.hyperparameter_optimization.grid_search_optuna
         --config_path_file '/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_hyper_optimization.yaml' \
         --output_dir '/scratch/jsanchoz/DeepRBP/stuff/' \
         --val_batch_size 32 \
-        --n_trials 4
+        --n_trials 15
 
 

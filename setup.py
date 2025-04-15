@@ -32,7 +32,8 @@ setup(
         "pydeseq2",
         "sanbomics",
         "colorama",
-        "torchinfo"
+        "torchinfo",
+        "psutil"
     ],
     entry_points={
         'console_scripts': [
