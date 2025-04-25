@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 from typing import Dict, List, Union
-#from sklearn.metrics import auc
 
 def scatter_real_vs_pred(
     category: str,
@@ -51,11 +50,13 @@ def scatter_real_vs_pred(
         f"Spearman Corr: {metrics['spearman_corr']:.2f}\n"
         f"Pearson Corr: {metrics['pearson_corr']:.2f}\n"
         f"MSE: {metrics['mse']:.2f}\n"
-        f"R²: {metrics['r2']:.2f}"
+        f"R²: {metrics['r2']:.2f}\n"
+        f"Spearman Corr per Gene: {metrics['mean_corr_per_gene']:.2f} \n"
+        f"Spearman Corr per Gene (max trans): {metrics['mean_corr_max_trans_per_gene']:.2f} \n"
     )
     plt.text(
         0.05, 0.95, legend_text, transform=plt.gca().transAxes,
-        fontsize=14, verticalalignment='top',
+        fontsize=9, verticalalignment='top',
         bbox=dict(boxstyle="round", edgecolor="black", facecolor="white")
     )
     sns.set_style("whitegrid")
@@ -141,3 +142,4 @@ def plot_transcript_to_gene_ratio_distributions(
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     plt.savefig(output_path, dpi=300)
     plt.close()
+    print(f"Plot saved to {output_path}")

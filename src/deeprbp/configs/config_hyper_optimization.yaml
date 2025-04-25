@@ -19,3 +19,4 @@ print_every: 5
 plot_results: False
 save_results: False
 save_best_model: False
+val_batch_size: 256

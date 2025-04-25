@@ -1,0 +1,26 @@
+activation_func: relu
+cuda: true
+data_paths:
+  gene_expr_path: /scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Test/test_gn_tpm.csv
+  isoform_expr_path: /scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Test/test_trans_log2p_tpm.csv
+  metadata_path: /scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Test/test_phenotype_metadata.csv
+  rbp_path: /scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Test/test_RBPs_log2p_tpm.csv
+gene_col_name: Gene_ID
+getBM_path: /scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/getBM.csv
+hidden1_nodes: 64
+learning_rate: 0.001
+node_shrink_factor: unused
+num_epochs: 100
+num_hidden_layers: 1
+optimizer_name: adamW
+plot_results: true
+print_every: 5
+sample_category: detailed_category
+save_best_model: true
+save_results: true
+seed: 42
+test_fraction: 0.2
+train_batch_size: 128
+trans_col_name: Transcript_ID
+uniform_nodes: unused
+val_batch_size: 256

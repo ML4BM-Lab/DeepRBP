@@ -156,19 +156,6 @@ class Scaler:
         self.scaler.fit(train_set)
         self.sigma = np.std(self.scaler.transform(train_set).flatten().astype(np.float64))
         self.logger.log(f"✅ [Scaler:fit] Sigma computed: {self.sigma:.4f}")
-        print_section_separator()
-    def fit_transform(self, train_set):
-        """
-        Fit the scaler to the training set and transform it in one step.
-
-        Parameters:
-        train_set (DataFrame): The training dataset to fit and transform.
-
-        Returns:
-        DataFrame: The normalized and clipped training data.
-        """
-        self.fit(train_set)
-        return self.transform(train_set)
     def transform(self, transform_set):
         """
         Normalize and clip the data using the fitted scaler and computed sigma.
@@ -198,20 +185,6 @@ class Scaler:
         scaled_set += 2 * self.sigma
         scaled_set /= 4 * self.sigma
         return scaled_set.astype(np.float64)
-    def transform_datasets(self, *datasets):
-        """
-        Transform multiple datasets using the fitted scaler.
-
-        Parameters:
-        *datasets (DataFrame): Multiple datasets to transform.
-
-        Returns:
-        Dict: A dictionary with the transformed datasets.
-        """
-        transformed_data = {}
-        for i, dataset in enumerate(datasets):
-            transformed_data[f'transformed_dataset_{i}'] = self.transform(dataset)
-        return transformed_data
     def save(self, folder_path):
         """
         Save the fitted scaler and the computed sigma to the specified directory.

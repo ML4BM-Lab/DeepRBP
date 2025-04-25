@@ -7,6 +7,7 @@ from tqdm import tqdm
 import optuna
 
 from .model import PredictorModel
+from ..util.logger import Logger
 
 class TrainPredictor:
     """
@@ -26,22 +27,31 @@ class TrainPredictor:
         output_features (tuple, optional): Tuple of output feature names that the model will predict. These features
                                             represent the target transcript abundance values that the model aims to
                                             predict, derived from the DataLoader batches (default: ('trans_expr_log2p_tpm',)).
+        verbose (int, optional): Verbosity level for logging. Controls the amount of information printed during training.
+                                 - 0: No logging (suppress device information and other logs).
+                                 - 1: Basic logging (show training progress and essential logs).
+                                 - 2: Detailed logging (show device information).
+                                 Default is 1.                               
     """
-    def __init__(self, model, config, input_features=None, output_features=None):
+    def __init__(self, model, config, input_features=None, output_features=None, verbose=1):
         """
         Initializes the TrainPredictor class with a model, configuration, and feature specifications.
         """
         self.config = config
-        self.device = torch.device('cuda' if self.config.get('cuda') and torch.cuda.is_available() else 'cpu')
-        print(f"🖥️  Using device: {self.device} for training.")
+        self.device = torch.device('cuda:0' if self.config.get('cuda') and torch.cuda.is_available() else 'cpu')
+        # Initialize the Logger with the given verbosity level
+        self.logger = Logger(verbose=verbose)
+        # Log the device information based on verbosity level
+        self.logger.log(f"🖥️  Using device: {self.device} for training.", level=2)
         self.model = model
         self.is_trained = False 
         # Set default input and output features if not provided
-        self.input_features = input_features if input_features is not None else ('scaled_rbp_expr_log2p_tpm', 'gn_expr_each_iso_tpm')  # Feature keys to be used as inputs
+        self.input_features = input_features if input_features is not None else (
+            'scaled_rbp_expr_log2p_tpm', 'gn_expr_each_iso_tpm')  # Feature keys to be used as inputs
         self.output_features = output_features if output_features is not None else ('trans_expr_log2p_tpm',) # Features keys to be predicted
-        # Sent the model to the device
+        # Send the model to the device
         self.model.to(self.device)
-        print(f"✅ Model has been moved to: {next(self.model.parameters()).device}")
+        self.logger.log(f"✅ Model has been moved to: {next(self.model.parameters()).device}", level=2)
         # Set random seed for reproducibility
         seed = self.config.get('seed', 42)
         torch.manual_seed(seed)
@@ -68,9 +78,16 @@ class TrainPredictor:
         """
         inputs = [batch[feature].to(self.device).float() for feature in self.input_features]
         targets = [batch[feature].to(self.device).float() for feature in self.output_features]
-        #print(f"📦 Batch data moved to device: {inputs[0].device}, targets: {targets[0].device}")
+        # Log device information for each input and target if verbosity level allows
+        for i, feature in enumerate(self.input_features):
+            self.logger.log(f"Input feature '{feature}' device after moving: {inputs[i].device}", level=2)
+        for i, feature in enumerate(self.output_features):
+            self.logger.log(f"Target feature '{feature}' device after moving: {targets[i].device}", level=2)
         rbp_expr, gen_expr = inputs
+        self.logger.log(f"rbp_expr device after unpacking: {rbp_expr.device}", level=2)
+        self.logger.log(f"gen_expr device after unpacking: {gen_expr.device}", level=2)
         targets = torch.stack(targets).squeeze(0)
+        self.logger.log(f"targets device after stacking and squeezing: {targets.device}", level=2)
         return rbp_expr, targets, gen_expr
     def train_one_epoch(self, train_loader):
         """
@@ -89,6 +106,9 @@ class TrainPredictor:
         losses = []
         for batch in train_loader:
             rbp_expr, targets, gen_expr = self.prepare_batch(batch)
+            # Log device information if verbosity level allows
+            self.logger.log(f"rbp_expr device: {rbp_expr.device}, targets device: {targets.device}, gen_expr device: {gen_expr.device}", level=2)
+            self.logger.log(f'device: {self.device}', level=2)
             assert rbp_expr.device == self.device, "rbp_expr is not on the correct device."
             assert targets.device == self.device, "targets is not on the correct device."
             assert gen_expr.device == self.device, "gen_expr is not on the correct device."
@@ -136,7 +156,6 @@ class TrainPredictor:
             tuple: A tuple containing:
                 - list: History of training losses for each epoch.
                 - list: History of validation losses for each epoch.
-                - PredictorModel: The trained model instance.
 
         Raises:
             ValueError: If the path to save the model is invalid or if the training process encounters issues.
@@ -156,7 +175,7 @@ class TrainPredictor:
         val_history = []
         print_every = self.config.get('print_every', 1)
         best_val_mse = float('inf')  # Initialize with infinity
-        print(f"\nStarting training for {epochs} epochs... 🚀")
+        self.logger.log(f"\nStarting training for {epochs} epochs... 🚀", level=1)
         for epoch in tqdm(range(epochs), desc="Training", unit="epoch"):
             # Training Phase
             train_loss = self.train_one_epoch(train_loader)
@@ -168,7 +187,7 @@ class TrainPredictor:
             if optuna_trial is not None:
                 optuna_trial.report(val_loss, epoch)  # Report the current validation loss
                 if optuna_trial.should_prune():  # Check if the trial should be pruned
-                     print(f"🚫 Pruning the current trial due to poor performance at epoch {epoch + 1}.")   
+                     self.logger.log(f"🚫 Pruning the current trial due to poor performance at epoch {epoch + 1}.", level=1) 
                      raise optuna.TrialPruned()
             # Display progress
             if epoch % print_every == 0:
@@ -179,15 +198,18 @@ class TrainPredictor:
                 best_val_mse = val_loss
                 if path_save_results:
                     self.model.save_model(path_save_results, 'best_model.pt')
-                    print(f'💾 Best model saved at epoch {epoch + 1} with validation loss: {best_val_mse:.4f}')  # Print when saving the model
+                    self.logger.log(f'💾 Best model saved at epoch {epoch + 1} with validation loss: {best_val_mse:.4f}', level=1)
         # Load the best model after training if configured to do so
         if save_best_model and path_save_results:
-            print("🔄 Loading the best model...")
+            self.logger.log("🔄 Loading the best model...", level=1)
             self.model = PredictorModel.load_model(os.path.join(path_save_results, 'best_model.pt'), self.config, 
                                                    input_size=self.model.input_size, output_size=self.model.output_size)
+            self.model.to(self.device)
         self.is_trained = True
-        print("\n🏁 Training completed!")
-        return train_history, val_history # not commited yet:, self.model
+        # Save the configuration used in model training
+        self.model.save_config(path_save_results)
+        self.logger.log("\n🏁 Training completed!", level=1)
+        return train_history, val_history  
     def generate_predictions(self, data_loader):
         """
         Generates log2(tpm+1) predictions from the model using the provided DataLoader.
@@ -207,7 +229,7 @@ class TrainPredictor:
             Warning: If the model has not been trained yet, indicating that predictions may not be reliable.
         """
         if not self.is_trained:
-            print("⚠️ Warning: The model has not been trained yet! Predictions may not be reliable.")
+            self.logger.log("⚠️ Warning: The model has not been trained yet! Predictions may not be reliable.", level=1)
         true_values = []
         predictions = []
         self.model.eval()  # Set the model to evaluation mode

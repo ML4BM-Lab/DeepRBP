@@ -11,12 +11,12 @@ def parse_args():
     
 def main():
     args = parse_args()
+    # Create an instance of the DeepRBPredictorPipeline with the provided configuration and output directory
     pipeline = DeepRBPredictorPipeline(args.config_path, args.output_dir)
+    # Start the training process by running the pipeline
     pipeline.run()
 
 if __name__ == "__main__":
     main()
 
-#python /scratch/jsanchoz/DeepRBP/src/deeprbp/training_module/main_predictor.py --config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_tcga_train.yaml" --external_config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_gtex.yaml"
-# config_path = '/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_tcga_model_train.yaml'
-# output_dir = '/scratch/jsanchoz/DeepRBP/output/results'
+

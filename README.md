@@ -89,7 +89,7 @@ Among other tasks, this process includes:
 7. Transposing expression data so patients are rows and genes (or transcript IDs) are columns.
 8. Saving processed expression and count data and phenotype metadata as CSV files in the specified output directory.
 
-## Execution Command
+### Execution Command
 To execute this, run:
 
 ```bash
@@ -125,7 +125,7 @@ prepare-model-inputs --raw_data_dir "/scratch/jsanchoz/DeepRBP/data/training_mod
 - **gene_census_file (str)**: TSV file with Cancer Gene Census data.
 - **rbp_genes_file (str)**: Excel file listing RNA-binding proteins (RBPs).
 
-## HPC Execution
+### HPC Execution
 Alternatively, you can submit this command on an HPC system with Slurm:
 
 ```bash
@@ -138,9 +138,8 @@ To ensure that different tumor types are equally represented in both the trainin
 
 We will use the processed data from The Cancer Genome Atlas (TCGA) for this task. The training set will consist of 80% of the data, while the remaining 20% will be reserved for testing the model's generalization and explainability module. The training set will later be utilized in hyperparameter optimization with Optuna.
 
-In this step before splitting data we will select specific tumor types (defined in config file).
+In this step before splitting data we can select specific tumor types (defined in config file). By default we use all the samples.
 
-## Execution Command
 To execute this, run:
 
 ```bash
@@ -148,7 +147,7 @@ split-and-save --config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/conf
                --output_dir "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets" 
                 
 ```
-### Command Arguments
+#### Command Arguments
 - **config_path (str)**: Path to the config file with the processed data files, sample selection, tumor types (categories), train-test fraction and source name.
 - **output_dir (str)**: Directory to save the splitted datasets.
 
@@ -157,30 +156,31 @@ The configuration file should look like this:
 #### **Example Configuration File (`config_data_split.yaml`)**
 
 ```yaml
-# /scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_data_split.yaml
-
-# Paths for the data files
 data_paths:
   rbp_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/RBPs_log2p_tpm.csv"
   isoform_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/trans_log2p_tpm.csv"
   gene_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/gn_tpm.csv"
   metadata_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/phenotype_metadata.csv"
 
-# Sample selection
 sample_category: "detailed_category"  # The column in metadata to stratify on 
 select_samples: ["all"]  # Can be ['all'] or a list of specific sample types: ['Lung_Squamous_Cell_Carcinoma', 'Rectum_Adenocarcinoma']
 test_fraction: 0.2
 seed: 42
 ```
 
-## HPC Execution
+#### HPC Execution
 Alternatively, you can submit this command on an HPC system with Slurm:
 
 ```bash
 sbatch slurm/split_and_save.sh
 ```
 
-As a result, in the `--output_dir`, you will find two folders, Train and Test, containing the following `.csv` files: `gn_tpm`, `phenotype_metadata`,`RBPs_log2p_tpm`, `trans_log2p_tpm`.
+As a result, in the `--output_dir`, you will find two folders: **Train** and **Test**. Each folder contains the following `.csv` files:
+
+1. **`gn_tpm.csv`**: This dataframe contains the expression levels of the genes involved in this study, measured in TPM (Transcripts Per Million).
+2. **`RBPs_log2p_tpm.csv`**: This dataframe presents the expression levels of RNA-binding proteins (RBPs) in log2(TPM + 1) for the selected samples.
+3. **`trans_log2p_tpm.csv`**: This file contains the expression levels of transcripts in log2(TPM + 1).
+4. **`phenotype_metadata.csv`**: This file includes metadata for the samples used in the study.
 
 ### Hyperparameter Optimization with Optuna
 In this section, we will implement hyperparameter optimization for the DeepRBP predictor using Optuna, a hyperparameter optimization framework designed for machine learning. This process aims to find the best set of hyperparameters that maximize model performance.
@@ -190,8 +190,6 @@ In this section, we will implement hyperparameter optimization for the DeepRBP p
 para ello vamos a cargar los datos de training sacados de '/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train' y aiming to optimize time and computational resources se coge una porcion de los datos de entrenamiento
 
 con un stratified split por tipo tumoral el 
-
-
 
 ```bash
 run-hyper-optimization-optuna --config_path_file '/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_hyper_optimization.yaml' \
@@ -204,21 +202,16 @@ sbatch slurm/run_hyper_optimization_optuna.sh
 ```
 
 
+ 
 
 
 
 
 
 
-
-
-
-
-
-# If you want to use an already trained model (...)
 
 #####
-## Executing DeepRBP Predictor
+## Executing DeepRBP Predictor (using optimized hyperparameters)
 There are three options:
 * Running the Python script 
 * Submitting a job to a HPC queue
@@ -231,101 +224,52 @@ To execute DeepRBP on the **TCGA** dataset, use a `.yaml` configuration file. Be
 #### **Example Configuration File (`config.yaml`)**
 
 ```yaml
-source_name: "TCGA"
-
-# Paths for the data files
 data_paths:
-  rbp_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/RBPs_tpm.csv"
-  isoform_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/trans_tpm.csv"
-  gene_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/gn_tpm.csv"
-  metadata_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/phenotype_metadata.csv"
-  getBM_path: "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/getBM.csv" 
+  rbp_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train/train_RBPs_log2p_tpm.csv"
+  isoform_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train/train_trans_log2p_tpm.csv"
+  gene_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train/train_gn_tpm.csv"
+  metadata_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train/train_phenotype_metadata.csv"
 
-# Model predictor configuration
-model:
-  input_size: 1348               # Number of input features (joseba ojo: las primeras dos caracteristicas podrian sobrar porque se sacan del data que uses.)
-  output_size: 11459             # Number of output isoforms (las primeras dos caracteristicas podrian sobrar porque se sacan del data que uses.)
-  num_hidden_layers: 2           # Number of hidden layers
-  max_node: 1024                 # Maximum nodes per layer
-  uniform_nodes: true            # Uniform node distribution across layers
-  node_shrink_factor: 2          # Factor to reduce nodes per layer
-  activation_func: "relu"        # Activation function
-  learning_rate: 0.001           # Optimizer learning rate
-  optimizer_name: "adamW"        # Optimizer to use
-  cuda: true                     # Set to true for GPU acceleration
-
-# Training configuration
-training:
-  epochs: 1000                   # Total number of training epochs
-  batch_size: 128                # Batch size for training
-  print_every: 10                # Print progress every N epochs
-  train_test_split: true         # Enable train-test split
-  train_val_split: true          # Enable train-validation split
-  test_fraction: 0.2             # Fraction of data reserved for testing
-  val_fraction: 0.15             # Fraction of training data for validation
-  seed: 0                        # Random seed for reproducibility
-
-# Sample selection
-sample_category: "detailed_category"   # Metadata column used for stratification
-select_samples:                       # Specify sample categories to include
-  - "Lung_Adenocarcinoma"
-  - "Breast_Invasive_Carcinoma"
-
-output_dir: ""                        # Output directory (generated automatically if not specified)
-plot_results: True                    # Enable visualization of results
+sample_category: "detailed_category"  # The column in metadata to stratify on 
+test_fraction: 0.2
+getBM_path: "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/getBM.csv"
+gene_col_name: "Gene_ID"
+trans_col_name: "Transcript_ID"
+seed: 42
+cuda: True
+print_every: 5
+train_batch_size: 128
+val_batch_size: 256
+num_epochs: 100
+num_hidden_layers: 2 # Number of hidden layers
+hidden1_nodes: 64 # Number of nodes in first hidden layer
+uniform_nodes: False 
+node_shrink_factor: 4
+activation_func: relu
+learning_rate: 0.001
+optimizer_name: adamW
+plot_results: True
+save_results: True
+save_best_model: True
 ```
 
-where,  
-- **`source_name`**: Name of the dataset being used.  
+where, (EXPLAIN MORE THIS JOSEBA PLEASE)
 - **`data_paths`**: Paths to input data files:  
   - **`rbp_path`**: File containing RBP expression data.  
   - **`isoform_expr_path`**: File containing isoform expression data.  
   - **`metadata_path`**: Metadata file (sample-level information).  
   - **`gene_expr_path`**: File with gene expression data per isoform.  
-  - **`getBM_path`**: File for selected gene-RBP mappings.  
-- **`model`**: Configuration for the neural network model, including the number of layers, activation function, and optimizer.  
-- **`training`**: Training hyperparameters, including epochs, batch size, and data splits.  
+- **`getBM_path`**: File for selected gene-RBP mappings.  
 - **`sample_category`**: Metadata column used to stratify samples.  
-- **`select_samples`**: Specify sample categories to include during training. Use `"all"` to include all samples.  
-- **`output_dir`**: Directory where results will be saved. If not specified, it is generated automatically.  
 - **`plot_results`**: Enable or disable visualization of results.  
 
-**Note**: You can also include a configuration for an external dataset where evaluations will be performed using the already trained model. This is in addition to the test fraction defined from the source dataset. The configuration for this external dataset would look as follows:  
 
-#### **Example: Configuration for External Dataset Evaluation (`config_gtex.yaml`)** 
-
-```yaml
-source_name: "GTEX"
-
-# Paths for the data files
-data_paths:
-  rbp_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/GTEX/RBPs_tpm.csv"
-  isoform_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/GTEX/trans_tpm.csv"
-  gene_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/GTEX/gn_tpm.csv"
-  metadata_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/GTEX/phenotype_metadata.csv"
-  getBM_path: "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/getBM.csv" 
-
-# Training configuration
-training:
-  train_test_split: false
-  train_val_split: false
-  test_fraction: 0
-  val_fraction: 0
-
-# Sample selection
-sample_category: "detailed_category"  # The column in metadata to stratify on
-select_samples: ["all"]  # Use 'all' to include all samples
-output_dir: ""  # Automatically generated if not specified
-seed: 0
-plot_results: True
-```
-
-Once the config.yaml files are ready, execute the script as follows, specifying the path where you have saved both the config for the dataset used for training (`config_path`) and the config for an external data (`external_config_path`):
+Once the config.yaml file is ready, execute the script as follows, specifying the path where you have saved both the config for the dataset used for training (`config_path`) and the `output_dir` in which you want to save the results:
 
 ```bash
 run-deeprbp-predictor \
-  --config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_tcga_train.yaml" \
-  --external_config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_gtex.yaml"
+  --config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_tcga_model_train.yaml" \
+  --output_dir "/scratch/jsanchoz/DeepRBP/output/results"
 ```
 
 ### Option 2: Submit a Job in a HPC
@@ -341,8 +285,34 @@ sbatch run_predictor_pipeline.sh
 ## (work to do here)
 ---
 
+### Evaluate DeepRBP Predictor using Test Data  
 
-### Explainability Module
+### **Option 1: Running the Python Script**  
+
+```bash
+deeprbp-predictor-evaluate \
+  --config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_tcga_model_test.yaml" \
+  --output_dir "/scratch/jsanchoz/DeepRBP/output/results" \
+  --trained_files_dir "/scratch/jsanchoz/DeepRBP/output/results/results"
+```
+
+### Option 2: Submit a Job in a HPC
+```bash
+cd slurm
+sbatch predictor_evaluate.sh
+```
+
+### Option 3: Running with Docker
+## (work to do here)
+
+---
+
+
+
+
+
+
+# Explainability Module
 This module uses the already trained DeepRBP Predictor to compute TxRBP (transcript-by-RBP) and GxRBP (gene-by-RBP) scores using DeepLIFT (Shrikumar, Greenside, and Kundaje, 2017) [Learning important features through propagating activation differences, International Conference on Machine Learning, PMLR, pages 3145–3153].
 
 With DeepLIFT, the contribution of each RBP-Transcript pair is determined for every sample in the input data, resulting in a three-dimensional score matrix with the following dimensions:

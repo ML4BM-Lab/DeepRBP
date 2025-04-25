@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import Any, Dict
+import yaml
 from colorama import Fore, Style, Back, init
 
 from ..util.logger import Logger
@@ -47,30 +48,35 @@ class PredictorModel(nn.Module):
         activation_func (str): Activation function to use in hidden layers (e.g., 'relu', 'tanh').
         optimizer_name (str): Name of the optimizer to use (e.g., 'adam', 'sgd90').
         learning_rate (float): Learning rate for the optimizer.
+        batch_norm_eps (float): Epsilon value for numerical stability in batch normalization, preventing division by zero.
+        batch_norm_momentum (float): Momentum for the running mean and variance in batch normalization, controlling how quickly these values are updated.
     """
     def __init__(self, config, input_size: int = None, output_size: int = None, verbose: int = 1):
         super(PredictorModel, self).__init__()
         self.logger = Logger(verbose=verbose)
         init(autoreset=True)
-        # Default configuration if none provided
-        if config is None:
-            config = {}
         # Model configuration
+        self.config = config
         self.input_size = input_size 
         self.output_size = output_size
-        self.num_hidden_layers = config.get('num_hidden_layers')
-        self.hidden1_nodes = config.get('hidden1_nodes')
-        self.uniform_nodes = config.get('uniform_nodes')
-        self.node_shrink_factor = config.get('node_shrink_factor') 
-        self.activation_func = config.get('activation_func')
-        self.learning_rate = config.get('learning_rate')
-        self.optimizer_name = config.get('optimizer_name')
+        self.num_hidden_layers = self.config.get('num_hidden_layers')
+        self.hidden1_nodes = self.config.get('hidden1_nodes')
+        self.uniform_nodes = self.config.get('uniform_nodes')
+        self.node_shrink_factor = self.config.get('node_shrink_factor') 
+        self.activation_func = self.config.get('activation_func')
+        self.learning_rate = self.config.get('learning_rate')
+        self.optimizer_name = self.config.get('optimizer_name')
+        self.batch_norm_eps = self.config.get('batch_norm_eps', 1e-5)   
+        self.batch_norm_momentum = self.config.get('batch_norm_momentum', 0.1) 
+
         # Initialize the variable usage tracking
         self.variable_usage = {
             'hidden1_nodes': False,
             'uniform_nodes': False,
             'node_shrink_factor': False,
-            'activation_func': False
+            'activation_func': False,
+            'batch_norm_eps': False,
+            'batch_norm_momentum': False
         }
         # Configure layers and optimizer
         self.logger.log("Initializing layers and optimizer...")
@@ -82,6 +88,7 @@ class PredictorModel(nn.Module):
         self._print_unused_variables()
         self._print_used_variables()
         self._update_unused_variables()
+        self._print_model_architecture()
     def _configure_layers(self):
         """Configures the hidden and output layers based on model configuration."""
         if self.num_hidden_layers > 0:
@@ -89,7 +96,7 @@ class PredictorModel(nn.Module):
             self._mark_used_variables()
             # First hidden layer
             self.add_module('hidden_linear_0', nn.Linear(self.input_size, node_count)) # Input size to first layer
-            self.add_module('batch_norm_0', nn.BatchNorm1d(node_count))
+            self.add_module('batch_norm_0', nn.BatchNorm1d(node_count, eps=self.batch_norm_eps, momentum=self.batch_norm_momentum))
             self.add_module('activation_0', self._get_activation_module(self.activation_func))
             # Subsequent hidden layers
             for i in range(1, self.num_hidden_layers):
@@ -103,7 +110,7 @@ class PredictorModel(nn.Module):
                 # Add the layer, batch normalization, and activation
                 layer = nn.Linear(input_size, node_count)
                 self.add_module(f'hidden_linear_{i}', layer)
-                self.add_module(f'batch_norm_{i}', nn.BatchNorm1d(layer.out_features))
+                self.add_module(f'batch_norm_{i}', nn.BatchNorm1d(layer.out_features, eps=self.batch_norm_eps, momentum=self.batch_norm_momentum))
                 self.add_module(f'activation_{i}', self._get_activation_module(self.activation_func))
         else:
             node_count = self.input_size  # No hidden layers, use input size directly
@@ -113,6 +120,10 @@ class PredictorModel(nn.Module):
         # Add the activation layer for the output
         self.output_activation = nn.Sigmoid()
         self.add_module('output_activation', self.output_activation)
+    def _print_model_architecture(self):
+        """Prints a high-level overview of the model architecture."""
+        print("Model architecture:")
+        print(self)
     def _check_layer_outputs(self):
         """
         Checks that no layer in the model has out_features equal to 0.
@@ -128,9 +139,12 @@ class PredictorModel(nn.Module):
                     f"based on the number of hidden layers ('num_hidden_layers') you are using."
                 )    
     def _mark_used_variables(self):
-        """Marks the variables as used based on the current configuration."""
+        """Marks the variables as used based on the current configuration if
+        number of hidden layers is greater to zero."""
         self.variable_usage['hidden1_nodes'] = True   
         self.variable_usage['activation_func'] = True 
+        self.variable_usage['batch_norm_eps'] = True 
+        self.variable_usage['batch_norm_momentum'] = True 
         if self.num_hidden_layers > 1:
             self.variable_usage['node_shrink_factor'] = True   
         if self.num_hidden_layers >= 3:
@@ -158,6 +172,8 @@ class PredictorModel(nn.Module):
             'uniform_nodes': self.uniform_nodes if self.variable_usage['uniform_nodes'] else None,
             'node_shrink_factor': self.node_shrink_factor if self.variable_usage['node_shrink_factor'] else None,
             'activation_func': self.activation_func if self.variable_usage['activation_func'] else None,
+            'batch_norm_eps': self.batch_norm_eps if self.variable_usage['batch_norm_eps'] else None,
+            'batch_norm_momentum': self.batch_norm_momentum if self.variable_usage['batch_norm_momentum'] else None,
             'num_hidden_layers': self.num_hidden_layers,  # Included without tracking
             'optimizer_name': self.optimizer_name,  # Included without tracking
             'learning_rate': self.learning_rate  # Included without tracking
@@ -173,16 +189,24 @@ class PredictorModel(nn.Module):
         print(Fore.CYAN + separator)
     def _update_unused_variables(self):
         """Updates unused variables with a placeholder character."""
+        # Map variable names to their corresponding attributes
+        variable_map = {
+            'hidden1_nodes': 'hidden1_nodes',
+            'uniform_nodes': 'uniform_nodes',
+            'node_shrink_factor': 'node_shrink_factor',
+            'activation_func': 'activation_func',
+            'batch_norm_eps': 'batch_norm_eps',
+            'batch_norm_momentum': 'batch_norm_momentum'
+        }
         for var in self.variable_usage:
             if not self.variable_usage[var]:  # If the variable is marked as unused ###
-                if var == 'hidden1_nodes':
-                    self.hidden1_nodes = None
-                elif var == 'uniform_nodes':
-                    self.uniform_nodes = None
-                elif var == 'node_shrink_factor':
-                    self.node_shrink_factor = None
-                elif var == 'activation_func':
-                    self.activation_func = None
+                if var in self.config.config_data:  # Use the ConfigParser's config_data
+                    self.config.update(var, 'unused')  # Update using the ConfigParser update method
+                else:
+                    print(f"Warning: {var} not found in configuration.")
+                # Update the corresponding attribute to None
+                if var in variable_map:
+                    setattr(self, variable_map[var], None)
     def _configure_optimizer(self, optimizer_name, learning_rate):
         """Configures the optimizer based on the provided name and learning rate.
         Args:
@@ -264,8 +288,18 @@ class PredictorModel(nn.Module):
         """Saves the model to the specified directory."""
         self.logger.log(f"Saving model to {output_dir} with name {model_name}...")
         os.makedirs(output_dir, exist_ok=True)
+        # Save model weights
         torch.save(self.state_dict(), os.path.join(output_dir, model_name))
         self.logger.log(f"Model saved successfully in {output_dir}")
+    def save_config(self, output_dir):
+        """Saves the model configuration to a YAML file in the specified directory."""
+        self.logger.log(f"Saving configuration to {output_dir}...")
+        os.makedirs(output_dir, exist_ok=True)
+        # Save configuration to a YAML file
+        config_path = os.path.join(output_dir, 'config.yaml')
+        with open(config_path, 'w') as config_file:
+            yaml.dump(self.config.config_data, config_file)  # Use config_data from ConfigParser
+        self.logger.log(f"Configuration saved successfully in {config_path}")
     @classmethod
     def load_model(cls, path_to_weights, config, input_size: int = None, output_size: int = None):
         """
