@@ -18,4 +18,4 @@ python -c "import deeprbp; print('Package found')"
 
 python -m deeprbp.training_module.main_predictor \
   --config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_tcga_model_train.yaml" \
-  --output_dir "/scratch/jsanchoz/DeepRBP/output/results"
+  --output_dir "/scratch/jsanchoz/DeepRBP/output/results/run_deeprbp_predictor"

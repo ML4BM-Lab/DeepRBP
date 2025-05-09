@@ -61,9 +61,9 @@ class DeepLiftHandler:
         self.getBM = pd.read_csv(self.base_config['data_paths'].get('getBM_path', None)).drop_duplicates()
         self.len_out_features = len(self.trans_id)
 
-    def prepare_rbp_tensors(self):
+    def prepare_data_tensors(self):
         """
-        Prepare scaled RBP tensor and reference RBP tensor based on the configuration.
+        Prepare input tensors and reference RBP tensor based on the configuration.
 
         Parameters:
             explain_config (dict): Dictionary containing the configuration. 

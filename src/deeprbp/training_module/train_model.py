@@ -38,20 +38,13 @@ class TrainPredictor:
         Initializes the TrainPredictor class with a model, configuration, and feature specifications.
         """
         self.config = config
-        self.device = torch.device('cuda:0' if self.config.get('cuda') and torch.cuda.is_available() else 'cpu')
+        #self.device = torch.device('cuda:0' if self.config.get('cuda') and torch.cuda.is_available() else 'cpu') OLD IT WORKS
+        self.device = torch.device('cuda' if self.config.get('cuda') and torch.cuda.is_available() else 'cpu')
         # Initialize the Logger with the given verbosity level
         self.logger = Logger(verbose=verbose)
         # Log the device information based on verbosity level
-        self.logger.log(f"🖥️  Using device: {self.device} for training.", level=2)
-        self.model = model
-        self.is_trained = False 
-        # Set default input and output features if not provided
-        self.input_features = input_features if input_features is not None else (
-            'scaled_rbp_expr_log2p_tpm', 'gn_expr_each_iso_tpm')  # Feature keys to be used as inputs
-        self.output_features = output_features if output_features is not None else ('trans_expr_log2p_tpm',) # Features keys to be predicted
-        # Send the model to the device
-        self.model.to(self.device)
-        self.logger.log(f"✅ Model has been moved to: {next(self.model.parameters()).device}", level=2)
+        self.logger.log(f"🖥️  Using device: {self.device} for training.", level=1)
+        #self.model = model
         # Set random seed for reproducibility
         seed = self.config.get('seed', 42)
         torch.manual_seed(seed)
@@ -60,6 +53,30 @@ class TrainPredictor:
             torch.cuda.manual_seed(seed)
             torch.backends.cudnn.deterministic = True
             torch.backends.cudnn.benchmark = False  
+            # Check the number of GPUs and log if more than one is being used
+            if torch.cuda.device_count() > 1:
+                self.logger.log(f"⚡ Using {torch.cuda.device_count()} GPUs for training.", level=1)
+                model = torch.nn.DataParallel(model)
+                model.module.configure_optimizer() # try this
+        self.model = model
+        self.is_trained = False 
+        # Set default input and output features if not provided
+        self.input_features = input_features if input_features is not None else (
+            'scaled_rbp_expr_log2p_tpm', 'gn_expr_each_iso_tpm')  # Feature keys to be used as inputs
+        self.output_features = output_features if output_features is not None else ('trans_expr_log2p_tpm',) # Features keys to be predicted
+        # Send the model to the device
+        self.model.to(self.device)
+        self.logger.log(f"✅ Model has been moved to: {next(self.model.parameters()).device}", level=1)
+        # # Set random seed for reproducibility
+        # seed = self.config.get('seed', 42)
+        # torch.manual_seed(seed)
+        # np.random.seed(seed)
+        # if self.device.type == 'cuda':
+        #     torch.cuda.manual_seed(seed)
+        #     torch.backends.cudnn.deterministic = True
+        #     torch.backends.cudnn.benchmark = False  
+        # Configure optimizer after moving the model to the device
+        #self.model.configure_optimizer()
     def prepare_batch(self, batch):
         """
         Extracts inputs and targets from the given batch.
@@ -108,7 +125,8 @@ class TrainPredictor:
             rbp_expr, targets, gen_expr = self.prepare_batch(batch)
             # Log device information if verbosity level allows
             self.logger.log(f"rbp_expr device: {rbp_expr.device}, targets device: {targets.device}, gen_expr device: {gen_expr.device}", level=2)
-            self.logger.log(f'device: {self.device}', level=2)
+            self.logger.log(f"Model parameters device: {[param.device for param in self.model.parameters()]}", level=2)
+            self.logger.log(f'Expected device: {self.device}', level=2)
             assert rbp_expr.device == self.device, "rbp_expr is not on the correct device."
             assert targets.device == self.device, "targets is not on the correct device."
             assert gen_expr.device == self.device, "gen_expr is not on the correct device."
@@ -202,8 +220,13 @@ class TrainPredictor:
         # Load the best model after training if configured to do so
         if save_best_model and path_save_results:
             self.logger.log("🔄 Loading the best model...", level=1)
-            self.model = PredictorModel.load_model(os.path.join(path_save_results, 'best_model.pt'), self.config, 
-                                                   input_size=self.model.input_size, output_size=self.model.output_size)
+            self.model = PredictorModel.load_model(
+                    os.path.join(path_save_results, 'best_model.pt'), 
+                    self.config, 
+                    input_size=self.model.input_size, 
+                    output_size=self.model.output_size,
+                    device=self.device
+            )
             self.model.to(self.device)
         self.is_trained = True
         # Save the configuration used in model training
@@ -239,7 +262,7 @@ class TrainPredictor:
                 assert rbp_expr.device == self.device, "rbp_expr is not on the correct device."
                 assert gen_expr.device == self.device, "gen_expr is not on the correct device."
                 out = self.model(rbp_expr, gen_expr) # Generate predictions
-                true_values.append(targets.cpu().numpy())
+                true_values.append(targets.cpu().numpy())  
                 predictions.append(out.detach().cpu().numpy())
         true_values = np.concatenate(true_values)
         predictions = np.concatenate(predictions)

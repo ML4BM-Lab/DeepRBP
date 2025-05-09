@@ -41,10 +41,12 @@ class DeepRBPredictorPipeline:
     def __init__(self, config_path, output_dir, verbose=1):
         self.logger = Logger(verbose=verbose)  # Initialize the logger with verbosity level
         self.logger.log("📁 Initializing the DeepRBPredictorPipeline...", level=1)
+        
         # Define paths for saving data and results
         self.path_save_data = os.path.join(output_dir, 'data')
         self.path_save_results = os.path.join(output_dir, 'results')
         self.logger.log("✅ Directories for saving data and results are ready.", level=1)
+        
         # Set the configuration based on yaml file path
         self.config = ConfigParser(config_path)
         self.data_paths = self.config.get('data_paths')
@@ -52,6 +54,7 @@ class DeepRBPredictorPipeline:
         self.rbp_names = None
         self.gene_names = None
         self.trans_names = None
+        
         # Log the retrieved paths
         self.logger.log(f"Data paths: {self.data_paths}", level=1)
         # Initialize DataImporter for importing data
@@ -60,12 +63,14 @@ class DeepRBPredictorPipeline:
         self.scaler = None
         # Initialize Trainer object
         self.trainer = None
+
     def import_data(self):
         """Imports training data and return."""
         # Import training data
         data = self.data_importer.load()    
         self.logger.log("✅ Data import complete.", level=1)
         return data
+    
     def filter_samples(self, data):
         """
         Filter a portion of the samples to optimize time and computational resources.
@@ -91,10 +96,12 @@ class DeepRBPredictorPipeline:
         else:
             self.logger.log("No sample_fraction defined in config; returning original data.", level=1)
             return data
+        
     def split_data(self, data, test_name='validation'):
         self.logger.log("✂️ Splitting data into train and validation (or test) sets...", level=1)
         splitter = DataSplitter(data, self.config)
         return splitter.split_data_sets(test_name)
+    
     def save_split_data(self, train_data, valid_data):
         """
         Saves the training and validation data to specified paths.
@@ -121,7 +128,8 @@ class DeepRBPredictorPipeline:
         for data, save_path, custom_names in data_to_save:
             self.logger.log(f"[*] Saving data to: {save_path}...", level=1) 
             save_data(data, save_path, custom_names)
-            self.logger.log(f"[*] Data saved successfully.", level=1)   
+            self.logger.log(f"[*] Data saved successfully.", level=1) 
+
     def fit_scaler(self, train_data):
         """Fits the scaler to the training data.
 
@@ -133,6 +141,7 @@ class DeepRBPredictorPipeline:
         self.logger.log("✅ Scaler has been fitted to training data.", level=1)
         self.scaler.save(self.path_save_results)
         self.logger.log(f"✅ Scaler has been saved in {self.path_save_results}.", level=1)
+
     def load_scaler(self, folder_path):
         """
         Load an already trained scaler from the specified directory and assign it to self.scaler.
@@ -150,6 +159,7 @@ class DeepRBPredictorPipeline:
             self.logger.error(f"❌ [Scaler:load_scaler] Failed to load scaler: {e}", level=1)
         except Exception as e:
             self.logger.error(f"❌ [Scaler:load_scaler] An unexpected error occurred: {e}", level=1)
+
     def scale_data(self, *datasets):  
         """Transforms the provided DataFrames using the fitted scaler.
 
@@ -170,6 +180,7 @@ class DeepRBPredictorPipeline:
             scaled_data['scaled_rbp_df'] = self.scaler.transform(data['rbp_df'])  # Scale the RBP data 
             scaled_datasets.append(scaled_data)   
         return format_output(scaled_datasets)  
+    
     def create_datasets(self, *dataframes):
         """
         Creates CustomTensorDataset instances for provided datasets.
@@ -185,7 +196,7 @@ class DeepRBPredictorPipeline:
         datasets = []
         for data in dataframes:
             dataset = CustomTensorDataset(
-                data=data,
+                data=data.copy(),
                 getBM=self.getBM,
                 rbp_data_key='scaled_rbp_df', 
                 gene_data_key='gene_df', 
@@ -199,6 +210,7 @@ class DeepRBPredictorPipeline:
                 self.gene_names = dataset.gene_names
                 self.trans_names = dataset.trans_names
         return datasets
+    
     def create_data_loaders(self, *datasets, batch_sizes=None):
         """
         Creates DataLoader instances for provided datasets with specified batch sizes.
@@ -242,6 +254,7 @@ class DeepRBPredictorPipeline:
             data_loaders.append(loader)
         self.logger.log("✅ Data loaders created.", level=1)
         return data_loaders
+    
     def get_loaders(self, *dataframes):
         """
         Encapsulates the creation of datasets and data loaders.
@@ -254,6 +267,7 @@ class DeepRBPredictorPipeline:
         """
         datasets = self.create_datasets(*dataframes)  
         return self.create_data_loaders(*datasets) 
+    
     def _get_model(self, loader, path_to_weights=None):
         """
         Creates an instance of the PredictorModel. If a path to weights is provided, it loads the model with those weights.
@@ -265,22 +279,19 @@ class DeepRBPredictorPipeline:
         Returns:
             PredictorModel: An instance of the PredictorModel initialized with the configuration or loaded with weights.
         """
+        input_size = next(iter(loader))['scaled_rbp_df'].shape[1]
+        output_size = next(iter(loader))['isoform_df'].shape[1]
         if path_to_weights:
             # Load the model using the loaded weights
-            input_size = next(iter(loader))['scaled_rbp_df'].shape[1]
-            output_size = next(iter(loader))['isoform_df'].shape[1]
             model = PredictorModel.load_model(path_to_weights, self.config, input_size=input_size, output_size=output_size)
         else:
-            model = PredictorModel(
-                input_size=next(iter(loader))['scaled_rbp_df'].shape[1],
-                output_size=next(iter(loader))['isoform_df'].shape[1],
-                config=self.config
-            )
+            model = PredictorModel(input_size=input_size, output_size=output_size, config=self.config)
         # Reassign the model's configuration directly to the pipeline (updating if there were 'unused' variables)
         self.config = model.config
         print("\n[*] Model Summary:")
         summarize_model(model, loader, self.config.get("train_batch_size"))
         return model
+    
     def _get_trainer(self, model):
         """
         Creates an instance of the TrainPredictor.
@@ -299,6 +310,7 @@ class DeepRBPredictorPipeline:
             verbose=self.logger.verbose # Pass the verbosity level from the logger
         )
         return trainer
+    
     def setup_model_trainer(self, loader, path_to_weights=None):
         """
         Creates both the model and trainer, returning the trainer. Allows for loading a pre-trained model if a path is provided.
@@ -315,6 +327,7 @@ class DeepRBPredictorPipeline:
         # Mark the trainer as trained if a pre-trained model was loaded
         if path_to_weights:
             self.trainer.is_trained = True  # Mark the trainer as trained
+
     def train_model(self, train_loader, val_loader, trial=None): 
         """
         Trains the model using the provided data loaders.
@@ -342,10 +355,12 @@ class DeepRBPredictorPipeline:
         train_history, val_history = self.trainer.fit(train_loader, val_loader, **fit_kwargs)
         self.logger.log("✅ Model training complete.", level=1)
         return train_history, val_history
+    
     def save_history(self, train_history, val_history, plot_name='loss_curve'):
         self.logger.log("💾 Saving training and validation history...", level=1)
         plot_loss_curve(train_history, val_history, output_dir=self.path_save_results, plot_name=plot_name)
         self.logger.log("✅ Saving training and validation history.", level=1)
+
     def evaluate_model(self, loader, set_name='validation'):
         """
         Evaluate the model's performance on the given dataset.
@@ -397,6 +412,7 @@ class DeepRBPredictorPipeline:
             self.logger.log(f"✅ Results for the {set_name} dataset have been successfully saved to files.")
         self.logger.log(f"✅ Model evaluation on {set_name} complete.", level=1)
         return metrics, gene_corr_df
+    
     def eval_model_per_category(self, data, set_name='validation'): 
         self.logger.log(f"📊 Evaluating metrics per category ...", level=1)
         calculate_metrics_per_category(
@@ -407,6 +423,7 @@ class DeepRBPredictorPipeline:
               self.config,
               source_name='TCGA',
               getBM=self.getBM)
+        
     def run(self):  
         self.logger.log("🚀 Starting the DeepRBPredictorPipeline run...", level=1)
         # Import data
@@ -436,11 +453,6 @@ class DeepRBPredictorPipeline:
             self.eval_model_per_category(dataset, name)  
         self.logger.log("✅ Pipeline run completed successfully.", level=1)
 
-
- ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ###
-  ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ###
-
-            # mira la beca de la unav a ver si no se me ha pasado la fecha.
 
 
 # ######### PROBAR OTRA VEZ TODO JOSEBA, LOS NOMBRES DE LOS METODOS NO ME ACABAN DE CONVENCER.

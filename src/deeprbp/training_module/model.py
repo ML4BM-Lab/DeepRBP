@@ -1,13 +1,12 @@
 # src/deeprbp/training_module/model.py
 
 import os
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Any, Dict
+#from typing import Any, Dict
 import yaml
-from colorama import Fore, Style, Back, init
+from colorama import Fore, init
 
 from ..util.logger import Logger
 
@@ -68,7 +67,6 @@ class PredictorModel(nn.Module):
         self.optimizer_name = self.config.get('optimizer_name')
         self.batch_norm_eps = self.config.get('batch_norm_eps', 1e-5)   
         self.batch_norm_momentum = self.config.get('batch_norm_momentum', 0.1) 
-
         # Initialize the variable usage tracking
         self.variable_usage = {
             'hidden1_nodes': False,
@@ -81,7 +79,8 @@ class PredictorModel(nn.Module):
         # Configure layers and optimizer
         self.logger.log("Initializing layers and optimizer...")
         self._configure_layers()
-        self.optimizer = self._configure_optimizer(self.optimizer_name, self.learning_rate)
+        #self.optimizer = self._configure_optimizer(self.optimizer_name, self.learning_rate)
+        self.optimizer = None 
         # Check the model layers to ensure there are no layers with out_features equal to 0
         self._check_layer_outputs()
         # Print and update unused variables and print used variables
@@ -207,6 +206,10 @@ class PredictorModel(nn.Module):
                 # Update the corresponding attribute to None
                 if var in variable_map:
                     setattr(self, variable_map[var], None)
+    def configure_optimizer(self):
+        """Configures the optimizer after the model has been moved to the appropriate device."""
+        if self.optimizer is None:  # Only configure if not already done
+            self.optimizer = self._configure_optimizer(self.optimizer_name, self.learning_rate)
     def _configure_optimizer(self, optimizer_name, learning_rate):
         """Configures the optimizer based on the provided name and learning rate.
         Args:
@@ -301,19 +304,25 @@ class PredictorModel(nn.Module):
             yaml.dump(self.config.config_data, config_file)  # Use config_data from ConfigParser
         self.logger.log(f"Configuration saved successfully in {config_path}")
     @classmethod
-    def load_model(cls, path_to_weights, config, input_size: int = None, output_size: int = None):
+    def load_model(cls, path_to_weights, config, input_size, output_size, device=None):
         """
         Class method to initialize the model and load pre-trained weights.
 
         Args:
             path_to_weights (str): Path to the file containing the pre-trained weights.
             config Configuration class for the model.
-            input_size (int, optional): Input size of the model.
-            output_size (int, optional): Output size of the model.
+            input_size (int): Input size of the model.
+            output_size (int): Output size of the model.
+            device (torch.device, optional): The device to load the model onto (CPU or GPU). If None, it will be set automatically.
 
         Returns:
             PredictorModel: An instance of PredictorModel with pre-trained weights loaded.
         """
+        # Determine the device if not provided
+        if device is None:
+            #device = torch.device('cuda:0' if config.get('cuda') and torch.cuda.is_available() else 'cpu')
+            device = torch.device('cuda' if config.get('cuda') and torch.cuda.is_available() else 'cpu')
+            print(f"⚠️ No device specified. Using default device: {device}.")  # Inform the user about the default device
         # Initialize the model with the provided config
         logger = Logger(config.get('verbose', 1))  # Initialize a logger
         logger.log(f"Loading model from weights at {path_to_weights}...")
@@ -321,7 +330,7 @@ class PredictorModel(nn.Module):
         model = cls(config, input_size, output_size)
         # Load pre-trained weights
         try:
-            state_dict = torch.load(path_to_weights, map_location=torch.device('cpu'), weights_only=True)  # Asegura compatibilidad con CPU
+            state_dict = torch.load(path_to_weights, map_location=device, weights_only=True)   
             model.load_state_dict(state_dict)
             logger.log("Pre-trained weights loaded successfully.")
         except Exception as e:

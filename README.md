@@ -182,33 +182,28 @@ As a result, in the `--output_dir`, you will find two folders: **Train** and **T
 3. **`trans_log2p_tpm.csv`**: This file contains the expression levels of transcripts in log2(TPM + 1).
 4. **`phenotype_metadata.csv`**: This file includes metadata for the samples used in the study.
 
-### Hyperparameter Optimization with Optuna
-In this section, we will implement hyperparameter optimization for the DeepRBP predictor using Optuna, a hyperparameter optimization framework designed for machine learning. This process aims to find the best set of hyperparameters that maximize model performance.
+### Hyperparameter Optimization for DeepRBPredictor with Optuna 
+In this section, we will implement hyperparameter optimization for the DeepRBP predictor using Optuna, a hyperparameter optimization framework designed for machine learning. 
+This process aims to find the best set of hyperparameters that maximize model performance. To do so we are using a subset of the training data. Exactly the 50\% with a stratified split based on tumor 
+type to enhance efficiency and optimize computational resources. The training data is sourced from the directory located at `/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train`. 
 
-#### HERE!!!
-
-para ello vamos a cargar los datos de training sacados de '/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train' y aiming to optimize time and computational resources se coge una porcion de los datos de entrenamiento
-
-con un stratified split por tipo tumoral el 
-
+*Option 1: Direct Command Execution*
 ```bash
 run-hyper-optimization-optuna --config_path_file '/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_hyper_optimization.yaml' \
-                              --output_dir '/scratch/jsanchoz/DeepRBP/stuff/' \
-                              --val_batch_size 512 \
-                              --n_trials 1
+                              --output_dir '/scratch/jsanchoz/DeepRBP/output/results/hyperpameter_optimization' \
+                              --n_trials 10
+                              
 ```
+
+In this command:
+* `config_path_file` specifies the configuration file.
+* `output_dir` indicates the directory where you want to save the results.
+* `n_trials` is the number of combinations you want to test with Optuna.
+
+*Option 2: Submit Job via SLURM*
 ```bash
 sbatch slurm/run_hyper_optimization_optuna.sh
 ```
-
-
- 
-
-
-
-
-
-
 
 #####
 ## Executing DeepRBP Predictor (using optimized hyperparameters)
@@ -255,10 +250,10 @@ save_best_model: True
 
 where, (EXPLAIN MORE THIS JOSEBA PLEASE)
 - **`data_paths`**: Paths to input data files:  
-  - **`rbp_path`**: File containing RBP expression data.  
-  - **`isoform_expr_path`**: File containing isoform expression data.  
+  - **`rbp_path`**: File containing RBP expression data in log2(TPM+1).  
+  - **`isoform_expr_path`**: File containing isoform expression data in log2(TPM+1).  
   - **`metadata_path`**: Metadata file (sample-level information).  
-  - **`gene_expr_path`**: File with gene expression data per isoform.  
+  - **`gene_expr_path`**: File with gene expression data per isoform in TPM.   
 - **`getBM_path`**: File for selected gene-RBP mappings.  
 - **`sample_category`**: Metadata column used to stratify samples.  
 - **`plot_results`**: Enable or disable visualization of results.  
@@ -269,7 +264,7 @@ Once the config.yaml file is ready, execute the script as follows, specifying th
 ```bash
 run-deeprbp-predictor \
   --config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_tcga_model_train.yaml" \
-  --output_dir "/scratch/jsanchoz/DeepRBP/output/results"
+  --output_dir "/scratch/jsanchoz/DeepRBP/output/results/run_deeprbp_predictor"
 ```
 
 ### Option 2: Submit a Job in a HPC
@@ -307,12 +302,7 @@ sbatch predictor_evaluate.sh
 
 ---
 
-
-
-
-
-
-# Explainability Module
+# Explainability Module 
 This module uses the already trained DeepRBP Predictor to compute TxRBP (transcript-by-RBP) and GxRBP (gene-by-RBP) scores using DeepLIFT (Shrikumar, Greenside, and Kundaje, 2017) [Learning important features through propagating activation differences, International Conference on Machine Learning, PMLR, pages 3145–3153].
 
 With DeepLIFT, the contribution of each RBP-Transcript pair is determined for every sample in the input data, resulting in a three-dimensional score matrix with the following dimensions:
@@ -326,14 +316,16 @@ where \( n \) represents the number of samples. This results in a score matrix o
 
 Specific TCGA samples (not presented in the training process) are used to calculate the scores. This module is validated using a binary matrix indicating experimental evidence of regulation in POSTAR3 (Zhao et al., 2022) [POSTAR3: an updated platform for exploring post-transcriptional regulation coordinated by RNA-binding proteins, Nucleic Acids Research, volume 50, D1, pages D287–D294]. POSTAR3 is a comprehensive Post-Transcriptional Regulation database that provides protein binding sites on RNA obtained from CLIP experiments.
 
-Additionally, we have applied our model in in-vitro knockdown experiments.
+Additionally, we have applied our model in in-silico knockdown experiments.
 
 This module aims to provide insights into how RBPs regulate gene expression. Below is an overview of the validation process and instructions to access the required data.
 
 ---
 
-#### Data Access  
-The necessary data for running this module is available through the provided Zenodo link. Below is a description of the files:  
+## Data Access  
+The necessary raw data for running this module is available through the provided Zenodo link (#TODO: AFTER YOU GET THE COMMUNITY PERMISSION UPLOAD THE LINK: https://zenodo.org/uploads/15337302) 
+
+. Below is a description of the files:  
 
 - **Events_Regions_gc23_400nt.RData**: Contains detailed information about the genomic regions associated with the events.  
 - **EventsFound_gencode23.txt**: Provides metadata about the events, including genomic positions, event types, names, and IDs.  
@@ -365,12 +357,11 @@ Rscript /scratch/jsanchoz/DeepRBP/src/deeprbp/data_preprocessing/create_gene_rbp
 - **`--selected_tissue_cell_line`**: A comma-separated list of cell lines from the POSTAR experiments to include in the analysis. This allows for filtering the data based on specific tissues or cell types.
 - **`--getBM_file`**: The name of the CSV file containing mapping information to relate gene names with their corresponding gene IDs. This file is essential for converting RBP names to gene IDs in the output matrix.
 
-By following these steps, you can generate a POSTAR matrix tailored to your specific tissue and experimental needs.
-
-For acute myeloid leukemia (AML) use the K562 cell-line; for kidney chromophobe (KICH) use HEK293 cell-line, and for 
+By following these steps, you can generate a POSTAR matrix tailored to your specific tissue and experimental needs. For acute myeloid leukemia (AML) use the K562 cell-line; for kidney chromophobe (KICH) use HEK293 cell-line, and for 
 liver hepatocellular carcinoma (HCC) use HepG2 and Huh7 cell-lines.
 
-<!-- Rscript /scratch/jsanchoz/DeepRBP/src/deeprbp/data_preprocessing/create_gene_rbp_postar_matrix.R \
+```bash
+Rscript /scratch/jsanchoz/DeepRBP/src/deeprbp/data_preprocessing/create_gene_rbp_postar_matrix.R \
     --input_path /data/jsanchoz/DeepRBP/data/explainability_module/postar3 \
     --output_path /scratch/jsanchoz/DeepRBP/data/explainability_module/postar3/processed \
     --output_file_name human_aml \
@@ -379,7 +370,8 @@ liver hepatocellular carcinoma (HCC) use HepG2 and Huh7 cell-lines.
     --events_gencode_file EventsFound_gencode23.txt \
     --selected_tissue_cell_line K562 \
     --getBM_file getBM.csv
-
+```
+```bash
 Rscript /scratch/jsanchoz/DeepRBP/src/deeprbp/data_preprocessing/create_gene_rbp_postar_matrix.R \
     --input_path /data/jsanchoz/DeepRBP/data/explainability_module/postar3 \
     --output_path /scratch/jsanchoz/DeepRBP/data/explainability_module/postar3/processed \
@@ -389,62 +381,174 @@ Rscript /scratch/jsanchoz/DeepRBP/src/deeprbp/data_preprocessing/create_gene_rbp
     --events_gencode_file EventsFound_gencode23.txt \
     --selected_tissue_cell_line HEK293 \
     --getBM_file getBM.csv -->
+```
 
-## Executing DeepRBP Explainer 
-There are three options:
+## Run Executing DeepRBP Explainer
+To execute the explainability pipeline on our model trained with DeepLIFT, you have the following options:
 * Running the Python script 
-* Submitting a job to a HPC queue
+* Submitting a job to an HPC queue
 * Running with Docker
 
 ---
-
 ### **Option 1: Running the Scripts**  
-To execute DeepRBP Explainer on the **TCGA** test dataset, use a `.yaml` configuration file. Below is an example configuration file:
+To execute DeepRBP Explainer with a specific tumor type on the **TCGA** test dataset, you need to use the config file used for training the predictor model and a `config_tcga_model_explain.yaml` configuration file for the explainability:
 
-#### **Example Configuration File (`config_path_explain.yaml`)**
+#### Configuration Parameters Explanation
+**`data_paths`**
+Contains the entire test data. You can later select the tumor type using `select_category` and `sample_category`. The first parameter selects the tumor type, while the second refers to the column associated with the tumor type in your metadata CSV. In `data_paths`, you have the expression of RBPs in log2p, transcripts in log2p, and genes in TPM, along with the metadata.
+
+**`trained_model_dir`**
+Directory path to the previously trained predictive model.
+
+**`model_file`**
+The name of the trained model file.
+
+**`scaler_dir`**
+Directory where the scaler is saved (in a joblib format) along with the sigma value.
+
+**`explanation_method`**
+The method you will use to compute the TxRBP and GxRBP explainability scores. Alternatively, you can use the Pseudoknockdown method, which simulates a knockdown or knockup.
+
+**`reference_data`**
+Required only by DeepLIFT to perform calculations.
+
+**`batch_reduction_method`**
+Specifies how we collapse the dimension of the samples once we have calculated the scores for each sample. An alternative option could be `sum_scores`.
+
+**`gene_collapse_method`**
+Set to `"max_absolute_value"`, which is the method used to collapse the TxRBP scores matrix to GxRBP. This method takes the highest absolute value score among the transcripts of a gene and retains its sign.
+
+**`getBM_path`**
+Path to the file that relates gene IDs with transcript IDs and disease conditions.
+
+**`sample_category`**
+Column name in metada that refers to samples' tumor type to help filtering samples.
+
+**`select_category`**
+The specific tumor type(s) you want to select.
+
+**`disease_condition`**
+The column in the metadata to stratify on.
+
+**`select_condition`**
+Conditions for filtering the samples, such as "Primary_Tumor" or potentially including "Solid_Tissue_Normal".
+by tumor type. You could select only primary tumors or also include normal samples. You could calculate scores for 
+normal samples and then run for tumor samples in a new execution to study the differences.
+
+#### **Example Configuration File (`config_tcga_model_explain.yaml`)**
 
 ```yaml
-# src/deeprbp/configs/config_tcga_explain.yaml
-source_name: "TCGA"
-
-# Paths for the data files
 data_paths:
-  rbp_path: "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2025-01-22_100_new_good_trained_model/train_prediction_model/data/test_data/rbp_expr_tpm_df.csv"
-  isoform_expr_path: "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2025-01-22_100_new_good_trained_model/train_prediction_model/data/test_data/trans_expr_tpm_df.csv"
-  gene_expr_path: "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2025-01-22_100_new_good_trained_model/train_prediction_model/data/test_data/gene_expr_tpm_df.csv"
-  metadata_path: "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2025-01-22_100_new_good_trained_model/train_prediction_model/data/test_data/metadata_df.csv"
-  getBM_path: "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/getBM.csv"  
+  rbp_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Test/test_RBPs_log2p_tpm.csv"
+  isoform_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Test/test_trans_log2p_tpm.csv"
+  gene_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Test/test_gn_tpm.csv"
+  metadata_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Test/test_phenotype_metadata.csv"
 
-explainability:
-  trained_model_path: "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2025-01-22_100_new_good_trained_model/train_prediction_model/results"
-  model_file: "model.pt"
-  scaler_path: "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2025-01-22_100_new_good_trained_model/train_prediction_model/data/scaler_trained"
-  explanation_method: "DeepLIFT"
-  reference_data: "knockdown_reference"
-  batch_reduction_method: "t-statistic"
-  gene_collapse_method: "max_absolute_value"
-  postar_matrix_path: "/scratch/jsanchoz/DeepRBP/data/explainability_module/postar3/processed"
-  postar_file: "human_liver_GxRBP.csv"
-
-# Sample selection
+trained_model_dir: "/scratch/jsanchoz/DeepRBP/output/results/run_deeprbp_predictor/results"
+model_file: "best_model.pt"
+scaler_dir: "/scratch/jsanchoz/DeepRBP/output/results/run_deeprbp_predictor/results"
+explanation_method: "DeepLIFT" # or alternatively: Pseudoknockdown
+reference_data: "knockdown_reference" # required when explanation_method is "DeepLIFT". Alternative values: median_reference, half_reference
+batch_reduction_method: "t-statistic" # alternative value: sum_scores
+gene_collapse_method: "max_absolute_value"
+getBM_path: "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/getBM.csv"
 sample_category: "detailed_category"  # The column in metadata to stratify on
-select_samples: ["Liver_Hepatocellular_Carcinoma"]  # Can be "all" or a list of specific sample types
-output_dir: "/scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2025-01-22_100_new_good_trained_model/explain_prediction_model"  # Will be generated automatically if not specified
-plot_results: True
+disease_condition: "sample_type"
+select_category: "Liver_Hepatocellular_Carcinoma"
+select_condition: 
+  - "Primary_Tumor"
+  #- "Solid_Tissue_Normal"
+seed: 42
 ```
 
-n this configuration file, it is important to ensure that the data is in TPM format, untransformed and unscaled, and that the gene matrix is not expanded. The method will transform the data, generate the extended gene matrix, and load the scaler and trained model to initialize the explainability process. The desired samples for explainability will be filtered using the `select_samples` argument.
+```bash  
+run-deeprbp-explainer \
+  --config_path_explain "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_tcga_model_explain.yaml" \
+  --config_path_train "/scratch/jsanchoz/DeepRBP/output/results/run_deeprbp_predictor/results/config.yaml" \
+  --output_dir "/scratch/jsanchoz/DeepRBP/output/results/explainability"
+```
 
-Make sure to include the path to the configuration file used for training the predictor model (`config_path_train`).
-
-Once you have your `config_path_explain.yaml` file ready, execute the script with the following command:
-
+### **Option 2: Submit a Job in a HPC**  (DOES IT WORK????)
 ```bash
-run-deeprbp-explainer-postar \
-  --config_path_explain "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_tcga_explain.yaml" \
-  --config_path_train "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_tcga_train.yaml"
-
+cd slurm
+sbatch run_explainer.sh
 ```
+
+As a result, you will receive three CSV files containing the scores of the RBPs at the transcript level (size: number of transcripts x RBPs) and at the gene level (size: number of genes x RBPs). Additionally, there will be a results table for each RBP-Gene (transcript) interaction with the following fields: RBP ID (attached RBP), RBP name, Gene ID (selected Gene), Gene name, Transcript ID (selected transcript of that Gene), Transcript name, Transcript biotype, Score, and the number of transcripts per gene (indicating how many transcripts the gene has).
+
+
+
+
+
+
+
+(WORKING NOW ON THIS PART!!!)**
+
+#-----------------------------------TODO "09/05"----------------------
+# Ejecuta main_explainer.py con DeepLIFT y con Pseudoknock (prueba dos condiciones distintas)
+# Haz la pipeline para hacer la evaluación con Postar y plotear (en .R?)
+  # haz un subfolder 'validation': tengamos postar3 e in-silico knowndowns! 
+# Vuelve para atrás, desarrolla model y train_model para poder hacer Parallel o Lightning ( Prueba a hacer este "model_new" y "train_model_new") y ejecuta grid_search
+# - meter en el explain las sugerencias de Ángel.
+# meterse con el manuscrito
+
+para postar luego:
+postar_matrix_dir: "/scratch/jsanchoz/DeepRBP/data/explainability_module/postar3/processed"
+postar_file: "human_liver_GxRBP.csv"
+
+
+
+ <!-- # Create and train model
+    model = SuperspotsGAT(neighbors=config["neighbors"],
+                        n_genes=config["n_genes"],
+                        n_layers=config["n_layers"],
+                        loss_func=config["loss_func_name"],
+                        lambda1=config["lambda_1"],
+                        lambda2=config["lambda_2"],
+                        negative_slope=config["negative_slope"],
+                        spatial_graph=spatial_graph)
+    
+    if torch.cuda.is_available() and torch.cuda.device_count() > 1:
+        model = torch.nn.DataParallel(model)
+
+if torch.cuda.device_count() > 1:
+  model = nn.DataParallel(model)
+
+    model.to(config["device"])
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=config["learning_rate"])
+
+    history_train, history_val = model.fit_model(epochs_train=config["epochs"],
+                                                train_loader=train_loader, 
+                                                val_loader=val_loader,
+                                                optimizer=optimizer, 
+                                                save_model=False,
+                                                verbose=0) -->
+
+<!--  -->
+<!-- The difference between DistributedDataParallel and DataParallel is: DistributedDataParallel uses multiprocessing where a process is created for each GPU, while DataParallel uses multithreading. By using multiprocessing, each GPU has its dedicated process, this avoids the performance overhead caused by GIL of Python interpreter. -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #### Results Visualization (EJECUTAR ESTO AUN!!)
 After running the DeepRBP Explainer, you can visualize the results to compare scores derived from explainability techniques, such as DeepLIFT, against POSTAR experimental data. Use the following command to generate the visualization:
@@ -464,6 +568,22 @@ Rscript /scratch/jsanchoz/DeepRBP/src/deeprbp/explainability_module/results_visu
   --index_end 4 \
   --max_iterations 7
 ```
+
+# #### Results Visualization (EXECUTE THIS NOW!!)
+# # Load R and run the visualization script
+# module load R/4.3.2
+# Rscript /scratch/jsanchoz/DeepRBP/src/deeprbp/explainability_module/results_visualization/run_postar_plot_generation.R \
+#   --input_path /scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2025-01-22_100_new_good_trained_model/explain_prediction_model/results/DeepLIFT_knockdown_reference_t-statistic_max_absolute_value \
+#   --output_path /scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2025-01-22_100_new_good_trained_model/explain_prediction_model/results/DeepLIFT_knockdown_reference_t-statistic_max_absolute_value/results_visualization \
+#   --output_filename plot_score_results.pdf \
+#   --results_filename df_results_summary.csv \
+#   --list_rbps_postar_filename list_rbps_postar_ordered.csv \
+#   --list_genes_postar_filename list_genes_postar_ordered.csv \
+#   --getBM_filename getBM.csv \
+#   --save_plot TRUE \
+#   --index_start 1 \
+#   --index_end 4 \
+#   --max_iterations 7
 
 This command generates box plots illustrating the distribution of scores across different RNA Binding Proteins (RBPs) and genes, utilizing POSTAR labels for classification. Additionally, the plot displays the results of conducting a Wilcoxon test across RBPs or genes between the groups 0 and 1 of POSTAR, allowing you to assess whether the difference in medians is statistically significant.
 

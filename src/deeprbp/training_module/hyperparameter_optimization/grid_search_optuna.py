@@ -5,11 +5,13 @@ import os
 import logging
 import sys
 import argparse
-import pandas as pd
+import matplotlib.pyplot as plt
+
 import optuna
 from optuna.samplers import TPESampler
-#import optuna.visualization.matplotlib as optuna_plt ESTO PUEDO INTENTAR DESARROLLARLO TB DEL ARCHIVO DE LUIS
+import optuna.visualization.matplotlib as optuna_plt
 import optuna.logging
+
 import time
 import torch
 
@@ -18,7 +20,7 @@ from ...util.utils import print_section_separator
 
 # Define the default configuration path and output directory
 default_config_path = '/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_hyper_optimization.yaml'
-default_output_dir = '/scratch/jsanchoz/DeepRBP/stuff/hyperpameter_optimization'
+default_output_dir = '/scratch/jsanchoz/DeepRBP/output/results/hyperpameter_optimization'
 
 def parse_args():   
     parser = argparse.ArgumentParser(description='Hyperparameter optimization using Optuna.')
@@ -34,7 +36,7 @@ def parse_args():
 def main():
     args = parse_args()
     # Load, process, and scale the data
-    pipeline, train_dataset, val_dataset = load_and_process_data(args.config_path_file, args.output_dir)
+    pipeline, tensor_datasets = load_and_process_data(args.config_path_file, args.output_dir)
     # pipeline, train_dataset, val_dataset = load_and_process_data(default_config_path, default_output_dir)
 
     # Optimization with Optuna using TPESampler and MedianPruner
@@ -42,7 +44,7 @@ def main():
     study_name = "DeepRBPredictor-optimization"
     optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
 
-    pruner = optuna.pruners.MedianPruner(n_warmup_steps=5, n_startup_trials=5)    
+    pruner = optuna.pruners.MedianPruner(n_startup_trials=5, n_warmup_steps=0) # default values
     study = optuna.create_study(study_name=study_name, 
                                 sampler=TPESampler(seed=pipeline.config.get('seed')), 
                                 direction='minimize', 
@@ -50,7 +52,7 @@ def main():
 
     # Execute the optimization
     print(f"[*] Running {args.n_trials} trials...")
-    study.optimize(lambda trial: objective(trial, pipeline, train_dataset, val_dataset), n_trials=args.n_trials) 
+    study.optimize(lambda trial: objective(trial, pipeline, tensor_datasets), n_trials=args.n_trials) 
     
     # Print the results of the best trial
     print(f'Best trial: {study.best_trial}, with parameters: {study.best_params} '
@@ -63,6 +65,9 @@ def main():
     df_results.to_csv(results_file_path, index=False)
     print(f"[*] Results saved to: {results_file_path}\n")
 
+    # Visualize study history to analayze the hyperparams-performance relationship
+    visualize_study_history(study, args.output_dir)
+
 def load_and_process_data(config_path, output_dir):
     """
     Load, process, and scale the data, returning the datasets.
@@ -72,10 +77,10 @@ def load_and_process_data(config_path, output_dir):
         output_dir (str): Output directory for saving processed data.
 
     Returns:
-        tuple: pipeline, train_dataset, valid_dataset
+        tuple: pipeline, tensor_datasets (containing the train dataset in pos 0 and the valid dataset in pos 1)
     """
     # Load the data using the data importer and getBM that relates transcript_id with gene_id info
-    pipeline = DeepRBPredictorPipeline(config_path, output_dir)
+    pipeline = DeepRBPredictorPipeline(config_path, output_dir, verbose=1)
     data = pipeline.import_data() 
     # Filter a portion of the samples to optimize time and computational resources
     data_subset = pipeline.filter_samples(data)
@@ -87,8 +92,8 @@ def load_and_process_data(config_path, output_dir):
     pipeline.fit_scaler(train_data) 
     scaled_train_data, scaled_val_data = pipeline.scale_data(train_data, val_data) 
     # Create custom data sets
-    train_dataset, val_dataset = pipeline.create_datasets(scaled_train_data, scaled_val_data)
-    return pipeline, train_dataset, val_dataset
+    tensor_datasets = pipeline.create_datasets(scaled_train_data, scaled_val_data)
+    return pipeline, tensor_datasets
 
 def consolidate_metrics(train_metrics, val_metrics):
     """
@@ -113,7 +118,34 @@ def consolidate_metrics(train_metrics, val_metrics):
     }
     return combined_metrics
 
-def objective(trial, pipeline, train_dataset, val_dataset):    
+def visualize_study_history(study, path_results): 
+    print("Creating the study plots...")
+    plt.rcParams['figure.figsize'] = (20, 12)  # Tamaño grande para mejor legibilidad
+    plt.rcParams['figure.dpi'] = 300  # Alta resolución para impresión
+    # Learning curves of the trials:
+    optuna_plt.plot_intermediate_values(study)
+    plt.savefig(path_results+'/plot_intermediate_values.png', bbox_inches='tight')
+    plt.close()
+    # Optimization history
+    optuna_plt.plot_optimization_history(study)
+    plt.savefig(path_results+'/optimization_history.png', bbox_inches='tight')
+    plt.close()
+    # Visualize parallel_coordinate
+    optuna_plt.plot_parallel_coordinate(study)
+    plt.savefig(path_results+'/plot_parallel_coordinate.png', bbox_inches='tight')
+    plt.close()
+    # The cumulative probability during trials
+    optuna_plt.plot_edf(study)
+    plt.savefig(path_results+'/plot_edf.png', bbox_inches='tight')
+    plt.close()
+    # plot feature importance for algorithm parameters
+    optuna_plt.plot_param_importances(study)
+    plt.savefig(path_results+'/plot_feature_importance.png', bbox_inches='tight')
+    plt.close()
+    print("Study plots generated")
+
+def objective(trial, pipeline, tensors):
+    train_dataset, val_dataset = tensors[0], tensors[1]    
     process = psutil.Process()
     mem_before = process.memory_info().rss / (1024 ** 3)  # Memory before in GB
 
@@ -130,10 +162,7 @@ def objective(trial, pipeline, train_dataset, val_dataset):
     batch_norm_eps = trial.suggest_categorical('batch_norm_eps', [1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1]) 
     batch_norm_momentum = trial.suggest_categorical('batch_norm_momentum', [0.1, 0.5, 0.9]) 
 
-    # prueba estos valores a ver
-    # num_hidden_layers = 2; hidden1_nodes = 1024; uniform_nodes = False; node_shrink_factor = 2; 
-    # activation_func = "relu"; optimizer_name = "adamW"; learning_rate = 0.0001; train_batch_size = 128; num_epochs = 50
-
+    # Update pipeline configuration with suggested hyperparameters
     pipeline.config.update("num_hidden_layers", num_hidden_layers)
     pipeline.config.update("hidden1_nodes", hidden1_nodes)
     pipeline.config.update("uniform_nodes", uniform_nodes)
@@ -145,10 +174,9 @@ def objective(trial, pipeline, train_dataset, val_dataset):
     pipeline.config.update("num_epochs", num_epochs) 
     pipeline.config.update("batch_norm_eps", batch_norm_eps) 
     pipeline.config.update("batch_norm_momentum", batch_norm_momentum) 
-    print(pipeline.config)
     
     # Log the hyperparameters for the current trial
-    print(f"[*] Trial {trial.number}:")
+    print(f"\n[*] Trial {trial.number}:")
     print(f"    - Number of Hidden Layers: {pipeline.config.get('num_hidden_layers')}")
     print(f"    - Hidden Layer 1 Nodes: {pipeline.config.get('hidden1_nodes')}")
     print(f"    - Use Uniform Nodes: {pipeline.config.get('uniform_nodes')}")
@@ -161,7 +189,8 @@ def objective(trial, pipeline, train_dataset, val_dataset):
     print(f"    - Batch Normalization Epsilon (eps): {pipeline.config.get('batch_norm_eps')}")
     print(f"    - Batch Normalization Momentum: {pipeline.config.get('batch_norm_momentum')}")
     print("\n")
-    
+
+    metrics = {}  # Initialize metrics to avoid UnboundLocalError
     try:
         # Create DataLoader instances
         train_loader, val_loader = pipeline.create_data_loaders(train_dataset, val_dataset)
@@ -184,25 +213,37 @@ def objective(trial, pipeline, train_dataset, val_dataset):
         print("\n")
         return val_history[-1]
     
+    except optuna.TrialPruned:
+        # Handle the case where Optuna has pruned the trial.
+        print(f"Trial {trial.number} has been pruned due to poor performance.")
+        return float('inf')  # Return a high value to indicate this trial was unsuccessful
+
     except Exception as e:
         # Catch any exception raised in the try block
         print(f"Training failed due to an error: {e}")
         return float('inf')  # Return a high value to indicate this trial was unsuccessful
     
     finally:
-        # Update trial.params if the corresponding pipeline.config value is 'unused'
+        # Update trial.params if the corresponding pipeline.config value is 'unused' (creating a new user attibute)
         for key in ['hidden1_nodes', 'uniform_nodes', 'node_shrink_factor', 
                     'activation_func', 'batch_norm_eps', 'batch_norm_momentum']:
-            # Check if the pipeline.config value is 'unused' and update trial.params
-            if pipeline.config.get(key) == 'unused':
-                trial.params[key] = pipeline.config.get(key)  # Overwrite trial parameter
-        print(trial.params)
-        print("\n")
-        
-        # Log metrics to the trial
-        for key in metrics:
-            trial.set_user_attr(key, metrics[key])
+            config_value = pipeline.config.get(key)
+            print(f"Config value for {key}: {config_value}")
+            print(f"Current trial parameter for {key}: {trial.params.get(key)}")
 
+            if config_value == 'unused':
+                trial.set_user_attr(f'real_used_{key}', config_value)
+                #trial.params[key] = config_value
+                print(f"Updated trial parameter for {key} to 'unused'")
+            else:
+                print(f"Skipping update for '{key}' because it is not marked as 'unused'")
+        
+        # Log metrics to the trial if they were successfully created
+        if metrics:  # Check if metrics is not empty
+            for key in metrics:
+                trial.set_user_attr(key, metrics[key])
+            
+        print("\n")
         # Cleanup: Free resources
         pipeline.trainer = None
         torch.cuda.empty_cache()  # If using GPU, clear the cache
@@ -220,6 +261,8 @@ if __name__ == "__main__":
 # 4) si num_hidden_layers == 3 -> no hay error (con uniform_nodes = False)
 # 5) si num_hidden_layers == 4 -> si hidden1_nodes es 64 y node_shrink_factor es 8, 128, 256, 512, 1024, 2048 error! (con uniform_nodes = False)
 # return model parameters (esto mejorar luego)
+
+
 
 
  

@@ -44,12 +44,13 @@ class CustomTensorDataset(Dataset):
         self.rbp_names = data_copy[rbp_data_key].columns.tolist()
         self.gene_names = data_copy[gene_data_key].columns.tolist()
         self.trans_names = data_copy[transcript_data_key].columns.tolist()
+        ##
         # Expand the gene matrix data to match the transcript shape data 
         genes_names_each_trans = getBM[getBM[trans_col_name].isin(self.trans_names)][gene_col_name]
         data_copy[gene_data_key] = data_copy[gene_data_key].loc[:, genes_names_each_trans]
         # Store tensors for each feature
         features_data = (rbp_data_key, gene_data_key, transcript_data_key)
-        self.features = {feature: torch.tensor(data_copy[f"{feature}"].values, dtype=torch.float64) for feature in features_data}
+        self.features = {feature: torch.tensor(data_copy[f"{feature}"].values, dtype=torch.float32) for feature in features_data} # CHANGED THIS TO FLOAT32 JOSEBA!
         # Log the features and their shapes for debugging
         self.logger.log("Features stored in the dataset:", level=1)
         for feature, tensor in self.features.items():
