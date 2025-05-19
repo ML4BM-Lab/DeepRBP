@@ -16,7 +16,6 @@ cuda: True
 print_every: 5
 train_batch_size: 128
 val_batch_size: 256
-num_epochs: 10 # 100
 num_hidden_layers: 1
 hidden1_nodes: 64
 uniform_nodes: False
@@ -25,6 +24,7 @@ activation_func: relu
 learning_rate: 0.001
 optimizer_name: adamW
 plot_results: True
-save_results: True
-save_best_model: True
+
+#save_results: True
+
 

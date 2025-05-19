@@ -20,7 +20,6 @@ save_best_model: true
 save_results: true
 seed: 42
 test_fraction: 0.2
-train_batch_size: 128
 trans_col_name: Transcript_ID
 uniform_nodes: unused
 val_batch_size: 256

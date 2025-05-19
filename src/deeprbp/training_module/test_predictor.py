@@ -33,5 +33,19 @@ def main():
 if __name__ == "__main__":
     main()
 
+# CHANGE THIS WHOLE CODE
+# mira q ahora va a ser asi: 
+ # Si se necesita escalar los datos, realiza la operación aquí
+        # scaled_test_data = self.scale_data(test_data)  # Método que deberías implementar para escalar
 
+        # # Crear el TensorDataset para los datos de test
+        # test_dataset = self.create_tensor_dataset(scaled_test_data)
 
+        # # Crear el DataLoader para los datos de test
+        # test_loader = self.create_data_loader(test_dataset, batch_size=self.val_batch_size, shuffle=False, drop_last=False)
+        
+       # Test on final datasets
+
+# Evaluate general
+# (inserta codigo aquí bro)
+#trainer.test(model, sparseGO_data)

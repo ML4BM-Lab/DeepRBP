@@ -252,15 +252,6 @@ def objective(trial, pipeline, tensors):
 if __name__ == "__main__":
     main()
 
-# The authors should provide the full table of results for the hyperparameter optimization runs
-# to be able to validate the claim that more complex models (more hidden layers) are necessary.
-# Verify that the suggested trial is elegible
-# 1) si num_hidden_layers == 0 -> hidden1_nodes, uniform_nodes, node_shrink_factor y activation_func no aplican "not_used" (bien)
-# 2) si num_hidden_layers == 1 -> uniform_nodes y node_shrink_factor no aplican "not_used" (bien)
-# 3) si num_hidden_layers == 2 -> uniform_nodes no aplica "not_used" (bien)
-# 4) si num_hidden_layers == 3 -> no hay error (con uniform_nodes = False)
-# 5) si num_hidden_layers == 4 -> si hidden1_nodes es 64 y node_shrink_factor es 8, 128, 256, 512, 1024, 2048 error! (con uniform_nodes = False)
-# return model parameters (esto mejorar luego)
 
 
 

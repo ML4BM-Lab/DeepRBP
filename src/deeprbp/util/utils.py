@@ -3,63 +3,15 @@
 import pandas as pd
 import torch
 from torchinfo import summary
-from torch.utils.data import Dataset
 from typing import List, Dict, Optional
 import os
+import GPUtil
+import random
+import numpy as np
+import torch
+import pytorch_lightning as pl
+import re
 
-from ..util.logger import Logger
-
-class CustomTensorDataset(Dataset):
-    def __init__(self, 
-                 data: dict, 
-                 getBM: pd.DataFrame, 
-                 rbp_data_key: str = 'scaled_rbp_df', 
-                 gene_data_key: str = 'gene_df', 
-                 transcript_data_key: str = 'isoform_df',
-                 trans_col_name: str = 'Transcript_ID',
-                 gene_col_name: str = 'Gene_ID',
-                 verbose: int = 0):
-        """
-        Custom dataset for loading RBP, gene, and transcript expressions.
-
-        Parameters:
-        - data: Dictionary containing the DataFrames for RBP, gene, and transcript expressions.
-        - getBM: DataFrame containing Transcript_IDs and associated Gene_IDs.
-        - rbp_data_key: The name of the DataFrame column for RBP features.
-        - gene_data_key: The name of the DataFrame column for gene expression features.
-        - transcript_data_key: The name of the DataFrame column for transcript expression features.
-        - gene_col_name: The name of the column in getBM that contains the Gene IDs.
-        - trans_col_name: The name of the column in getBM that contains the Transcript IDs.
-        - verbose (int, optional): Verbosity level for logging. Controls the amount of information printed during dataset initialization.
-            - 0: No logging (suppress all output).
-            - 1: Basic logging (show feature names and their shapes).
-        """
-        self.logger = Logger(verbose=verbose) 
-        for key in [rbp_data_key, gene_data_key, transcript_data_key]:
-            if key not in data:
-                raise KeyError(f"{key} not found in data.")
-        self.original_data = {key: df.copy() for key, df in data.items()} # Original data
-        data_copy = {key: df.copy() for key, df in data.items()}
-        # Automatically detect the feature names from the DataFrames
-        self.rbp_names = data_copy[rbp_data_key].columns.tolist()
-        self.gene_names = data_copy[gene_data_key].columns.tolist()
-        self.trans_names = data_copy[transcript_data_key].columns.tolist()
-        ##
-        # Expand the gene matrix data to match the transcript shape data 
-        genes_names_each_trans = getBM[getBM[trans_col_name].isin(self.trans_names)][gene_col_name]
-        data_copy[gene_data_key] = data_copy[gene_data_key].loc[:, genes_names_each_trans]
-        # Store tensors for each feature
-        features_data = (rbp_data_key, gene_data_key, transcript_data_key)
-        self.features = {feature: torch.tensor(data_copy[f"{feature}"].values, dtype=torch.float32) for feature in features_data} # CHANGED THIS TO FLOAT32 JOSEBA!
-        # Log the features and their shapes for debugging
-        self.logger.log("Features stored in the dataset:", level=1)
-        for feature, tensor in self.features.items():
-            self.logger.log(f"{feature}: {tensor} | Shape: {tensor.shape}", level=1)  # Log each feature tensor and its shape
-    def __len__(self) -> int:
-        return len(next(iter(self.features.values())))
-    def __getitem__(self, idx: int):
-        return {feature: values[idx] for feature, values in self.features.items()}
-    
 def print_section_separator(char="═", width=50):
     """
     Prints a decorative separator line with a minimalist design.
@@ -203,38 +155,82 @@ def calculate_category_proportions(data: Dict[str, pd.DataFrame]) -> pd.DataFram
     category_proportions.columns = ['detailed_category', 'proportion']
     return category_proportions
 
-def summarize_model(model, train_loader, batch_size, device='cpu'):
-    """
-    Generates dummy inputs based on the training data and summarizes the model.
+# def format_output(data):
+#     """Format the output to always return a single object if data is formed by a single dataset or a list otherwise.
+
+#     Args:
+#         data (list): The data to format.
+
+#     Returns:
+#         data: A single object (dict or object) if the input is a single dataset, or a list of dictionaries or objects if multiple datasets.
+#     """
+#     if isinstance(data, list) and len(data) == 1:
+#         return data[0]  # Return the single item 
+#     return data  # Return as a list for multiple items
+
+def print_gpu_memory_info():
+    # Get the list of GPUs
+    gpus = GPUtil.getGPUs()
+    # Iterate over the GPUs and print their details
+    for gpu in gpus:
+        memory_free_gb = gpu.memoryFree / 1024  # Convert free memory to GB
+        memory_used_gb = gpu.memoryUsed / 1024  # Convert used memory to GB
+        gpu_load_percentage = gpu.load * 100  # Convert GPU load to percentage
+        print(f"GPU: {gpu.id} {gpu.name} | Memory Free: {memory_free_gb:.2f} GB | Memory Used: {memory_used_gb:.2f} GB | GPU Load: {gpu_load_percentage:.2f}%")
+    print()  # Empty line for better readability
+
+def set_random_seed(seed=123):
+    """Sets the random seed for reproducibility in training.
 
     Args:
-        model: The model to summarize.
-        train_loader: The DataLoader for the training dataset.
-        batch_size: The batch size to use for the dummy inputs.
-        device: The device to which the inputs should be sent ('cpu' or 'cuda').
-
-    Returns:
-        None
+        seed (int): The seed value to set for random number generators.
     """
-    # Create dummy inputs
-    rbp_input_size = next(iter(train_loader))['scaled_rbp_df'].shape[1]  # Number of features for rbp_df
-    gene_input_size = next(iter(train_loader))['gene_df'].shape[1]      # Number of features for gene_df
-    # Generate dummy inputs
-    dummy_rbp = torch.randn(batch_size, rbp_input_size).to(device)  # Use 'cpu' or 'cuda' based on your setup
-    dummy_gene = torch.randn(batch_size, gene_input_size).to(device)  # Use 'cpu' or 'cuda' based on your setup
-    # Use torchinfo to summarize the model
-    summary(model, input_data=(dummy_rbp, dummy_gene))
+    # Ensure that training is as reproducible as possible
+    torch.manual_seed(seed)  # Random seed for CPU tensors
+    torch.cuda.manual_seed_all(seed)  # Seed for generating random numbers for the current GPU
+    torch.backends.cudnn.deterministic = True  # Ensure deterministic computations
+    torch.backends.cudnn.benchmark = False
+    random.seed(seed)
+    np.random.seed(seed)
+    os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'  # Set the environment variable for deterministic behavior
+    pl.seed_everything(seed, workers=seed)  # Set seed for PyTorch Lightning
+    # Set PyTorch print options
+    torch.set_printoptions(precision=5, threshold=10_000)
 
-def format_output(data):
-    """Format the output to always return a single object if data is formed by a single dataset or a list otherwise.
+def find_latest_checkpoint(checkpoint_dir: str) -> str:
+    """Function to find the latest checkpoint file in the specified directory"""
+    # List all files in the checkpoint directory
+    files = os.listdir(checkpoint_dir)
+    # Filter for files that end with .ckpt
+    ckpt_files = [f for f in files if f.endswith('.ckpt')]
+    # Check if there's exactly one checkpoint file
+    if len(ckpt_files) == 1:
+        return os.path.join(checkpoint_dir, ckpt_files[0])
+    else:
+        raise ValueError(f"Expected one checkpoint file in {checkpoint_dir}, found: {len(ckpt_files)}")
 
-    Args:
-        data (list): The data to format.
-
-    Returns:
-        data: A single object (dict or object) if the input is a single dataset, or a list of dictionaries or objects if multiple datasets.
-    """
-    if isinstance(data, list) and len(data) == 1:
-        return data[0]  # Return the single item 
-    return data  # Return as a list for multiple items
-
+def find_best_checkpoint(checkpoint_dir: str) -> str:
+    """Function to find the checkpoint file with the lowest validation loss in the specified directory."""
+    # List all files in the checkpoint directory
+    files = os.listdir(checkpoint_dir)
+    # Filter for files that end with .ckpt and extract val_loss
+    ckpt_files = [f for f in files if f.endswith('.ckpt')]
+    # Dictionary to hold filename and corresponding val_loss
+    val_loss_dict = {}
+    for f in ckpt_files:
+        # Use regex to extract the val_loss value from the filename
+        match = re.search(r'val_loss=([0-9.]+)', f)
+        if match:
+            # Clean the val_loss string to avoid conversion errors
+            val_loss_str = match.group(1).rstrip('.')  # Remove any trailing dot
+            try:
+                val_loss = float(val_loss_str)
+                val_loss_dict[f] = val_loss
+            except ValueError:
+                print(f"Skipping file {f} due to conversion error.")
+    # Check if there are any checkpoint files found
+    if not val_loss_dict:
+        raise ValueError(f"No valid checkpoint files found in {checkpoint_dir}")
+    # Find the checkpoint file with the minimum val_loss
+    best_ckpt_file = min(val_loss_dict, key=val_loss_dict.get)
+    return os.path.join(checkpoint_dir, best_ckpt_file)

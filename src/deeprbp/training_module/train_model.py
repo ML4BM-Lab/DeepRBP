@@ -154,7 +154,7 @@ class TrainPredictor:
                 val_loss = self.model.validate_step(rbp_expr, targets, gen_expr)  # Validation step
                 val_losses.append(val_loss)
         return torch.stack(val_losses).mean().item() # Average validation loss
-    def fit(self, train_loader, val_loader, epochs, path_save_results=None, optuna_trial=None):
+    def fit(self, train_loader, val_loader, epochs, path_save_results=None, optuna_trial=None): # de aqui aun los model checkpoint y los callbacks de optuna hay que meterlos en la version new.
         """
         Trains the model for a specified number of epochs.
 

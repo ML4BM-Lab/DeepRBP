@@ -67,6 +67,7 @@ class PredictorModel(nn.Module):
         self.optimizer_name = self.config.get('optimizer_name')
         self.batch_norm_eps = self.config.get('batch_norm_eps', 1e-5)   
         self.batch_norm_momentum = self.config.get('batch_norm_momentum', 0.1) 
+
         # Initialize the variable usage tracking
         self.variable_usage = {
             'hidden1_nodes': False,
@@ -88,6 +89,7 @@ class PredictorModel(nn.Module):
         self._print_used_variables()
         self._update_unused_variables()
         self._print_model_architecture()
+
     def _configure_layers(self):
         """Configures the hidden and output layers based on model configuration."""
         if self.num_hidden_layers > 0:
@@ -119,6 +121,7 @@ class PredictorModel(nn.Module):
         # Add the activation layer for the output
         self.output_activation = nn.Sigmoid()
         self.add_module('output_activation', self.output_activation)
+        
     def _print_model_architecture(self):
         """Prints a high-level overview of the model architecture."""
         print("Model architecture:")

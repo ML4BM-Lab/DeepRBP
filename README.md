@@ -235,7 +235,6 @@ cuda: True
 print_every: 5
 train_batch_size: 128
 val_batch_size: 256
-num_epochs: 100
 num_hidden_layers: 2 # Number of hidden layers
 hidden1_nodes: 64 # Number of nodes in first hidden layer
 uniform_nodes: False 
@@ -244,8 +243,6 @@ activation_func: relu
 learning_rate: 0.001
 optimizer_name: adamW
 plot_results: True
-save_results: True
-save_best_model: True
 ```
 
 where, (EXPLAIN MORE THIS JOSEBA PLEASE)
@@ -264,17 +261,40 @@ Once the config.yaml file is ready, execute the script as follows, specifying th
 ```bash
 run-deeprbp-predictor \
   --config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_tcga_model_train.yaml" \
-  --output_dir "/scratch/jsanchoz/DeepRBP/output/results/run_deeprbp_predictor"
+  --output_dir "/scratch/jsanchoz/DeepRBP/output/results/run_deeprbp_predictor" \
+  --epochs 1000
+  --num_workers 4
+  --min_delta 0.001
+  --patience 30
 ```
 
+### Explanation of Arguments
+- **`--config_path`** (`type: str`, `required: True`): 
+This argument specifies the path to the configuration file (config.yaml) that contains the settings and parameters for the DeepRBP training process. Ensure the path is correctly set to avoid errors during execution.
+
+- **`--output_dir`** (`type: str`, `required: True`): 
+This argument defines the directory where you want to save the results of the training process.  
+
+- **`--epochs`** (`type: int`, `default: 10`):  
+This argument sets the number of training epochs for the model. 
+
+- **`--num_workers`** (`type: int`, `default: 0`):
+This argument specifies the number of worker threads to use for loading the data in the DataLoader. Increasing the number of workers can speed up data loading, especially with larger datasets. By default, it is set to 0, meaning that data loading will occur in the main thread.
+
+- **`--min_delta`** (`type: float`, `default: 0.001`): 
+This argument sets the minimum change in the monitored quantity (like validation loss) that qualifies as an improvement for the purpose of early stopping. If the change is less than this value, the training will not be considered improved.
+
+- **`--patience`** (`type: int`, `default: 30`): 
+This argument determines how many epochs to wait after the last improvement before stopping the training process early. If no improvement is observed for the specified number of epochs, training will be halted to prevent overfitting.
+
 ### Option 2: Submit a Job in a HPC
-If the number of training datasets or the total number of samples is high, we recommend submitting the job using the provided `run_predictor_pipeline.sh` script from the cluster directory. 
+If the number of training datasets or the total number of samples is high, we recommend submitting the job using the provided `run_predictor.sh` script from the cluster directory. 
 This script is adapted to Slurm, but can be easily modified to work on SGE. 
 The specific parameters should be adapted depending on the specifications of the HPC.
 
 ```bash
 cd slurm
-sbatch run_predictor_pipeline.sh
+sbatch run_predictor.sh
 ```
 ### Option 3: Running with Docker
 ## (work to do here)
@@ -463,146 +483,95 @@ seed: 42
 
 ```bash  
 run-deeprbp-explainer \
-  --config_path_explain "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_tcga_model_explain.yaml" \
+  --config_path_explain "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_tcga_model_explain_deeplift_knock_t_stat.yaml" \
   --config_path_train "/scratch/jsanchoz/DeepRBP/output/results/run_deeprbp_predictor/results/config.yaml" \
-  --output_dir "/scratch/jsanchoz/DeepRBP/output/results/explainability"
+  --output_dir "/scratch/jsanchoz/DeepRBP/output/results/explainability_deeplift_knock_t_stat"
 ```
 
-### **Option 2: Submit a Job in a HPC**  (DOES IT WORK????)
+### **Option 2: Submit a Job in a HPC**   
 ```bash
 cd slurm
 sbatch run_explainer.sh
 ```
 
+### Option 3: Running with Docker
+## (work to do here)
+--- -->
+
 As a result, you will receive three CSV files containing the scores of the RBPs at the transcript level (size: number of transcripts x RBPs) and at the gene level (size: number of genes x RBPs). Additionally, there will be a results table for each RBP-Gene (transcript) interaction with the following fields: RBP ID (attached RBP), RBP name, Gene ID (selected Gene), Gene name, Transcript ID (selected transcript of that Gene), Transcript name, Transcript biotype, Score, and the number of transcripts per gene (indicating how many transcripts the gene has).
 
+## Evaluation of Explainability Scores Using POSTAR
+For evaluating explainability scores against POSTAR experimental data, the `run-postar-validator`command facilitates this process by integrating explainability scores with POSTAR data, allowing for validation and analysis of the results.
 
+To run the POSTAR validator, use the following command:
 
+```bash  
+run-postar-validator \
+  --postar_matrix_dir "/scratch/jsanchoz/DeepRBP/data/explainability_module/postar3/processed" \
+  --postar_file "human_liver_GxRBP.csv" \
+  --scores_result_dir "/scratch/jsanchoz/DeepRBP/output/results/explainability_deeplift_knock_t_stat/results" \
+  --output_dir "/scratch/jsanchoz/DeepRBP/output/results/explainability_deeplift_knock_t_stat/results"
+```
 
+### Command-Line Arguments
+The following command-line arguments are required to execute the script:
 
+- `--postar_matrix_dir` (str): Directory path to the POSTAR matrix. This directory should contain the POSTAR data files needed for validation.
+- `--postar_file` (str): Filename of the POSTAR binary matrix. This file should be in the format of genes x RNA Binding Proteins (RBPs).
+- `--scores_result_dir` (str): Directory path for the scores matrices and results table. This directory should contain the explainability scores that you want to evaluate.
+- `--output_dir` (str): Directory path where validation results will be saved. The results of the validation will be stored in this directory.
+- `--verbose` (int, default=1): Verbosity level for logging messages. Adjust this parameter to control the amount of information logged during the execution (default is 1 for minimal logging).
 
+### Results Visualization (locally)
+After running the DeepRBP Explainer, you can visualize the results to compare scores derived from explainability techniques, such as DeepLIFT, against POSTAR experimental data.
 
-(WORKING NOW ON THIS PART!!!)**
+Among other things, this script performs a Wilcoxon test at the gene level and a test at the RBP level to see if the difference between the POSTAR values of 0 ("Not Binding") and 1 ("Binding") is statistically significant. Then it plots the results.
 
-#-----------------------------------TODO "09/05"----------------------
-# Ejecuta main_explainer.py con DeepLIFT y con Pseudoknock (prueba dos condiciones distintas)
-# Haz la pipeline para hacer la evaluación con Postar y plotear (en .R?)
-  # haz un subfolder 'validation': tengamos postar3 e in-silico knowndowns! 
-# Vuelve para atrás, desarrolla model y train_model para poder hacer Parallel o Lightning ( Prueba a hacer este "model_new" y "train_model_new") y ejecuta grid_search
-# - meter en el explain las sugerencias de Ángel.
-# meterse con el manuscrito
-
-para postar luego:
-postar_matrix_dir: "/scratch/jsanchoz/DeepRBP/data/explainability_module/postar3/processed"
-postar_file: "human_liver_GxRBP.csv"
-
-
-
- <!-- # Create and train model
-    model = SuperspotsGAT(neighbors=config["neighbors"],
-                        n_genes=config["n_genes"],
-                        n_layers=config["n_layers"],
-                        loss_func=config["loss_func_name"],
-                        lambda1=config["lambda_1"],
-                        lambda2=config["lambda_2"],
-                        negative_slope=config["negative_slope"],
-                        spatial_graph=spatial_graph)
-    
-    if torch.cuda.is_available() and torch.cuda.device_count() > 1:
-        model = torch.nn.DataParallel(model)
-
-if torch.cuda.device_count() > 1:
-  model = nn.DataParallel(model)
-
-    model.to(config["device"])
-
-    optimizer = torch.optim.Adam(model.parameters(), lr=config["learning_rate"])
-
-    history_train, history_val = model.fit_model(epochs_train=config["epochs"],
-                                                train_loader=train_loader, 
-                                                val_loader=val_loader,
-                                                optimizer=optimizer, 
-                                                save_model=False,
-                                                verbose=0) -->
-
-<!--  -->
-<!-- The difference between DistributedDataParallel and DataParallel is: DistributedDataParallel uses multiprocessing where a process is created for each GPU, while DataParallel uses multithreading. By using multiprocessing, each GPU has its dedicated process, this avoids the performance overhead caused by GIL of Python interpreter. -->
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#### Results Visualization (EJECUTAR ESTO AUN!!)
-After running the DeepRBP Explainer, you can visualize the results to compare scores derived from explainability techniques, such as DeepLIFT, against POSTAR experimental data. Use the following command to generate the visualization:
+Use the following command to generate the visualization:
 
 ```bash
 module load R/4.3.2
-Rscript /scratch/jsanchoz/DeepRBP/src/deeprbp/explainability_module/results_visualization/run_postar_plot_generation.R \
-  --input_path /scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2025-01-22_100_new_good_trained_model/explain_prediction_model/results/DeepLIFT_knockdown_reference_t-statistic_max_absolute_value \
-  --output_path /scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2025-01-22_100_new_good_trained_model/explain_prediction_model/results/DeepLIFT_knockdown_reference_t-statistic_max_absolute_value/results_visualization \
-  --output_filename plot_score_results.pdf \
-  --results_filename df_results_summary.csv \
-  --list_rbps_postar_filename list_rbps_postar_ordered.csv \
-  --list_genes_postar_filename list_genes_postar_ordered.csv \
-  --getBM_filename getBM.csv \
+Rscript /scratch/jsanchoz/DeepRBP/src/deeprbp/explainability_module/postar_validation/run_postar_plot_generation.R \
+  --input_path "/scratch/jsanchoz/DeepRBP/output/results/explainability_deeplift_knock_t_stat/results/postar_validation" \
+  --results_filename "result_table_completed.csv" \
+  --count_genes_per_rbp_file "count_genes_per_rbp.csv" \
+  --count_rbps_per_gen_file "count_rbps_per_gen.csv" \
+  --getBM_path "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/getBM.csv" \
+  --getBM_filename "getBM.csv" \
+  --output_path "/scratch/jsanchoz/DeepRBP/output/results/explainability_deeplift_knock_t_stat/results/postar_validation" \
+  --output_filename "plot_score_results.pdf" \
   --save_plot TRUE \
   --index_start 1 \
   --index_end 4 \
   --max_iterations 7
 ```
 
-# #### Results Visualization (EXECUTE THIS NOW!!)
-# # Load R and run the visualization script
-# module load R/4.3.2
-# Rscript /scratch/jsanchoz/DeepRBP/src/deeprbp/explainability_module/results_visualization/run_postar_plot_generation.R \
-#   --input_path /scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2025-01-22_100_new_good_trained_model/explain_prediction_model/results/DeepLIFT_knockdown_reference_t-statistic_max_absolute_value \
-#   --output_path /scratch/jsanchoz/DeepRBP/output/results/analysis/TCGA_all_2025-01-22_100_new_good_trained_model/explain_prediction_model/results/DeepLIFT_knockdown_reference_t-statistic_max_absolute_value/results_visualization \
-#   --output_filename plot_score_results.pdf \
-#   --results_filename df_results_summary.csv \
-#   --list_rbps_postar_filename list_rbps_postar_ordered.csv \
-#   --list_genes_postar_filename list_genes_postar_ordered.csv \
-#   --getBM_filename getBM.csv \
-#   --save_plot TRUE \
-#   --index_start 1 \
-#   --index_end 4 \
-#   --max_iterations 7
+This command generates box plots illustrating the distribution of scores across different RNA Binding Proteins (RBPs) and genes, utilizing POSTAR labels for classification. Additionally, the plot displays the results of conducting a Wilcoxon test across RBPs or genes between the groups 0 and 1 of POSTAR, allowing you to assess whether the difference in medians is statistically significant. You can see the results obtained in the Wilcoxon test in `stat_test_rbps.csv`and `stat_test_genes.csv`.
 
-This command generates box plots illustrating the distribution of scores across different RNA Binding Proteins (RBPs) and genes, utilizing POSTAR labels for classification. Additionally, the plot displays the results of conducting a Wilcoxon test across RBPs or genes between the groups 0 and 1 of POSTAR, allowing you to assess whether the difference in medians is statistically significant.
+- **Binding**: Indicates that the gene is regulated by the RBP (Postar_Score = 1).
+- **Not Binding**: Indicates that the gene is not regulated by the RBP (Postar_Score = 0).
+- **Unknown**: Indicates that there is insufficient data to determine the binding status (Postar_Score = N/A).
 
 ## Parameters
 The parameters, in order, are as follows:
 - **`input_path`**:  
   A character string specifying the path to the input files.
+- **`results_filename`**:  
+  A character string indicating the name of the results file (CSV) that contains the calculated scores.
+- **`count_genes_per_rbp_file`**:  
+  A character string indicating the name of the file (CSV) that contains the number of genes per RBP in Postar ordered by positive rbp 
+  gene interactions in decreasing order
+- **`count_rbps_per_gen_file`**:  
+  A character string indicating the name of the file (CSV) that contains the number of rbps per Gene in Postar ordered by positive rbp
+  gene interactions in decreasing order
+- **`getBM_path`**:  
+  A character string indicating the path of the getBM file (CSV) that contains gene ID mappings.
+- **`getBM_filename`**:  
+  A character string indicating the name of the getBM file (CSV) that contains gene ID mappings.
 - **`output_path`**:  
   A character string specifying the path where the output files will be saved.
 - **`output_filename`**:  
   A character string indicating the name of the output file (including the extension).
-- **`results_filename`**:  
-  A character string indicating the name of the results file (CSV) that contains the calculated scores.
-- **`list_rbps_postar_filename`**:  
-  A character string indicating the name of the RBP list file, ordered in descending order by the number of positive regulations associated with that RBP in POSTAR (CSV).
-- **`list_genes_postar_filename`**:  
-  A character string indicating the name of the gene list file, ordered in descending order by the number of positive regulations associated with that gene in POSTAR (CSV).
-- **`getBM_filename`**:  
-  A character string indicating the name of the getBM file (CSV) that contains gene ID mappings.
 - **`save_plot`**:  
   A logical value indicating whether to save the plot as a PDF. Default is `TRUE`.
 - **`index_start`**:  
@@ -613,29 +582,22 @@ The parameters, in order, are as follows:
   An integer specifying the maximum number of iterations for processing RBPs and genes for plotting. Default is `5`.
 
 
-### Option 2: Submit a Job in a HPC (EJECUTAR ESTO AUN!!)
-If the number of training datasets or the total number of samples is high, we recommend submitting the job using the provided `run_explainer_pipeline.sh` script from the cluster directory. 
-This script is adapted to Slurm, but can be easily modified to work on SGE. 
-The specific parameters should be adapted depending on the specifications of the HPC.
-
-```bash
-cd slurm
-sbatch run_explainer_postar_pipeline.sh
-```
-The above script takes care of executing the DeepRBP Explainer, validating the results with the appropriate POSTAR matrix, and generating the visualization plots. This allows you to automate the entire analysis and visualization process efficiently in a high-performance computing environment.
-
-### Option 3: Running with Docker
-## (work to do here)
---- -->
 
 
 
-# ME QUEDA LUEGO HACER UN GET_POTENTIAL_CANDIDATES A PARTIR DE UN DF_SUMMARY. Y RESULTADOS DE DEG.
-# ME QUEDA PODER USAR DEEPRBPEXPLAINER PARA REAL KDS DATA (EL GET INPUT DATA HAY Q HACERLO TB PARA ESTOS)
-# ME QUEDA QUE EL PREP_MODEL_INPUTS COJA LOS COUNTS DE LOS TRANS Y TODOS LOS GENES.
-# hacer el pseucode.py y que el deeplift_handler pueda trabajar con todos los casos.
-# hacer merge de este branch en git y publicar la versión!
-# hacer notebooks!
+
+
+
+
+
+
+
+
+
+(WORKING NOW ON THIS PART!!!)**
+
+
+
 
 
 
@@ -778,3 +740,11 @@ src/  # Main code for the DeepRBP package
 ├── README.md  # Instrucciones y documentación del proyecto
 ├── .gitignore  # Archivos y carpetas a ignorar en el control de versiones
 └── setup.py  # Script de instalación para el paquete DeepRBP
+
+
+# ME QUEDA LUEGO HACER UN GET_POTENTIAL_CANDIDATES A PARTIR DE UN DF_SUMMARY. Y RESULTADOS DE DEG.
+# ME QUEDA PODER USAR DEEPRBPEXPLAINER PARA REAL KDS DATA (EL GET INPUT DATA HAY Q HACERLO TB PARA ESTOS)
+# ME QUEDA QUE EL PREP_MODEL_INPUTS COJA LOS COUNTS DE LOS TRANS Y TODOS LOS GENES.
+# hacer el pseucode.py y que el deeplift_handler pueda trabajar con todos los casos.
+# hacer merge de este branch en git y publicar la versión!
+# hacer notebooks!
