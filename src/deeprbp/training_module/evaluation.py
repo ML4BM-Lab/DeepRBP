@@ -13,7 +13,7 @@ import lightning as L
 from ..util.utils import adjust_batch_size, filter_data_by_sample_ids
 from .preds2visualization import scatter_real_vs_pred, plot_transcript_to_gene_ratio_distributions
 
-from ..data_preparation.prepare_data import myTensorDataset
+from ..data_preparation.prepare_data import DeepRBPExpressionDataset
 
 def calculate_general_metrics(predictions, true_values):  
     """
@@ -63,6 +63,8 @@ def spearmanr_per_gene(gene_names, getBM, trans_names, outputs, labels): # new
     gene_corrs_dict_max = {}
     nan_count_genes = 0  # Counter for NaN correlations
     nan_count_max_trans = 0  # Counter for NaN max transcript correlations
+    
+    # Loop through each gene to calculate Spearman correlations
     for gene_id in gene_names:
         related_transcripts = getBM[getBM['Gene_ID'] == gene_id]['Transcript_ID'].values
         # Find and filter the indices of the related transcripts in predictions and actual values tensor
@@ -93,8 +95,10 @@ def spearmanr_per_gene(gene_names, getBM, trans_names, outputs, labels): # new
     corrs_max = [corr for corr in gene_corrs_dict_max.values() if not np.isnan(corr)]
     mean_corr_max = np.mean(corrs_max) 
     # Print the results about NaN exclusions
-    print(f"Excluded {nan_count_genes} gene correlations due to NaN values.")
-    print(f"Excluded {nan_count_max_trans} maximum transcript correlations due to NaN values.")
+    if nan_count_genes > 0:
+        print(f"\n[spearmanr_per_gene] Excluded {nan_count_genes} gene correlations due to NaN values.")
+    if nan_count_max_trans > 0:
+        print(f"[spearmanr_per_gene] Excluded {nan_count_max_trans} maximum transcript correlations due to NaN values.\n")
     return {
         'mean_corr': mean_corr,
         'gene_corrs_dict': gene_corrs_dict,
@@ -104,13 +108,11 @@ def spearmanr_per_gene(gene_names, getBM, trans_names, outputs, labels): # new
 
 def evaluate_and_visualize_metrics_by_category(  
     test_data: Dict[str, pd.DataFrame], 
-    sample_category: str,
     trainer: L.Trainer,
     model: L.LightningModule,
-    batch_size: int,
+    dm: L.LightningDataModule,
     output_dir: str,
     set_name: str,
-    getBM: pd.DataFrame,
     plot_results: bool) -> List[Dict[str, float]]:
     """
     Evaluates metrics for each category in a dataset and optionally plots the results.
@@ -121,40 +123,43 @@ def evaluate_and_visualize_metrics_by_category(
     Args:
         test_data (Dict[str, pd.DataFrame]): A dictionary containing the dataset to test, 
                                               including metadata, scaled features, and true labels.
-        sample_category (str): Column name in the metadata DataFrame of test data that has the information 
-                               of the sample category.
         trainer (L.Trainer): PyTorch Lightning Trainer object to handle the prediction process.
         model (L.LightningModule): PyTorch Lightning model object to be used for making predictions.
-        batch_size (int): Number of samples per batch to use during prediction.
+        dm (L.LightningDataModule): An instance of DeepRBPDataModule used for managing data loading and preparation, 
+                                providing a consistent interface for accessing datasets.
         output_dir (str): Directory path to save results and plots.
         set_name (str): Name of the dataset being processed (e.g., 'validation', 'test').
-        getBM (pd.DataFrame, optional): DataFrame for mapping transcripts to genes; defaults to None.
         plot_results (bool): A flag indicating whether to generate and save visualizations of the results. 
                              If True, scatter plots and histograms will be created and saved in the output directory.
     Returns:
         List[Dict[str, float]]: List of metrics dictionaries, one for each category.
     """
     metadata_df = test_data['metadata_df'].copy()
-    categories = metadata_df[sample_category].unique().tolist()
+    categories = metadata_df[dm.sample_category].unique().tolist()
     # Initialize a list to store results
     results_list = []
     # Use tqdm to create a progress bar for processing categories
     for category in tqdm(categories, desc="Processing categories", unit="category"):
-        print(f"Currently processing category: {category}")
+        print(f"\n[evaluate_and_visualize_metrics_by_category] 🚀 Currently processing category: {category}")
+        
         # Filter samples for the current category
-        category_samples = metadata_df.loc[metadata_df[sample_category] == category].index
+        category_samples = metadata_df.loc[metadata_df[dm.sample_category] == category].index
         # Create a copy of the test data to avoid modifying the original data
         test_data_copy = {key: df.copy() for key, df in test_data.items()}
         # Filter test data for selected samples
         test_subset = filter_data_by_sample_ids(data=test_data_copy, selected_sample_ids=category_samples)
+        
         # Create DataLoader
-        test_subdataset = myTensorDataset(test_subset, getBM)
+        test_subdataset = DeepRBPExpressionDataset(test_subset, dm.getBM)
         test_loader = DataLoader(
             test_subdataset,
-            batch_size=adjust_batch_size(test_subdataset, batch_size)
+            batch_size=len(test_subdataset) #adjust_batch_size(test_subdataset, batch_size)
         )
         # Generate predictions
-        results = trainer.predict(model, dataloaders=test_loader)
+        print(f"[evaluate_and_visualize_metrics_by_category] 🔮 Generating predictions for category '{category}'...")
+        #results = trainer.predict(model, dataloaders=test_loader)
+        results = trainer.predict(model, dataloaders=dm.predict_dataloader(mode='predict', custom_loader=test_loader))
+
         true_values = []
         predictions = []
         for preds, labels in results:
@@ -166,7 +171,7 @@ def evaluate_and_visualize_metrics_by_category(
         # Calculate metrics
         metrics_general = calculate_general_metrics(predictions.flatten(), true_values.flatten())  
         metrics_per_gene = spearmanr_per_gene(test_subdataset.gene_names,
-                                              getBM,
+                                              dm.getBM,
                                               test_subdataset.trans_names, 
                                               predictions, true_values)
         # Collect results for the current category
@@ -179,18 +184,22 @@ def evaluate_and_visualize_metrics_by_category(
             'mean_corr_per_gene': metrics_per_gene['mean_corr'],
             'mean_corr_max_trans_per_gene': metrics_per_gene['mean_corr_max']
         }
+        print(f"[evaluate_and_visualize_metrics_by_category] 📈 Metrics for category '{category}': {metrics}\n")
         # Append the metrics dictionary to the results list
         results_list.append(metrics)
         # Optional: Plot results
         if plot_results:
+            print(f"[evaluate_and_visualize_metrics_by_category] 📊 Plotting log2(tpm+1) predictions vs real values scatter plot for category '{category}'.")
             scatter_real_vs_pred(
                 category=category,
                 metrics=dict(list(metrics.items())[1:]),
                 pred=predictions.flatten(),
                 labels=true_values.flatten(),
                 output_dir=os.path.join(output_dir, 'scat_plot_real_vs_pred_value', set_name, category))
+            
+            print(f"\n[evaluate_and_visualize_metrics_by_category] 🔍 Analyzing transcript-to-gene ratios for category '{category}'...")
             analyze_transcript_to_gene_ratios(
-                getBM=getBM,
+                getBM=dm.getBM,
                 pred_df=pd.DataFrame(predictions, columns=list(test_subset['isoform_df'].columns), index=category_samples),
                 labels_df=test_subset['isoform_df'],
                 genes_df=test_subset['gene_df'],  
@@ -198,9 +207,8 @@ def evaluate_and_visualize_metrics_by_category(
                 output_dir=os.path.join(output_dir, 'pred_label_expression_ratio_histogram', set_name, category))
     # Save results
     results_df = pd.DataFrame(results_list)
-    print(f"📂 Saving metrics per category summary for the {set_name} dataset...")
     results_df.to_csv(os.path.join(output_dir, f'{set_name}_tumor_category_results.csv'), index=False)
-    print(f"✅ Results for the {set_name} dataset have been successfully saved to files.")
+    print(f"[evaluate_and_visualize_metrics_by_category] ✅ Results for the {set_name} dataset have been successfully saved to files.")
 
 def filter_low_expressed_genes(
     gene_df: pd.DataFrame, 
@@ -222,8 +230,8 @@ def filter_low_expressed_genes(
     # Filter genes based on mean expression
     filtered_genes = gene_df[mean_expr[mean_expr > min_mean_expr].index]
     # Print the filtering details
-    print(f"Filtering out low-expressed genes with a minimum mean expression of: {min_mean_expr}")
-    print(f"Number of genes remaining after filtering: {filtered_genes.shape[1]}")
+    print(f"\nFiltering out low-expressed genes with a minimum mean expression of: {min_mean_expr}")
+    print(f"Number of genes remaining after filtering: {filtered_genes.shape[1]}\n")
     return filtered_genes
 
 def aggregate_transcripts_to_genes(

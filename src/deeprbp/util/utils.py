@@ -11,6 +11,7 @@ import numpy as np
 import torch
 import pytorch_lightning as pl
 import re
+import warnings
 
 def print_section_separator(char="═", width=50):
     """
@@ -85,7 +86,11 @@ def adjust_batch_size(dataset, batch_size):
     Returns:
         int: The adjusted batch size, which is the minimum of the number of samples in the dataset and the requested batch size.
     """
-    return min(len(dataset), batch_size)
+    adjusted_size = min(len(dataset), batch_size)
+    if adjusted_size < batch_size:
+        warnings.warn(f"Requested batch size {batch_size} is greater than the number of samples in the dataset ({len(dataset)}). "
+                      f"Adjusting to {adjusted_size}.", UserWarning)
+    return adjusted_size
 
 def get_gene_info(gene_ids_or_names: List[str], getBM: pd.DataFrame, return_type: str = 'names') -> List[Optional[str]]:
     """

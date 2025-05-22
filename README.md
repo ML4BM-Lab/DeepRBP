@@ -93,20 +93,20 @@ Among other tasks, this process includes:
 To execute this, run:
 
 ```bash
-prepare-model-inputs --raw_data_dir "/scratch/jsanchoz/DeepRBP/data/training_module/raw" \
-                     --selected_genes_dir "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps" \
-                     --output_dir "/scratch/jsanchoz/DeepRBP/data/training_module/processed" \
-                     --transcript_expression_file "TcgaTargetGtex_rsem_isoform_tpm.gz" \
-                     --gene_expression_file "TcgaTargetGtex_rsem_gene_tpm.gz" \
-                     --gene_counts_file "TcgaTargetGTEX_gene_expected_count.gz" \
-                     --phenotype_data_file "TcgaTargetGTEX_phenotype.txt" \
-                     --chunk_size 1000 \
-                     --gene_selection True \
-                     --gene_transcript_mapping_file "getBM.csv" \
-                     --splicing_genes_file "Table_S5_Cancer_splicing_gene_eyras.xlsx" \
-                     --cancer_genes_file "Table_S6_Cancer_gene_eyras.xlsx" \
-                     --gene_census_file "Table_Cancer_Gene_Census.tsv" \
-                     --rbp_genes_file "Table_S2_list_RBPs_eyras.xlsx"
+preprocess-data --raw_data_dir "/scratch/jsanchoz/DeepRBP/data/training_module/raw" \
+                --selected_genes_dir "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps" \
+                --output_dir "/scratch/jsanchoz/DeepRBP/data/training_module/processed" \
+                --transcript_expression_file "TcgaTargetGtex_rsem_isoform_tpm.gz" \
+                --gene_expression_file "TcgaTargetGtex_rsem_gene_tpm.gz" \
+                --gene_counts_file "TcgaTargetGTEX_gene_expected_count.gz" \
+                --phenotype_data_file "TcgaTargetGTEX_phenotype.txt" \
+                --chunk_size 1000 \
+                --gene_selection True \
+                --gene_transcript_mapping_file "getBM.csv" \
+                --splicing_genes_file "Table_S5_Cancer_splicing_gene_eyras.xlsx" \
+                --cancer_genes_file "Table_S6_Cancer_gene_eyras.xlsx" \
+                --gene_census_file "Table_Cancer_Gene_Census.tsv" \
+                --rbp_genes_file "Table_S2_list_RBPs_eyras.xlsx"
 ```
 
 ### Command Arguments
@@ -129,7 +129,7 @@ prepare-model-inputs --raw_data_dir "/scratch/jsanchoz/DeepRBP/data/training_mod
 Alternatively, you can submit this command on an HPC system with Slurm:
 
 ```bash
-sbatch slurm/generate_model_inputs.sh
+sbatch slurm/preprocess_data.sh
 ```
 
 ## Model Training from Scratch (Optional)
@@ -182,7 +182,7 @@ As a result, in the `--output_dir`, you will find two folders: **Train** and **T
 3. **`trans_log2p_tpm.csv`**: This file contains the expression levels of transcripts in log2(TPM + 1).
 4. **`phenotype_metadata.csv`**: This file includes metadata for the samples used in the study.
 
-### Hyperparameter Optimization for DeepRBPredictor with Optuna 
+### Hyperparameter Optimization for DeepRBPredictor with Optuna (ESTO HAY QUE VOLVER A ACTUALIZAR!!!)
 In this section, we will implement hyperparameter optimization for the DeepRBP predictor using Optuna, a hyperparameter optimization framework designed for machine learning. 
 This process aims to find the best set of hyperparameters that maximize model performance. To do so we are using a subset of the training data. Exactly the 50\% with a stratified split based on tumor 
 type to enhance efficiency and optimize computational resources. The training data is sourced from the directory located at `/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train`. 
@@ -192,7 +192,6 @@ type to enhance efficiency and optimize computational resources. The training da
 run-hyper-optimization-optuna --config_path_file '/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_hyper_optimization.yaml' \
                               --output_dir '/scratch/jsanchoz/DeepRBP/output/results/hyperpameter_optimization' \
                               --n_trials 10
-                              
 ```
 
 In this command:
@@ -212,6 +211,18 @@ There are three options:
 * Submitting a job to a HPC queue
 * Running with Docker
 ---
+
+# PRIMERO VAMOS A TENER QUE PREPARAR LOS DATOS LLAMAR A SCRIPT QUE PREPARE DATA (LOAD, DIVIDE TRAIN/VAL, SCALE AND SAVE)
+
+
+
+
+
+
+
+
+
+
 
 ### **Option 1: Running the Python Script**  
 To execute DeepRBP on the **TCGA** dataset, use a `.yaml` configuration file. Below is an example configuration file:
@@ -262,10 +273,11 @@ Once the config.yaml file is ready, execute the script as follows, specifying th
 run-deeprbp-predictor \
   --config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_tcga_model_train.yaml" \
   --output_dir "/scratch/jsanchoz/DeepRBP/output/results/run_deeprbp_predictor" \
-  --epochs 1000
-  --num_workers 4
-  --min_delta 0.001
-  --patience 30
+  --epochs 1000 \
+  --num_workers 4 \
+  --min_delta 0.001 \
+  --patience 30 \
+  --save_top_k 1
 ```
 
 ### Explanation of Arguments
@@ -287,6 +299,9 @@ This argument sets the minimum change in the monitored quantity (like validation
 - **`--patience`** (`type: int`, `default: 30`): 
 This argument determines how many epochs to wait after the last improvement before stopping the training process early. If no improvement is observed for the specified number of epochs, training will be halted to prevent overfitting.
 
+- **`--save_top_k`** (`type: int`, `default: 1`):
+This argument controls how many of the best models, according to the MSE validation, will be saved. If save_top_k is set to 0, no models will be saved. If it is set to -1, all models will be saved. Adjust this parameter based on your needs for model retention and evaluation.
+
 ### Option 2: Submit a Job in a HPC
 If the number of training datasets or the total number of samples is high, we recommend submitting the job using the provided `run_predictor.sh` script from the cluster directory. 
 This script is adapted to Slurm, but can be easily modified to work on SGE. 
@@ -300,25 +315,19 @@ sbatch run_predictor.sh
 ## (work to do here)
 ---
 
-### Evaluate DeepRBP Predictor using Test Data  
-
+### Evaluate DeepRBP Predictor 
 ### **Option 1: Running the Python Script**  
+# para esto haz un jupyter notebook para que el usuario pueda usar el modelo sobre su propio data si quiere.
+ 
 
-```bash
-deeprbp-predictor-evaluate \
-  --config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_tcga_model_test.yaml" \
-  --output_dir "/scratch/jsanchoz/DeepRBP/output/results" \
-  --trained_files_dir "/scratch/jsanchoz/DeepRBP/output/results/results"
-```
 
-### Option 2: Submit a Job in a HPC
-```bash
-cd slurm
-sbatch predictor_evaluate.sh
-```
 
-### Option 3: Running with Docker
-## (work to do here)
+
+
+
+
+
+
 
 ---
 

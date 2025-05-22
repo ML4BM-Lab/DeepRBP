@@ -35,15 +35,16 @@ setup(
         "torchinfo",
         "psutil",
         "lightning",
-        "GPUtil"
+        "GPUtil",
+        "optuna-integration[pytorch_lightning]",
+        "tabulate"
     ],
     entry_points={
         'console_scripts': [
-            'prepare-model-inputs=src.deeprbp.data_preprocessing.prep_model_inputs:main',
+            'preprocess-data=src.deeprbp.data_preprocessing.preprocess_data:main',
             'split-and-save=src.deeprbp.data_preprocessing.split_data_and_save:main',
             'run-hyper-optimization-optuna=src.deeprbp.training_module.hyperparameter_optimization.grid_search_optuna:main',
             'run-deeprbp-predictor=src.deeprbp.training_module.main_predictor:main',
-            'deeprbp-predictor-evaluate=src.deeprbp.training_module.test_predictor:main',
             'run-deeprbp-explainer=src.deeprbp.explainability_module.main_explainer:main',
             'run-postar-validator=src.deeprbp.explainability_module.postar_validation.postar_validator:main'
         ],

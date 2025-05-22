@@ -1,22 +1,11 @@
-# /scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_hyper_optimization.yaml
-
-# Paths for the data files
-data_paths:
-  rbp_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train/train_RBPs_log2p_tpm.csv"
-  isoform_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train/train_trans_log2p_tpm.csv"
-  gene_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train/train_gn_tpm.csv"
-  metadata_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train/train_phenotype_metadata.csv"
-
-sample_category: "detailed_category"  # The column in metadata to stratify on 
+# src/deeprbp/configs/config_hyper_optimization.yaml
+train_path_files: '/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train'
+sample_category: "detailed_category"   
 sample_fraction: 0.5
 test_fraction: 0.2
 getBM_path: "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/getBM.csv"
 gene_col_name: "Gene_ID"
 trans_col_name: "Transcript_ID"
-seed: 42
 cuda: True
-print_every: 5
-plot_results: False
-save_results: False
-save_best_model: False
 val_batch_size: 256
+plot_results: False

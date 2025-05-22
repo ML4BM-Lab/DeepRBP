@@ -24,7 +24,7 @@ class DeepLiftHandler:
     Attributes:
         logger (Logger): Logger instance for tracking the progress and results of the explanation process.
         config_explain (ConfigParser): Configuration parser instance for the explanation process, containing settings and paths.
-        dataset (CustomTensorDataset): An instance of CustomTensorDataset containing RBP, gene, and transcript expression data.
+        dataset (DeepRBPExpressionDataset): An instance of DeepRBPExpressionDataset containing RBP, gene, and transcript expression data.
         deeplift_explainer (DeepLift): Instance of the DeepLift explainer used to compute attribution scores.
         
         

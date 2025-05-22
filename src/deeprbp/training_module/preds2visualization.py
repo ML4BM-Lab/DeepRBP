@@ -36,6 +36,7 @@ def scatter_real_vs_pred(
     None
         The function saves a PNG image at the specified path.
     """
+    sns.set_style("white")
     plt.figure(figsize=(8, 6))
     plt.xlabel('Predicted Values', fontsize=16, fontweight='bold')
     plt.ylabel('Real Values', fontsize=16, fontweight='bold')
@@ -46,19 +47,18 @@ def scatter_real_vs_pred(
         line_kws={'color': 'red', 'lw': 2}
     )
     legend_text = (
-        f"Spearman Corr: {metrics['spearman_corr']:.2f}\n"
-        f"Pearson Corr: {metrics['pearson_corr']:.2f}\n"
-        f"MSE: {metrics['mse']:.2f}\n"
-        f"R²: {metrics['r2']:.2f}\n"
-        f"Spearman Corr per Gene: {metrics['mean_corr_per_gene']:.2f} \n"
-        f"Spearman Corr per Gene (max trans): {metrics['mean_corr_max_trans_per_gene']:.2f} \n"
+        f"Spearman Corr: {metrics['spearman_corr']:.4f}\n"
+        f"Pearson Corr: {metrics['pearson_corr']:.4f}\n"
+        f"MSE: {metrics['mse']:.4f}\n"
+        f"R²: {metrics['r2']:.4f}\n"
+        f"Spearman Corr per Gene: {metrics['mean_corr_per_gene']:.4f} \n"
+        f"Spearman Corr per Gene (max trans): {metrics['mean_corr_max_trans_per_gene']:.4f} \n"
     )
     plt.text(
         0.05, 0.95, legend_text, transform=plt.gca().transAxes,
         fontsize=9, verticalalignment='top',
         bbox=dict(boxstyle="round", edgecolor="black", facecolor="white")
     )
-    sns.set_style("whitegrid")
     os.makedirs(output_dir, exist_ok=True)
     output_path = os.path.join(output_dir, f"{category}.png")
     plt.tight_layout()
@@ -74,8 +74,6 @@ def plot_all_metrics_history(metrics_df: pd.DataFrame, output_dir: str) -> None:
         'R2 Score History': ('train_r2', 'val_r2')
     }
     for title, (train_metric, val_metric) in metrics_pairs.items():
-        print(metrics_df[train_metric].tolist())
-        print(metrics_df[val_metric].tolist())
         plot_metric_history(
             train_history=metrics_df[train_metric].tolist(),
             val_history=metrics_df[val_metric].tolist(),
@@ -104,19 +102,15 @@ def plot_metric_history(train_history: List[float], val_history: List[float],
     os.makedirs(output_dir, exist_ok=True)
     plt.style.use('seaborn-v0_8-muted')
     plt.figure(figsize=(8, 5))
-    # Imprimir valores a graficar
-    print(f"Plotting {title}:")
-    print(f"Train values: {train_history}")
-    print(f"Validation values: {val_history}")
     # Plot both training and validation metrics
     plt.plot(train_history, label='Training', color='royalblue', linestyle='-', linewidth=2.5)
     plt.plot(val_history, label='Validation', color='darkorange', linestyle='--', linewidth=2.5)
     plt.title(title, fontsize=18, fontweight='bold', pad=10)
     plt.xlabel('Epoch', fontsize=14, labelpad=8)
     print('\n\n')
-    plt.ylabel('Performance', fontsize=14, labelpad=8)  # Dynamically set the ylabel
+    plt.ylabel('Performance', fontsize=14, labelpad=8)  
     plt.grid(True, linestyle='--', alpha=0.6)
-    plt.legend(fontsize=12, loc='upper right', frameon=True, shadow=True, fancybox=True)
+    plt.legend(fontsize=12, loc='upper left', bbox_to_anchor=(1.04, 1), frameon=True, shadow=True, fancybox=True)
     plt.tight_layout(pad=2)
     # Save the plot with the specified name
     plt.savefig(os.path.join(output_dir, f'{plot_name}.png'), dpi=300)
@@ -164,8 +158,6 @@ def plot_transcript_to_gene_ratio_distributions(
     plt.savefig(output_path, dpi=300)
     plt.close()
     print(f"Plot saved to {output_path}")
-
-
 
 
 # esta hay que moverla al explainer folder bro

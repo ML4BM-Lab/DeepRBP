@@ -11,7 +11,7 @@
 module load Python
 conda activate /data/jsanchoz/conda-env/DeepRBP
 
-python /scratch/jsanchoz/DeepRBP/src/deeprbp/data_preprocessing/prep_model_inputs.py \
+python /scratch/jsanchoz/DeepRBP/src/deeprbp/data_preprocessing/preprocess_data.py \
   --raw_data_dir "/scratch/jsanchoz/DeepRBP/data/training_module/raw" \
   --selected_genes_dir "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps" \
   --output_dir "/scratch/jsanchoz/DeepRBP/data/training_module/processed" \
@@ -26,3 +26,4 @@ python /scratch/jsanchoz/DeepRBP/src/deeprbp/data_preprocessing/prep_model_input
   --cancer_genes_file "Table_S6_Cancer_gene_eyras.xlsx" \
   --gene_census_file "Table_Cancer_Gene_Census.tsv" \
   --rbp_genes_file "Table_S2_list_RBPs_eyras.xlsx"
+

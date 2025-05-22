@@ -1,19 +1,12 @@
 # src/deeprbp/configs/config_tcga_train.yaml
-
-data_paths:
-  rbp_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train/train_RBPs_log2p_tpm.csv"
-  isoform_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train/train_trans_log2p_tpm.csv"
-  gene_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train/train_gn_tpm.csv"
-  metadata_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train/train_phenotype_metadata.csv"
-
+train_path_files: '/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train'
+test_path_files: '/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Test'
 sample_category: "detailed_category"  # The column in metadata to stratify on 
 test_fraction: 0.2
 getBM_path: "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/getBM.csv"
 gene_col_name: "Gene_ID"
 trans_col_name: "Transcript_ID"
-seed: 42
 cuda: True
-print_every: 5
 train_batch_size: 128
 val_batch_size: 256
 num_hidden_layers: 1
@@ -25,6 +18,5 @@ learning_rate: 0.001
 optimizer_name: adamW
 plot_results: True
 
-#save_results: True
 
 

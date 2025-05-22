@@ -7,7 +7,7 @@ from collections import namedtuple
 from ..data_loading.config_loader import ConfigParser
 from ..data_loading.data_loader import DataImporter, Scaler
 from ..util.logger import Logger
-from ..util.utils import CustomTensorDataset, filter_data_by_sample_ids, get_gene_info
+from ..util.utils import DeepRBPExpressionDataset, filter_data_by_sample_ids, get_gene_info
 
 from ..training_module.model import PredictorModel
 from .deeplift_handler import DeepLiftHandler
@@ -30,7 +30,7 @@ class ExplainerModel():
         select_condition (str): Conditions for filtering the samples, such as "Primary_Tumor" or potentially including "Solid_Tissue_Normal".
         data_importer (DataImporter): An instance for importing datasets.
         scaler (Scaler): An instance of the Scaler for data preprocessing.
-        dataset (CustomTensorDataset): The dataset used for explainability, created from the loaded data.
+        dataset (DeepRBPExpressionDataset): The dataset used for explainability, created from the loaded data.
         model (PredictorModel): The trained predictor model used for making predictions.
     """
     def __init__(self, config_path_explain, config_path_train, output_dir, verbose=1):
@@ -97,9 +97,9 @@ class ExplainerModel():
         return data  
     
     def build_tensor_dataset(self, data):
-        """Create a CustomTensorDataset instance"""
-        self.logger.log("Starting the creation of the CustomTensorDataset...", level=1)
-        dataset =  CustomTensorDataset(
+        """Create a DeepRBPExpressionDataset instance"""
+        self.logger.log("Starting the creation of the DeepRBPExpressionDataset...", level=1)
+        dataset =  DeepRBPExpressionDataset(
                 data=data.copy(),
                 getBM=self.getBM,
                 rbp_data_key='scaled_rbp_df', 
@@ -108,8 +108,8 @@ class ExplainerModel():
                 trans_col_name=self.config_train.get('trans_col_name'),
                 gene_col_name=self.config_train.get('gene_col_name')
             )
-        self.logger.log("✅ CustomTensorDataset instance created successfully.", level=1)
-        self.logger.log("Features data stored in CustomTensorDataset:", level=2)
+        self.logger.log("✅ DeepRBPExpressionDataset instance created successfully.", level=1)
+        self.logger.log("Features data stored in DeepRBPExpressionDataset:", level=2)
         for feature_name, tensor in dataset.features.items():
             self.logger.log(f"{feature_name}: Shape: {tensor.shape}", level=2)
         return dataset

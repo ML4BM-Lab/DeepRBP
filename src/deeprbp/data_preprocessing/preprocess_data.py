@@ -1,4 +1,4 @@
-#src/deeprbp/data_preprocessing/prep_model_inputs.py
+# src/deeprbp/data_preprocessing/preprocess_data.py
 
 import os
 import pandas as pd
@@ -9,7 +9,7 @@ import warnings
 import argparse
 import timeit
 
-def prepare_inputs( 
+def preprocessing( 
     raw_data_dir: str, 
     selected_genes_dir: str,
     output_dir: str,
@@ -608,7 +608,7 @@ def main():
     args = parse_args()
     start_time = timeit.default_timer()
     
-    prepare_inputs(
+    preprocessing(
                 raw_data_dir=args.raw_data_dir, 
                 selected_genes_dir=args.selected_genes_dir, 
                 output_dir=args.output_dir, 

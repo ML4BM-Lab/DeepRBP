@@ -12,95 +12,123 @@ from ..util.logger import Logger
 from ..util.utils import print_section_separator, filter_data_by_sample_ids
 
 class DataImporter:
-    def __init__(self, paths):
+    def __init__(self, base_path: str, verbose: int = 1):
         """
         This class is designed to facilitate the loading of multiple datasets related to RNA-binding proteins (RBP),
-        gene expression, isoform expression, and associated metadata from specified file paths.
+        gene expression, isoform expression, and associated metadata from a specified base path.
 
         Parameters:
-        - paths (dict): A dictionary containing the file paths for the datasets. The expected keys include:
-          - 'rbp_path': Path to the RBP expression data file.
-          - 'gene_expr_path': Path to the gene expression data file.
-          - 'isoform_expr_path': Path to the isoform expression data file.
-          - 'counts_path': Path to the gene counts data file.
-          - 'metadata_path': Path to the metadata file, which is required.
+        - base_path (str): Base path where the data files are located (e.g., train or test).
+        - verbose (int): Verbosity level for logging. Default is 1, which enables logging.
+                         Higher values may provide more detailed logging output.
         """
-        self.logger = Logger(verbose=1)
-        if "metadata_path" not in paths or not paths["metadata_path"]:
-            self.logger.error("❌ The 'metadata_path' is required and must be provided.", ValueError)
-        self.paths = paths
-        self.data = {}
-    def load(self):
-        """
-        Load data dictionary from the specified paths and store it in the object.
-        """
+        self.logger = Logger(verbose)
+        self.base_path = base_path
+        self.paths = self._generate_data_patterns()
+    def _generate_data_patterns(self) -> Dict[str, str]:
+        """Generates the file paths based on the base path provided."""
+        base_name = self.base_path.split('/')[-1].lower()
+        return {
+            'rbp_path': os.path.join(self.base_path, f"{base_name}_RBPs_log2p_tpm.csv"),
+            'isoform_expr_path': os.path.join(self.base_path, f"{base_name}_trans_log2p_tpm.csv"),
+            'gene_expr_path': os.path.join(self.base_path, f"{base_name}_gn_tpm.csv"),
+            'metadata_path': os.path.join(self.base_path, f"{base_name}_phenotype_metadata.csv")
+        }
+    def load(self) -> Dict[str, pd.DataFrame]:
+        """Load data dictionary from the specified paths and store it in the object."""
         try:
             self.logger.log("📥 Loading data from specified paths...")
+            data = {}
             for key, path in self.paths.items():
-                if path:  # Only load if the path is provided
-                    self.data[f"{key.split('_')[0]}_df"] = pd.read_csv(path, index_col=0)
-                    self.logger.log(f"✅ Loaded {key} data.")
+                if os.path.exists(path):  # Check if the file exists before loading
+                    data[f"{key.split('_')[0]}_df"] = pd.read_csv(path, index_col=0)
+                    self.logger.log(f"✅ Loaded {key} data from {path}.")
+                else:
+                    self.logger.error(f"❌ File not found: {path}")
             print_section_separator()
-        except FileNotFoundError as e:
-            self.logger.error(f"❌ Error loading file: {e}", FileNotFoundError)
-        return self.data  # Return raw loaded data
+            return data  # Return raw loaded data
+        except Exception as e:
+            self.logger.error(f"❌ Error loading files: {e}", level=1)
+            raise
 
 class DataSplitter:
-    def __init__(self, data: Dict[str, pd.DataFrame], config, sample_category: str = "detailed_category"):
+    def __init__(self, data: Dict[str, pd.DataFrame], sample_category: str = "detailed_category", verbose: int = 1):
         """
-        Initialize the DataSplitter class for splitting datasets into training, validation, and test sets.
+        Initialize the DataSplitter class for splitting datasets into training, validation/test sets.
 
         This class is designed to facilitate the stratified splitting of a dataset based on specified categories in the metadata.
         The main functionalities include:
         - Performing stratified splits to ensure that each subset (training, validation, and test) 
           maintains the same distribution of categories as in the full dataset.
-        - Assigning labels to samples to indicate their respective sets (training, validation, testing).
+        - Assigning labels to samples to indicate their respective sets (training, validation or testing).
     
         Parameters:
-        - data (Dict[str, pd.DataFrame]): A dictionary containing the datasets, with 'metadata_df' being a 
+        - data (Dict[str, pd.DataFrame]): A dictionary containing the datasets, where 'metadata_df' is a 
           DataFrame that holds metadata relevant for stratification during data splitting.
-          
-        - config: A configuration object that contains settings for data splitting. This includes 
-          parameters for train/test and train/validation splitting, such as:
-          - 'test_fraction': The fraction of the dataset to be used as the test set (or 'validation set').
-          
         - sample_category (str, optional): The column name in 'metadata_df' used for stratification. 
           Default is 'detailed_category'. This determines how samples are divided to ensure proportional 
           representation of categories in each subset.
+        - verbose (int): Verbosity level for logging. Default is 1, which enables logging.
+                         Higher values may provide more detailed logging output.
         """
-        self.logger = Logger(verbose=1)
+        self.logger = Logger(verbose)
         self.data = data
-        self.config = config
-        self.sample_category = sample_category
-        self.sample_ids = self.data['metadata_df'].index
-    def split_data(self, data, test_size):
-        """Perform a stratified train-test split based on the detailed_category in metadata."""
-        sample_category = data['metadata_df'][self.sample_category]
+        self.sample_ids_index = self.data['metadata_df'].index # Index of sample IDs
+        self.sample_category_labels = self.data['metadata_df'][sample_category] # Series of sample categories
+    def split_data(self, test_size: float) -> Tuple[list, list]:
+        """Perform a stratified train-test split based on the detailed_category in metadata.
+        Parameters:
+        - test_size (float): The fraction of the dataset to be used as the test set.
+
+        Returns:
+        Tuple[list, list]: Two lists containing the training and testing sample IDs.
+        """
         self.logger.log(f'📊 [split_data] Performing a stratified data split with fraction division equal to {test_size}...')
         # Perform the stratified split based on patient IDs (still strings at this point) and sample category
-        train_id, test_id = sk_train_test_split(
-            data['metadata_df'].index,
-            test_size=test_size,
-            stratify=sample_category,
-            random_state=self.config.get('seed')
-        )
+        train_id, test_id = sk_train_test_split(self.sample_ids_index, test_size=test_size, stratify=self.sample_category_labels, random_state=42)
         return train_id, test_id
     @classmethod
-    def split_data_class(cls, data: Dict[str, pd.DataFrame], config, sample_category: str = "detailed_category", test_size: float = 0.2) -> Tuple[list, list]:
-        """Class method to split data, instantiating the class and calling the instance method."""
-        instance = cls(data, config, sample_category)
-        return instance.split_data(data, test_size)
+    def split_data_class(cls, data: Dict[str, pd.DataFrame], sample_category: str, 
+                         test_size: float, verbose: int) -> Dict[str, pd.DataFrame]:
+        """Class method to split data data in two and just return the first part, instantiating the class and calling the instance method.
+        It is intended to be used for creating a toy dataset to optimize the computational resources.
+
+        Parameters:
+        - data (Dict[str, pd.DataFrame]): A dictionary containing the datasets.
+        - sample_category (str): The column name in 'metadata_df' used for stratification.
+        - test_size (float): The fraction of the dataset to be used as the test set.
+        - verbose (int): Verbosity level for logging.
+
+        Returns:
+        Dict[str, pd.DataFrame]: A dictionary containing the subset of the original data corresponding to the training samples for toy dataset.
+        """
+        instance = cls(data, sample_category, verbose)
+        subset_idx1, _ = instance.split_data(test_size)
+        data_subset = filter_data_by_sample_ids(data, subset_idx1)
+        return data_subset
     def add_sample_set_label(self, set_name: str, samples: list):
-        """ Add a column to the metadata DataFrame indicating whether samples belong to the training or test set."""
+        """Add a column to the metadata DataFrame indicating whether samples belong to the training, validation or test set.
+
+        Parameters:
+        - set_name (str): The name of the set (e.g., 'training', 'validation' or 'testing').
+        - samples (list): The list of sample IDs to label.
+        """
         sample_set = set(samples)
         if 'set_type' not in self.data['metadata_df'].columns:
             self.data['metadata_df']['set_type'] = 'unknown'
-        self.data['metadata_df'].loc[self.data['metadata_df'].index.isin(sample_set), 'set_type'] = set_name
+        self.data['metadata_df'].loc[self.sample_ids_index.isin(sample_set), 'set_type'] = set_name
         self.logger.log(f"🏷️ Added sample set label '{set_name}' for {len(samples)} samples.")
-        print_section_separator()
-    def split_data_sets(self, test_name='testing') -> Tuple[Dict[str, pd.DataFrame], Dict[str, pd.DataFrame]]:
+    def split_data_sets(self, test_fraction, test_name='testing') -> Tuple[Dict[str, pd.DataFrame], Dict[str, pd.DataFrame]]:
         """
-        This function handles the splitting of data into training and testing (or 'validation') sets based on config test fraction.
+        This function handles the splitting of data into training and testing (or 'validation') sets based on the 
+        provided test fraction.
+        
+        Parameters:
+        - test_fraction (float): The fraction of the dataset to be used for the test set.
+        - test_name (str, optional): The name to use for the test set label (default is 'testing').
+
+        Returns:
+        Tuple[Dict[str, pd.DataFrame], Dict[str, pd.DataFrame]]: Two dictionaries containing the training and testing datasets.
         """
         train_data, test_data = {}, {}
         # Determine the type of split and log the corresponding message
@@ -110,9 +138,8 @@ class DataSplitter:
         else:
             self.logger.log("🔄 Performing train/val split...")
             log_message = "📝 Writing set_type in metadata after train/val split"
-        print_section_separator()
         # Perform the data splitting
-        self.train_id, self.test_id = self.split_data(data=self.data, test_size=self.config.get('test_fraction'))
+        self.train_id, self.test_id = self.split_data(test_size=test_fraction)
         # Log the corresponding message in a single line
         self.logger.log(log_message)
         # Add labels to the sample sets
@@ -122,7 +149,7 @@ class DataSplitter:
         train_data = filter_data_by_sample_ids(self.data, self.train_id)
         test_data = filter_data_by_sample_ids(self.data, self.test_id)
         return train_data, test_data
-        
+    
 class Scaler:
     def __init__(self, existing_scaler=None, existing_sigma=None):
         """
@@ -241,3 +268,38 @@ class Scaler:
     
     # You can load the scaler later from disk if needed
     # scaler = Scaler.load(folder_path=f"{scaler_path}/scaler")
+
+
+# class DataImporter: VERSION OLD
+#     def __init__(self, paths):
+#         """
+#         This class is designed to facilitate the loading of multiple datasets related to RNA-binding proteins (RBP),
+#         gene expression, isoform expression, and associated metadata from specified file paths.
+
+#         Parameters:
+#         - paths (dict): A dictionary containing the file paths for the datasets. The expected keys include:
+#           - 'rbp_path': Path to the RBP expression data file.
+#           - 'gene_expr_path': Path to the gene expression data file.
+#           - 'isoform_expr_path': Path to the isoform expression data file.
+#           - 'counts_path': Path to the gene counts data file.
+#           - 'metadata_path': Path to the metadata file, which is required.
+#         """
+#         self.logger = Logger(verbose=1)
+#         if "metadata_path" not in paths or not paths["metadata_path"]:
+#             self.logger.error("❌ The 'metadata_path' is required and must be provided.", ValueError)
+#         self.paths = paths
+#         self.data = {}
+#     def load(self):
+#         """
+#         Load data dictionary from the specified paths and store it in the object.
+#         """
+#         try:
+#             self.logger.log("📥 Loading data from specified paths...")
+#             for key, path in self.paths.items():
+#                 if path:  # Only load if the path is provided
+#                     self.data[f"{key.split('_')[0]}_df"] = pd.read_csv(path, index_col=0)
+#                     self.logger.log(f"✅ Loaded {key} data.")
+#             print_section_separator()
+#         except FileNotFoundError as e:
+#             self.logger.error(f"❌ Error loading file: {e}", FileNotFoundError)
+#         return self.data  # Return raw loaded data
