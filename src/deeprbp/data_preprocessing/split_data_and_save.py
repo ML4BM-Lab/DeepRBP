@@ -20,7 +20,7 @@ def main():
 
     # Load the data using the data importer
     print("Loading data...")
-    data_importer = DataImporter(config['data_paths'])
+    data_importer = DataImporter(config.get('path_files'))
     data = data_importer.load()
     print("Data loaded successfully")
 
@@ -28,8 +28,8 @@ def main():
     print("Filter data by selecting the samples based on the provided configuration ...")
     sel_sample_ids = select_sample_ids_by_type(
             metadata_df=data['metadata_df'],
-            sample_category_col=config['sample_category'],
-            sample_types=config['select_samples']
+            sample_category_col=config.get('sample_category'),
+            sample_types=config.get('select_samples')
         )
     # Filter the data by the selected samples
     data = filter_data_by_sample_ids(data, sel_sample_ids)
@@ -37,8 +37,8 @@ def main():
 
     # Split the data into training and test sets
     print("Splitting data into training and test sets...")
-    splitter = DataSplitter(data, config)
-    train_data, test_data = splitter.split_data_sets()
+    splitter = DataSplitter(data, config.get('sample_category'))
+    train_data, test_data = splitter.split_data_sets(config.get('test_fraction'))
     print("Data splitted successfully.")
 
     # Save the training and test datasets to the specified output directory
@@ -46,10 +46,10 @@ def main():
     save_data(train_data, 
               os.path.join(args.output_dir, 'Train'), 
               custom_names = {
-                            'rbp_df': 'train_RBPs_log2p_tpm.csv',
-                            'isoform_df': 'train_trans_log2p_tpm.csv',
-                            'gene_df': 'train_gn_tpm.csv',
-                            'metadata_df': 'train_phenotype_metadata.csv'}
+                            'rbp_df': 'RBPs_log2p_tpm.csv',
+                            'isoform_df': 'trans_log2p_tpm.csv',
+                            'gene_df': 'gn_tpm.csv',
+                            'metadata_df': 'phenotype_metadata.csv'}
                             )
     print("Training data saved successfully.")
 
@@ -57,10 +57,10 @@ def main():
     save_data(test_data, 
               os.path.join(args.output_dir, 'Test'), 
               custom_names = {
-                            'rbp_df': 'test_RBPs_log2p_tpm.csv',
-                            'isoform_df': 'test_trans_log2p_tpm.csv',
-                            'gene_df': 'test_gn_tpm.csv',
-                            'metadata_df': 'test_phenotype_metadata.csv'}
+                            'rbp_df': 'RBPs_log2p_tpm.csv',
+                            'isoform_df': 'trans_log2p_tpm.csv',
+                            'gene_df': 'gn_tpm.csv',
+                            'metadata_df': 'phenotype_metadata.csv'}
                             )
     print("Test data saved successfully.")
 

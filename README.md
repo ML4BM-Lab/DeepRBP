@@ -156,12 +156,7 @@ The configuration file should look like this:
 #### **Example Configuration File (`config_data_split.yaml`)**
 
 ```yaml
-data_paths:
-  rbp_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/RBPs_log2p_tpm.csv"
-  isoform_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/trans_log2p_tpm.csv"
-  gene_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/gn_tpm.csv"
-  metadata_path: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA/phenotype_metadata.csv"
-
+path_files: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA"
 sample_category: "detailed_category"  # The column in metadata to stratify on 
 select_samples: ["all"]  # Can be ['all'] or a list of specific sample types: ['Lung_Squamous_Cell_Carcinoma', 'Rectum_Adenocarcinoma']
 test_fraction: 0.2
@@ -182,22 +177,67 @@ As a result, in the `--output_dir`, you will find two folders: **Train** and **T
 3. **`trans_log2p_tpm.csv`**: This file contains the expression levels of transcripts in log2(TPM + 1).
 4. **`phenotype_metadata.csv`**: This file includes metadata for the samples used in the study.
 
-### Hyperparameter Optimization for DeepRBPredictor with Optuna (ESTO HAY QUE VOLVER A ACTUALIZAR!!!)
+
+### Hyperparameter Optimization for DeepRBPredictor with Optuna 
 In this section, we will implement hyperparameter optimization for the DeepRBP predictor using Optuna, a hyperparameter optimization framework designed for machine learning. 
 This process aims to find the best set of hyperparameters that maximize model performance. To do so we are using a subset of the training data. Exactly the 50\% with a stratified split based on tumor 
 type to enhance efficiency and optimize computational resources. The training data is sourced from the directory located at `/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train`. 
 
+You can use the following `config` file:
+
+#### **Example Configuration File (`config_hyper_optimization.yaml`)**
+```yaml
+train_path_files: '/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train'
+test_path_files: '/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Test' # just for making predictions with the best params after optimization
+sample_category: "detailed_category"   
+sample_fraction: 0.5
+test_fraction: 0.2
+getBM_path: "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/getBM.csv"
+gene_col_name: "Gene_ID"
+trans_col_name: "Transcript_ID"
+cuda: True
+val_batch_size: 256
+plot_results: False
+```
+
+where,
+- **`train_path_files`**: Paths to input folder containing the data to model:
+  - **`rbp_path`**: File containing RBP expression data in log2(TPM+1).  
+  - **`isoform_expr_path`**: File containing isoform expression data in log2(TPM+1).  
+  - **`metadata_path`**: Metadata file (sample-level information).  
+  - **`gene_expr_path`**: File with gene expression data per isoform in TPM.  
+  
+- **`test_path_files`**: Paths to input folder containing the test data. In the Optuna optimization script
+this data it is just used to test the model using the best parameters selected by the MSE between the log2p TPM values 
+between predicted and real values on a validation set.
+- **`sample_category`**: Metadata column used to stratify samples.  
+- **`sample_fraction`**: Portion of the training data used for the optimization process to save time and computational resources.
+- **`test_fraction`**: Portion of the remained training data used for validation.
+- **`getBM_path`**: File for selected gene-RBP mappings. 
+
+- **`gene_col_name`**: The name of the column in getBM representing Gene_ID.
+- **`trans_col_name`**: The name of the column in getBM representing Transcript_ID.
+- **`cuda`**: Whether to use cude or not.
+- **`val_batch_size`**: Batch size used for the validation data loader.
+- **`plot_results`**: Enable or disable visualization of results. 
+
 *Option 1: Direct Command Execution*
 ```bash
-run-hyper-optimization-optuna --config_path_file '/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_hyper_optimization.yaml' \
+run-hyper-optimization-optuna --config_path '/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_hyper_optimization.yaml' \
+                              --n_trials 1000 \
                               --output_dir '/scratch/jsanchoz/DeepRBP/output/results/hyperpameter_optimization' \
-                              --n_trials 10
+                              --num_workers 0 \
+                              --min_delta 0.001 \
+                              --patience 30                    
 ```
 
 In this command:
-* `config_path_file` specifies the configuration file.
-* `output_dir` indicates the directory where you want to save the results.
+* `config_path` specifies the configuration file.
 * `n_trials` is the number of combinations you want to test with Optuna.
+* `output_dir` indicates the directory where you want to save the results.
+* `num_workers` is the number of worker threads to use for loading data with DataLoader. Increasing this number can improve data loading speed, especially with large datasets.
+* `min_delta` is the minimum change in the monitored metric to qualify as an improvement. This value is used to determine when to stop training early. If the improvement is less than this threshold, the training might halt.
+* `patience` is the number of epochs to wait after the last improvement before stopping the training process. This allows the model some time to improve before deciding to terminate the training early.
 
 *Option 2: Submit Job via SLURM*
 ```bash
@@ -212,43 +252,26 @@ There are three options:
 * Running with Docker
 ---
 
-# PRIMERO VAMOS A TENER QUE PREPARAR LOS DATOS LLAMAR A SCRIPT QUE PREPARE DATA (LOAD, DIVIDE TRAIN/VAL, SCALE AND SAVE)
-
-
-
-
-
-
-
-
-
-
-
 ### **Option 1: Running the Python Script**  
 To execute DeepRBP on the **TCGA** dataset, use a `.yaml` configuration file. Below is an example configuration file:
 
-#### **Example Configuration File (`config.yaml`)**
+#### **Example Configuration File (`config_model_train.yaml`)**
 
 ```yaml
-data_paths:
-  rbp_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train/train_RBPs_log2p_tpm.csv"
-  isoform_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train/train_trans_log2p_tpm.csv"
-  gene_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train/train_gn_tpm.csv"
-  metadata_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train/train_phenotype_metadata.csv"
-
+train_path_files: '/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train'
+test_path_files: '/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Test'
 sample_category: "detailed_category"  # The column in metadata to stratify on 
 test_fraction: 0.2
 getBM_path: "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/getBM.csv"
 gene_col_name: "Gene_ID"
 trans_col_name: "Transcript_ID"
-seed: 42
 cuda: True
-print_every: 5
 train_batch_size: 128
 val_batch_size: 256
-num_hidden_layers: 2 # Number of hidden layers
-hidden1_nodes: 64 # Number of nodes in first hidden layer
-uniform_nodes: False 
+
+num_hidden_layers: 1
+hidden1_nodes: 64
+uniform_nodes: False
 node_shrink_factor: 4
 activation_func: relu
 learning_rate: 0.001
@@ -256,22 +279,20 @@ optimizer_name: adamW
 plot_results: True
 ```
 
-where, (EXPLAIN MORE THIS JOSEBA PLEASE)
-- **`data_paths`**: Paths to input data files:  
-  - **`rbp_path`**: File containing RBP expression data in log2(TPM+1).  
-  - **`isoform_expr_path`**: File containing isoform expression data in log2(TPM+1).  
-  - **`metadata_path`**: Metadata file (sample-level information).  
-  - **`gene_expr_path`**: File with gene expression data per isoform in TPM.   
-- **`getBM_path`**: File for selected gene-RBP mappings.  
-- **`sample_category`**: Metadata column used to stratify samples.  
-- **`plot_results`**: Enable or disable visualization of results.  
+where,
+- **`num_hidden_layers`**: Number of hidden layers.
+- **`hidden1_nodes`**: Number of nodes in the first hidden layer.
+- **`uniform_nodes`**:  Whether to use uniform nodes across layers.
+- **`node_shrink_factor`**: Factor to reduce nodes in layers.
+- **`activation_func`**: Activation function to use (e.g., 'relu', 'tanh').
+- **`learning_rate`**: Learning rate for the optimizer.
+- **`optimizer_name`**:  Name of the optimizer (e.g., 'adamW').
 
-
-Once the config.yaml file is ready, execute the script as follows, specifying the path where you have saved both the config for the dataset used for training (`config_path`) and the `output_dir` in which you want to save the results:
+Once the `config` file is ready, execute the script as follows, specifying the path `output_dir` where you want to save the results:
 
 ```bash
 run-deeprbp-predictor \
-  --config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_tcga_model_train.yaml" \
+  --config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_model_train.yaml" \
   --output_dir "/scratch/jsanchoz/DeepRBP/output/results/run_deeprbp_predictor" \
   --epochs 1000 \
   --num_workers 4 \
@@ -331,7 +352,7 @@ sbatch run_predictor.sh
 
 ---
 
-# Explainability Module 
+# Explainability Module  (actualizar data paths que ahora solo hay que dar el parent dir y que el model ahora es un checkpoint directamente)
 This module uses the already trained DeepRBP Predictor to compute TxRBP (transcript-by-RBP) and GxRBP (gene-by-RBP) scores using DeepLIFT (Shrikumar, Greenside, and Kundaje, 2017) [Learning important features through propagating activation differences, International Conference on Machine Learning, PMLR, pages 3145–3153].
 
 With DeepLIFT, the contribution of each RBP-Transcript pair is determined for every sample in the input data, resulting in a three-dimensional score matrix with the following dimensions:
@@ -422,6 +443,15 @@ To execute the explainability pipeline on our model trained with DeepLIFT, you h
 ### **Option 1: Running the Scripts**  
 To execute DeepRBP Explainer with a specific tumor type on the **TCGA** test dataset, you need to use the config file used for training the predictor model and a `config_tcga_model_explain.yaml` configuration file for the explainability:
 
+
+
+
+
+
+
+
+# esto hay que actualizar socio:
+
 #### Configuration Parameters Explanation
 **`data_paths`**
 Contains the entire test data. You can later select the tumor type using `select_category` and `sample_category`. The first parameter selects the tumor type, while the second refers to the column associated with the tumor type in your metadata CSV. In `data_paths`, you have the expression of RBPs in log2p, transcripts in log2p, and genes in TPM, along with the metadata.
@@ -492,7 +522,7 @@ seed: 42
 
 ```bash  
 run-deeprbp-explainer \
-  --config_path_explain "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_tcga_model_explain_deeplift_knock_t_stat.yaml" \
+  --config_path_explain "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_model_explain_deeplift_knock_t_stat.yaml" \
   --config_path_train "/scratch/jsanchoz/DeepRBP/output/results/run_deeprbp_predictor/results/config.yaml" \
   --output_dir "/scratch/jsanchoz/DeepRBP/output/results/explainability_deeplift_knock_t_stat"
 ```

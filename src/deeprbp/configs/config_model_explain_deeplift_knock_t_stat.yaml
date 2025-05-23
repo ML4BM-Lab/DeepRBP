@@ -9,6 +9,7 @@ data_paths:
 trained_model_dir: "/scratch/jsanchoz/DeepRBP/output/results/run_deeprbp_predictor/results"
 model_file: "best_model.pt"
 scaler_dir: "/scratch/jsanchoz/DeepRBP/output/results/run_deeprbp_predictor/results"
+
 explanation_method: "DeepLIFT"
 reference_data: "knockout_reference"
 batch_reduction_method: "t-statistic"

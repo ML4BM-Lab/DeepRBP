@@ -52,7 +52,7 @@ class DeepRBPDataModule(L.LightningDataModule):
         self.test_path_files = self.config.get('test_path_files', None)
         
         # Load batch sizes for training and validation
-        self.train_batch_size = self.config.get('train_batch_size', None) # para optuna esto hay que definirlo dentro de los loaders o redefinir con dm.train_batch_size
+        self.train_batch_size = self.config.get('train_batch_size', None) 
         self.val_batch_size = self.config.get('val_batch_size', 256)
         
         # Load sampling information
@@ -84,6 +84,7 @@ class DeepRBPDataModule(L.LightningDataModule):
         print('ESTOY LLAMANDO A SETUP BRO')
         # we set up only relevant datasets when stage is specified (automatically set by Pytorch-Lightning)
         if stage == 'fit' or stage is None:
+            print('ESTOY INTENTANDO ENTRAR MÁS')
             if not self.is_train_setup:
                 if self.toy_sample_fraction:
                     print(f"[DeepRBPDataModule] 🧩 Using toy sample fraction: {self.toy_sample_fraction}")

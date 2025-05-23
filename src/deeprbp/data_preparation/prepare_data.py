@@ -87,9 +87,9 @@ class PrepareData:
             # Filter samples if sample fraction is defined
             filtered_data = prep_data.filter_samples(data, sample_category='detailed_category', sample_fraction=0.1)
         """
-        self.logger.log(f"[*] Filtering samples to optimize time and resources with fraction: {sample_fraction}...", level=1)
+        self.logger.log(f"\n[*] Filtering samples to optimize time and resources with fraction: {sample_fraction}...", level=1)
         data_subset = DataSplitter.split_data_class(data, sample_category, sample_fraction, self.verbose)
-        self.logger.log("[*] Samples filtered successfully.", level=self.verbose)
+        self.logger.log("[*] Samples filtered successfully.\n", level=self.verbose)
         return data_subset
     ###
     def split_data(self, data: Dict[str, pd.DataFrame], sample_category: str, 
@@ -109,7 +109,7 @@ class PrepareData:
             # Split the data into training and validation sets
             train_data, valid_data = prep_data.split_data(data, sample_category='detailed_category', test_fraction=0.2)
         """
-        self.logger.log("✂️ Splitting data into train and validation (or test) sets...", level=self.verbose)
+        self.logger.log("\n✂️ Splitting data into train and validation (or test) sets...", level=self.verbose)
         splitter = DataSplitter(data, sample_category)
         return splitter.split_data_sets(test_fraction, test_name)
     ###
@@ -147,7 +147,7 @@ class PrepareData:
         for data, save_path, custom_names in data_to_save:
             self.logger.log(f"[*] Saving data to: {save_path}...", level=self.verbose) 
             save_data(data, save_path, custom_names)
-            self.logger.log(f"[*] Data saved successfully.", level=self.verbose) 
+            self.logger.log(f"[*] Data saved successfully.\n", level=self.verbose) 
     ###
     def fit_scaler(self, train_data: dict[pd.DataFrame]):
         """Fits the scaler to the training data.

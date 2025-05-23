@@ -49,7 +49,7 @@ class DeepRBPExpressionDataset(Dataset):
         features_data = (rbp_data_key, gene_data_key, transcript_data_key)
         self.features = {feature: torch.tensor(data_copy[f"{feature}"].values, dtype=torch.float32) for feature in features_data} # CHANGED THIS TO FLOAT32 JOSEBA!
     def print_tensor_shapes(self):
-        self.logger.log("Features stored in the dataset:", level=self.verbose)
+        self.logger.log("\nFeatures stored in the dataset:", level=self.verbose)
         table_data = []
         for feature, tensor in self.features.items():
             table_data.append([feature, tensor.shape])

@@ -160,18 +160,18 @@ def calculate_category_proportions(data: Dict[str, pd.DataFrame]) -> pd.DataFram
     category_proportions.columns = ['detailed_category', 'proportion']
     return category_proportions
 
-# def format_output(data):
-#     """Format the output to always return a single object if data is formed by a single dataset or a list otherwise.
-
-#     Args:
-#         data (list): The data to format.
-
-#     Returns:
-#         data: A single object (dict or object) if the input is a single dataset, or a list of dictionaries or objects if multiple datasets.
-#     """
-#     if isinstance(data, list) and len(data) == 1:
-#         return data[0]  # Return the single item 
-#     return data  # Return as a list for multiple items
+def log_section_separator(title, max_length=70):
+    title = title.upper()
+    title_length = len(title)
+    line_length = min(max_length, title_length + 4)             
+    padding_length = line_length - 2 - title_length
+    left_padding = padding_length // 2
+    right_padding = padding_length - left_padding
+    separator_line = "#" * line_length
+    title_line = "#" + " " * left_padding + title + " " * right_padding + "#"
+    print(separator_line)
+    print(title_line)
+    print(separator_line)
 
 def print_gpu_memory_info():
     # Get the list of GPUs

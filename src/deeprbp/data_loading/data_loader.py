@@ -27,12 +27,11 @@ class DataImporter:
         self.paths = self._generate_data_patterns()
     def _generate_data_patterns(self) -> Dict[str, str]:
         """Generates the file paths based on the base path provided."""
-        base_name = self.base_path.split('/')[-1].lower()
         return {
-            'rbp_path': os.path.join(self.base_path, f"{base_name}_RBPs_log2p_tpm.csv"),
-            'isoform_expr_path': os.path.join(self.base_path, f"{base_name}_trans_log2p_tpm.csv"),
-            'gene_expr_path': os.path.join(self.base_path, f"{base_name}_gn_tpm.csv"),
-            'metadata_path': os.path.join(self.base_path, f"{base_name}_phenotype_metadata.csv")
+            'rbp_path': os.path.join(self.base_path, f"RBPs_log2p_tpm.csv"),
+            'isoform_expr_path': os.path.join(self.base_path, f"trans_log2p_tpm.csv"),
+            'gene_expr_path': os.path.join(self.base_path, f"gn_tpm.csv"),
+            'metadata_path': os.path.join(self.base_path, f"phenotype_metadata.csv")
         }
     def load(self) -> Dict[str, pd.DataFrame]:
         """Load data dictionary from the specified paths and store it in the object."""
@@ -86,6 +85,7 @@ class DataSplitter:
         self.logger.log(f'📊 [split_data] Performing a stratified data split with fraction division equal to {test_size}...')
         # Perform the stratified split based on patient IDs (still strings at this point) and sample category
         train_id, test_id = sk_train_test_split(self.sample_ids_index, test_size=test_size, stratify=self.sample_category_labels, random_state=42)
+        print_section_separator()
         return train_id, test_id
     @classmethod
     def split_data_class(cls, data: Dict[str, pd.DataFrame], sample_category: str, 
@@ -118,6 +118,7 @@ class DataSplitter:
             self.data['metadata_df']['set_type'] = 'unknown'
         self.data['metadata_df'].loc[self.sample_ids_index.isin(sample_set), 'set_type'] = set_name
         self.logger.log(f"🏷️ Added sample set label '{set_name}' for {len(samples)} samples.")
+        print_section_separator()
     def split_data_sets(self, test_fraction, test_name='testing') -> Tuple[Dict[str, pd.DataFrame], Dict[str, pd.DataFrame]]:
         """
         This function handles the splitting of data into training and testing (or 'validation') sets based on the 
@@ -165,8 +166,6 @@ class Scaler:
         self.sigma = existing_sigma
         if self.scaler is not None and self.sigma is not None:
             self.logger.log("✅ [Scaler] Existing scaler and sigma loaded. Ready for transformation.")
-        else:
-            self.logger.warn("⚠️ [Scaler] No existing scaler or sigma provided. Please fit before using.")
         print_section_separator()
     def fit(self, train_set):
         """
@@ -182,7 +181,7 @@ class Scaler:
         self.scaler = StandardScaler()
         self.scaler.fit(train_set)
         self.sigma = np.std(self.scaler.transform(train_set).flatten().astype(np.float64))
-        self.logger.log(f"✅ [Scaler:fit] Sigma computed: {self.sigma:.4f}")
+        self.logger.log(f"✅ [Scaler:fit] Sigma computed: {self.sigma:.4f}\n")
     def transform(self, transform_set):
         """
         Normalize and clip the data using the fitted scaler and computed sigma.
@@ -268,38 +267,3 @@ class Scaler:
     
     # You can load the scaler later from disk if needed
     # scaler = Scaler.load(folder_path=f"{scaler_path}/scaler")
-
-
-# class DataImporter: VERSION OLD
-#     def __init__(self, paths):
-#         """
-#         This class is designed to facilitate the loading of multiple datasets related to RNA-binding proteins (RBP),
-#         gene expression, isoform expression, and associated metadata from specified file paths.
-
-#         Parameters:
-#         - paths (dict): A dictionary containing the file paths for the datasets. The expected keys include:
-#           - 'rbp_path': Path to the RBP expression data file.
-#           - 'gene_expr_path': Path to the gene expression data file.
-#           - 'isoform_expr_path': Path to the isoform expression data file.
-#           - 'counts_path': Path to the gene counts data file.
-#           - 'metadata_path': Path to the metadata file, which is required.
-#         """
-#         self.logger = Logger(verbose=1)
-#         if "metadata_path" not in paths or not paths["metadata_path"]:
-#             self.logger.error("❌ The 'metadata_path' is required and must be provided.", ValueError)
-#         self.paths = paths
-#         self.data = {}
-#     def load(self):
-#         """
-#         Load data dictionary from the specified paths and store it in the object.
-#         """
-#         try:
-#             self.logger.log("📥 Loading data from specified paths...")
-#             for key, path in self.paths.items():
-#                 if path:  # Only load if the path is provided
-#                     self.data[f"{key.split('_')[0]}_df"] = pd.read_csv(path, index_col=0)
-#                     self.logger.log(f"✅ Loaded {key} data.")
-#             print_section_separator()
-#         except FileNotFoundError as e:
-#             self.logger.error(f"❌ Error loading file: {e}", FileNotFoundError)
-#         return self.data  # Return raw loaded data

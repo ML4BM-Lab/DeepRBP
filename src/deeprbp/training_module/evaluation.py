@@ -10,7 +10,7 @@ from typing import List, Dict, Any
 from tqdm import tqdm 
 import lightning as L
 
-from ..util.utils import adjust_batch_size, filter_data_by_sample_ids
+from ..util.utils import filter_data_by_sample_ids, log_section_separator
 from .preds2visualization import scatter_real_vs_pred, plot_transcript_to_gene_ratio_distributions
 
 from ..data_preparation.prepare_data import DeepRBPExpressionDataset
@@ -138,10 +138,13 @@ def evaluate_and_visualize_metrics_by_category(
     categories = metadata_df[dm.sample_category].unique().tolist()
     # Initialize a list to store results
     results_list = []
-    # Use tqdm to create a progress bar for processing categories
-    for category in tqdm(categories, desc="Processing categories", unit="category"):
-        print(f"\n[evaluate_and_visualize_metrics_by_category] 🚀 Currently processing category: {category}")
-        
+
+    total_categories = len(categories)
+
+    for index, category in enumerate(categories):
+        print('\n')
+        log_section_separator(f"Processing Category: {category} ({index + 1}/{total_categories})")
+        print('\n')
         # Filter samples for the current category
         category_samples = metadata_df.loc[metadata_df[dm.sample_category] == category].index
         # Create a copy of the test data to avoid modifying the original data

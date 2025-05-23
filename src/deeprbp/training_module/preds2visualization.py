@@ -107,7 +107,6 @@ def plot_metric_history(train_history: List[float], val_history: List[float],
     plt.plot(val_history, label='Validation', color='darkorange', linestyle='--', linewidth=2.5)
     plt.title(title, fontsize=18, fontweight='bold', pad=10)
     plt.xlabel('Epoch', fontsize=14, labelpad=8)
-    print('\n\n')
     plt.ylabel('Performance', fontsize=14, labelpad=8)  
     plt.grid(True, linestyle='--', alpha=0.6)
     plt.legend(fontsize=12, loc='upper left', bbox_to_anchor=(1.04, 1), frameon=True, shadow=True, fancybox=True)

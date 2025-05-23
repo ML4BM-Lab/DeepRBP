@@ -19,6 +19,7 @@ from lightning.pytorch.loggers import CSVLogger
 
 def main():
     args = parse_args()
+    
     # Load configuration and auxiliary file
     print('\n[main_predictor] 🚀 Loading configuration...')
     config = ConfigParser(args.config_path) 
