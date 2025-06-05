@@ -18,24 +18,37 @@ echo "Current time in Hondarribia: $(TZ='Europe/Madrid' date '+%Y-%m-%d %H:%M:%S
 echo "########################################"
 
 module load Python
-conda activate /data/jsanchoz/conda-env/DeepRBP
+source activate /data/jsanchoz/conda-env/DeepRBP
+
+PYTHON_EXEC="/data/jsanchoz/conda-env/DeepRBP/bin/python"
+
+# Check Python version
+python --version
+
+# Check active conda environment
+conda info --envs
 
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 
 export PYTHONPATH="/scratch/jsanchoz/DeepRBP/src:$PYTHONPATH"
 python -c "import deeprbp; print('Package found')"
 
-# Run the training script with torchrun
-torchrun \
-    --nproc_per_node=$SLURM_NTASKS \
-    --nnodes=$SLURM_JOB_NUM_NODES \
-    --node_rank=$SLURM_NODEID \
-    --master_addr=$(hostname) \
-    --master_port=$(shuf -i 20000-30000 -n 1) \
-    -m deeprbp.training_module.hyperparameter_optimization.grid_search_optuna \
-        --config_path '/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_hyper_optimization.yaml' \
-        --n_trials 33 \
-        --output_dir '/scratch/jsanchoz/DeepRBP/output/results/hyperpameter_optimization_SLURM' \
+# Lanzar un proceso por GPU
+for i in {0..3}; do
+    echo "➤ Lanzando proceso en GPU $i"
+    LOG_FILE="/scratch/jsanchoz/DeepRBP/output/logs/run_hyper_optuna_gpu_${i}.out"
+    CUDA_VISIBLE_DEVICES=$i \
+    python -m deeprbp.training_module.hyperparameter_optimization.grid_search_optuna \
+        --storage_path "/scratch/jsanchoz/DeepRBP/output/results/hyperparameter_optimization_SLURM/optuna.db" \
+        --n_trials 250 \
+        --config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_hyper_optimization.yaml" \
+        --output_dir "/scratch/jsanchoz/DeepRBP/output/results/hyperparameter_optimization_SLURM" \
         --num_workers 0 \
         --min_delta 0.001 \
-        --patience 30
+        --patience 30 \
+        --gpu_id $i > "$LOG_FILE" 2>&1 &   
+done
+
+wait   
+echo "✅ All process are finished"
+

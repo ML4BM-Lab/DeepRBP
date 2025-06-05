@@ -68,10 +68,10 @@ def scatter_real_vs_pred(
  
 def plot_all_metrics_history(metrics_df: pd.DataFrame, output_dir: str) -> None:
     metrics_pairs = {
-        'Correlation Pearson History': ('train_corr_pearson', 'val_corr_pearson'),
-        'Correlation Spearman History': ('train_corr_spearman', 'val_corr_spearman'),
-        'Loss History': ('train_loss', 'val_loss'),
-        'R2 Score History': ('train_r2', 'val_r2')
+        'Correlation Pearson History': ('train_corr_pearson', 'validation_corr_pearson'),
+        'Correlation Spearman History': ('train_corr_spearman', 'validation_corr_spearman'),
+        'Loss History': ('train_loss', 'validation_loss'),
+        'R2 Score History': ('train_r2', 'validation_r2')
     }
     for title, (train_metric, val_metric) in metrics_pairs.items():
         plot_metric_history(

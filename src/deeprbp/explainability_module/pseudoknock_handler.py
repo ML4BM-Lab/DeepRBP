@@ -166,7 +166,7 @@ class PseudoKnockHandler:
             df_scores_TxRBP[rbp_name] = self._compute_attribution_scores_for_rbp(index_col)
             self.logger.log(f"✅ Finished processing RBP {rbp_name}.", level=2)
             print(df_scores_TxRBP)
-            print_section_separator()
+            #print_section_separator()
         self.logger.log("✅ Attribution scores computation completed for all RBPs.", level=1)
         return df_scores_TxRBP
     
@@ -217,26 +217,7 @@ class PseudoKnockHandler:
         return df_scores_TxRBP
         
        
-# # JOSEBA AQUI!!!
-# config_path_train = '/scratch/jsanchoz/DeepRBP/output/results/run_deeprbp_predictor/results/config.yaml'
-# config_path_explain = '/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_tcga_model_explain_alternative.yaml'
-# config_explain = ConfigParser(config_path_explain)
-# output_dir = '/scratch/jsanchoz/DeepRBP/output/results/explainability'
 
-# explainer = ExplainerModel(config_path_explain, config_path_train, output_dir)
-# data = explainer.load_process_scale_data()
-# dataset = explainer.build_tensor_dataset(data)
-
-# model = explainer.load_trained_predictor_model()
-
-# explainer_handler = explainer.initialize_explainer_handler(model)
- 
-# df_scores_TxRBP = compute_attribution_scores(explainer_handler.dataset, explainer_handler.model)
-
-
-# explainer_handler.dataset
-# explainer_handler.model
-# explainer_handler.config_explain
 
 
 

@@ -1,10 +1,13 @@
+# src/deeprbp/data_preparation/data_module.py
 
+import os
 import pandas as pd
+import torch
 import lightning as L
 
 from ..data_loading.config_loader import ConfigParser
 from .prepare_data import PrepareData
-from ..util.utils import adjust_batch_size
+from ..util.utils import print_if_main, adjust_batch_size, print_section_separator
 
 class DeepRBPDataModule(L.LightningDataModule):
     """
@@ -37,71 +40,55 @@ class DeepRBPDataModule(L.LightningDataModule):
     def __init__(self, config: ConfigParser, output_dir: str, num_workers: int = 0, verbose: int = 1):
         super().__init__()
         self.config = config
-        self.output_dir = output_dir
         self.num_workers = num_workers
         self.verbose = verbose
-        
+        self.output_dir = output_dir
         # Load the mapping DataFrame from the specified path in the configuration
         self.getBM = pd.read_csv(self.config.get('getBM_path'))
         self.trans_col_name=self.config.get('trans_col_name', default="Transcript_ID") # just used on create_tensor_dataset
         self.gene_col_name=self.config.get('gene_col_name', default="Gene_ID")
-        
         # Load paths for training and testing data
         self.train_path_files = self.config.get('train_path_files')
         self.val_fraction = self.config.get('test_fraction')
         self.test_path_files = self.config.get('test_path_files', None)
-        
         # Load batch sizes for training and validation
         self.train_batch_size = self.config.get('train_batch_size', None) 
         self.val_batch_size = self.config.get('val_batch_size', 256)
-        
         # Load sampling information
         self.sample_category = self.config.get('sample_category') 
         self.toy_sample_fraction = self.config.get('sample_fraction', None) # Used for filtering samples
-        
         # Initialize the PrepareData instance for data preparation
-        self.prep_data = PrepareData(self.getBM, self.trans_col_name, self.gene_col_name, self.output_dir, self.verbose) 
-
+        self.prep_data = PrepareData(self.getBM, self.trans_col_name, self.gene_col_name, 
+                                     self.sample_category, self.output_dir, self.verbose) 
         # Flags to check if data has already been prepared or set up
-        self.is_data_prepared = False
         self.is_train_setup = False
         self.is_test_setup = False
- 
-    def prepare_data(self):
-        """Load data"""
-        if not self.is_data_prepared:
-            self.training_all_data = self.prep_data.load_data(self.train_path_files)
-            if self.test_path_files:
-                self.test_data = self.prep_data.load_data(self.test_path_files)
-            self.is_data_prepared = True
-        else:
-            print("[DeepRBPDataModule] 🔍 Data already prepared; skipping loading data.")
 
     def setup(self, stage=None):
         """Split, transform data and create tensor datasets. Called on each GPU separately - stage defines if we are at fit or test step.
         Setup is called from every process across all the nodes. Setting state here is recommended.
         """
-        print('ESTOY LLAMANDO A SETUP BRO')
-        # we set up only relevant datasets when stage is specified (automatically set by Pytorch-Lightning)
         if stage == 'fit' or stage is None:
-            print('ESTOY INTENTANDO ENTRAR MÁS')
+    
             if not self.is_train_setup:
-                if self.toy_sample_fraction:
-                    print(f"[DeepRBPDataModule] 🧩 Using toy sample fraction: {self.toy_sample_fraction}")
-                    self.training_all_data = self.prep_data.filter_samples(self.training_all_data, self.sample_category, self.toy_sample_fraction)
-                                                                           
-                print("[DeepRBPDataModule] 🛠 Setting up training and validation data...")
+                print_if_main("[DeepRBPDataModule] 🛠 Setting up Training data ...")
+                # Loading training data
+                self.training_all_data = self.prep_data.load_data(
+                        path=self.train_path_files, sample_fraction=self.toy_sample_fraction
+                )
+                print_if_main("[DeepRBPDataModule] 🛠 Dividing data into Training and Validation ...")
+                
                 # Split data on train and validation
-                self.train_data, self.val_data = self.prep_data.split_data(self.training_all_data, self.sample_category, self.val_fraction)
+                self.train_data, self.val_data = self.prep_data.split_data(self.training_all_data, self.val_fraction)
                 self.prep_data.save_split_data(self.train_data, self.val_data)
                 
                 # Transform data
                 self.prep_data.fit_scaler(self.train_data) 
                 self.train_data, self.val_data = self.prep_data.scale_train_val_data(self.train_data, self.val_data)
-                
                 # Create the tensor dataset
                 self.train_dataset = self.prep_data.create_tensor_dataset(self.train_data)
                 self.val_dataset = self.prep_data.create_tensor_dataset(self.val_data)
+                print_section_separator()
                 
                 # Print the shapes of the resulting tensors and layers details only on rank 0  
                 if self.trainer is not None and hasattr(self.trainer, 'is_global_zero') and self.trainer.is_global_zero:
@@ -109,51 +96,50 @@ class DeepRBPDataModule(L.LightningDataModule):
                     self.val_dataset.print_tensor_shapes() 
                 self.is_train_setup = True 
             else:
-                print("[DeepRBPDataModule] 🔍 Training and validation data already set up; skipping setup.")
-   
+                print_if_main("[DeepRBPDataModule] 🔍 Training and validation data already set up; skipping setup.")
+        
         if stage == 'test' or stage is None:
+            
             if not self.is_test_setup:
-                print("[DeepRBPDataModule] 🛠 Setting up test data...")
+                # Loading test data
+                print_if_main("[DeepRBPDataModule] 🛠 Setting up Test data...")
+                self.test_data = self.prep_data.load_data(path=self.test_path_files)
+                
                 if self.prep_data.scaler is None:
                     self.prep_data.load_scaler(self.output_dir+'/data')
-
                 self.test_data = self.prep_data.scale_data(self.test_data)
                 self.test_dataset = self.prep_data.create_tensor_dataset(self.test_data)
-                
                 if self.trainer is not None and hasattr(self.trainer, 'is_global_zero') and self.trainer.is_global_zero:
                     self.test_dataset.print_tensor_shapes() 
-
                 self.is_test_setup = True
+
             else:
-                print("[DeepRBPDataModule] 🔍 Test data already set up; skipping setup.")
+                print_if_main("[DeepRBPDataModule] 🔍 Test data already set up; skipping setup.")
 
     def train_dataloader(self):
         """Returns loader for training set"""
-        print('ESTOY LLAMANDO A train_dataloader BRO')
         train_data_loader = self.prep_data.create_data_loader(
                     self.train_dataset, batch_size=adjust_batch_size(self.train_dataset, self.train_batch_size), 
                     shuffle = True, drop_last = True, num_workers = self.num_workers
         )
         return train_data_loader
- 
+    
     def val_dataloader(self):
         """Returns loader for validation set"""
-        print('ESTOY LLAMANDO A val_dataloader BRO')
         val_data_loader = self.prep_data.create_data_loader(
                     self.val_dataset, batch_size=adjust_batch_size(self.val_dataset, self.val_batch_size), 
                     shuffle = False, drop_last = False, num_workers = self.num_workers
         )
         return val_data_loader
- 
+    
     def test_dataloader(self):
         """Returns loader for test set"""
-        print('ESTOY LLAMANDO A test_dataloader BRO')
         test_data_loader = self.prep_data.create_data_loader(
                     self.test_dataset, batch_size=len(self.test_dataset), shuffle = False, drop_last = False, num_workers = self.num_workers
         )
         # Use a large batch size to ensure all samples are included for predictions.
         return test_data_loader
-   
+    
     def predict_dataloader(self, mode='test', custom_loader=None):
         """Returns loader for prediction set based on the specified mode.
         
@@ -184,7 +170,6 @@ class DeepRBPDataModule(L.LightningDataModule):
             test_predictions = trainer.predict(model, datamodule=data_module.predict_dataloader(mode='test'))
         ```
         """
-        print('ESTOY LLAMANDO A predict_dataloader BRO!!!!!')
         if mode == 'train':
             return self.train_dataloader()
         elif mode == 'val':
@@ -199,6 +184,3 @@ class DeepRBPDataModule(L.LightningDataModule):
             raise ValueError("Invalid mode. Choose 'train', 'val', 'test', or 'predict'.")
     
 
-
-    
-   

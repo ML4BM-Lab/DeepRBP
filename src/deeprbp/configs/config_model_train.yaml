@@ -1,4 +1,5 @@
 # src/deeprbp/configs/config_model_train.yaml
+
 train_path_files: '/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train'
 test_path_files: '/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Test'
 sample_category: "detailed_category"  # The column in metadata to stratify on 

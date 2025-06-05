@@ -47,7 +47,7 @@ class DeepLiftHandler:
         self.dataset = dataset
         self.deeplift_explainer = DeepLift(model)
         self.logger.log("✅ DeepLiftHandler initialized successfully.", level=1)
-
+    ###
     def prepare_rbp_reference_tensor(self):
         """
         Prepare reference RBP tensor based on the configuration.
@@ -73,7 +73,7 @@ class DeepLiftHandler:
             self.logger.error(f"[prepare_rbp_tensors] Unknown reference type: '{reference_type}'", ValueError)
             raise ValueError(f"Unknown reference type: {reference_type}")
         return reference_rbp_tensor
-    
+    ###
     def compute_attribution_scores(self, reference_rbp_tensor):
         """
         Compute attribution scores batch-wise for RBP x S x T.
@@ -92,7 +92,7 @@ class DeepLiftHandler:
             )
             list_batch_scores.append(scores_batch)
         return list_batch_scores
-    
+    ###
     def _compute_attribution_scores_for_batch(self, target_node, scaled_rbp_inputs, reference_rbp_inputs, gene_expression_inputs):
         """
         Compute attribution scores for a batch of input data using the DeepLift explainer.
@@ -116,7 +116,7 @@ class DeepLiftHandler:
             additional_forward_args=gene_expression_inputs,
         )
         return scores
-    
+    ###
     def reduce_batch_dimension(self, list_batch_scores):
         """
         Reduce the batch dimension of DeepLIFT scores to generate final TxRBP scores using a specified method.
@@ -160,7 +160,7 @@ class DeepLiftHandler:
             self.logger.log("[reduce_batch_dimension] Sum reduction completed.")
         df_deeplift_TxRBP = pd.DataFrame(result_scores, index=self.dataset.trans_names, columns=self.dataset.rbp_names)
         return df_deeplift_TxRBP
-    
+    ###
     def calculate_scores_transcript_level(self):
         """
         Calculate attribution scores at the transcript level using the DeepLIFT method.

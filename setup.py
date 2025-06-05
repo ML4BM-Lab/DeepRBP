@@ -43,7 +43,8 @@ setup(
         'console_scripts': [
             'preprocess-data=src.deeprbp.data_preprocessing.preprocess_data:main',
             'split-and-save=src.deeprbp.data_preprocessing.split_data_and_save:main',
-            'run-hyper-optimization-optuna=src.deeprbp.training_module.hyperparameter_optimization.grid_search_optuna:main',
+            'create-optuna-study=src.deeprbp.training_module.hyperparameter_optimization.create_optuna_study:main',
+            'analyze-optuna-results=src.deeprbp.training_module.hyperparameter_optimization.analyze_results_optuna:main',
             'run-deeprbp-predictor=src.deeprbp.training_module.main_predictor:main',
             'run-deeprbp-explainer=src.deeprbp.explainability_module.main_explainer:main',
             'run-postar-validator=src.deeprbp.explainability_module.postar_validation.postar_validator:main'
@@ -51,5 +52,3 @@ setup(
     },
     zip_safe=False,
 )
-
- 

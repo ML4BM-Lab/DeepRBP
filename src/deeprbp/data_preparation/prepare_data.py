@@ -1,3 +1,4 @@
+# src/deeprbp/data_preparation/prepare_data.py
 
 from ..data_loading.data_loader import DataImporter, DataSplitter, Scaler
 
@@ -8,13 +9,14 @@ from torch.utils.data import DataLoader
 
 from .tensor_dataset import DeepRBPExpressionDataset
 from ..util.logger import Logger
-from ..util.utils import save_data
+from ..util.utils import save_data, print_section_separator
 
 class PrepareData:
     def __init__(self, 
                  getBM: pd.DataFrame, 
                  trans_col_name: str, 
                  gene_col_name: str, 
+                 sample_category: str = None, 
                  output_dir: str = None, 
                  verbose: int = 1):
         """
@@ -24,6 +26,7 @@ class PrepareData:
             getBM (pd.DataFrame): DataFrame containing the mapping of Gene_ID to Transcript_ID.
             trans_col_name (str): The name of the column in getBM representing Transcript_ID.
             gene_col_name (str): The name of the column in getBM representing Gene_ID.
+            sample_category (str, optional): Column name used for the sample category.
             output_dir (str, optional): Directory where output data will be saved. Default is None.
             verbose (int, optional): Verbosity level for logging. 
                                      - 0: No logging (suppress all output).
@@ -37,23 +40,30 @@ class PrepareData:
         self.logger = Logger(self.verbose)  # Initialize the logger with verbosity level
         self.logger.log("📁 Initializing Data Preparation...", level=1)
         ###
-        self.getBM = getBM
+        self.getBM = getBM 
         self.trans_col_name = trans_col_name
         self.gene_col_name = gene_col_name
+        self.sample_category = sample_category
         ###
         # Optional output directory
-        if output_dir:
-            self.path_save_data = os.path.join(output_dir, 'data')
-        else:
-            self.path_save_data = None  # Handle case where output_dir is not provided
+        self.path_save_data = os.path.join(output_dir, 'data') if output_dir else None
         self.scaler = None
-        self.logger.log("Initialization done ✅", level=1)
+        self.logger.log("✅ Initialization done", level=1)
+        print_section_separator()
     ###
-    def load_data(self, path: str) -> Dict[str, pd.DataFrame]:  
+    def load_data(self, path: str,
+                  select_category: str = None, 
+                  disease_condition: str = None, 
+                  select_condition: list = None, 
+                  sample_fraction: float = None) -> Dict[str, pd.DataFrame]:
         """Loads data from specified paths using the DataImporter class.
         
         Args:
             path (str): The path where data files are located.
+            select_category (str, optional): Specific category of samples to retain.
+            disease_condition (str, optional): Column name used for filtering samples based on disease conditions.
+            select_condition (list, optional): List of conditions to retain in the filtered dataset.
+            sample_fraction (float, optional): Fraction of samples to retain for dataset size reduction.
 
         Returns:
             Dict[str, pd.DataFrame]: The loaded data as a dictionary of DataFrames.
@@ -66,39 +76,26 @@ class PrepareData:
             data = prep_data.load_data(path='path/to/data')
             print(data['metadata_df'].head())
         """
-        self.data_importer = DataImporter(path, self.verbose)
+        self.data_importer = DataImporter(
+            base_path=path, 
+            verbose=self.verbose,
+            sample_category=self.sample_category,
+            select_category=select_category,
+            disease_condition=disease_condition,
+            select_condition=select_condition,
+            sample_fraction=sample_fraction
+        )
         data = self.data_importer.load()    
-        self.logger.log("✅ Data import complete.", level=self.verbose)
+        self.logger.log("✅ Data import completed", level=self.verbose)
+        print_section_separator()
         return data
     ###
-    # Alternative method: if you wanna reduce your dataset size you can use this.
-    def filter_samples(self, data: Dict[str, pd.DataFrame], sample_category: str, sample_fraction: float) -> Dict[str, pd.DataFrame]:
-        """ Filters a portion of the samples to optimize time and computational resources.
-        
-        Args:
-            data (Dict[str, pd.DataFrame]): Dictionary of DataFrames to filter based on the sample fraction.
-            sample_category (str): The column name in metadata used for stratification.
-            sample_fraction (float): The fraction of samples to retain.
-
-        Returns:
-            Dict[str, pd.DataFrame]: Filtered dictionary of DataFrames if sample_fraction is defined, else original data.
-
-        Example:
-            # Filter samples if sample fraction is defined
-            filtered_data = prep_data.filter_samples(data, sample_category='detailed_category', sample_fraction=0.1)
-        """
-        self.logger.log(f"\n[*] Filtering samples to optimize time and resources with fraction: {sample_fraction}...", level=1)
-        data_subset = DataSplitter.split_data_class(data, sample_category, sample_fraction, self.verbose)
-        self.logger.log("[*] Samples filtered successfully.\n", level=self.verbose)
-        return data_subset
-    ###
-    def split_data(self, data: Dict[str, pd.DataFrame], sample_category: str, 
-                   test_fraction: float, test_name: str = 'validation') -> Tuple[Dict[str, pd.DataFrame], Dict[str, pd.DataFrame]]:
+    def split_data(self, data: Dict[str, pd.DataFrame], test_fraction: float, 
+                   test_name: str = 'validation') -> Tuple[Dict[str, pd.DataFrame], Dict[str, pd.DataFrame]]:
         """Splits data into training and validation (or test) sets.
             
         Args:
             data (Dict[str, pd.DataFrame]): The data to be split.
-            sample_category (str): The column name in metadata used for stratification.
             test_fraction (float): The fraction of the dataset to be used as the validation set.
             test_name (str, optional): Name for the validation dataset. Default is 'validation'.
 
@@ -110,7 +107,7 @@ class PrepareData:
             train_data, valid_data = prep_data.split_data(data, sample_category='detailed_category', test_fraction=0.2)
         """
         self.logger.log("\n✂️ Splitting data into train and validation (or test) sets...", level=self.verbose)
-        splitter = DataSplitter(data, sample_category)
+        splitter = DataSplitter(data, self.sample_category)
         return splitter.split_data_sets(test_fraction, test_name)
     ###
     def save_split_data(self, train_data: pd.DataFrame, valid_data: pd.DataFrame):
@@ -148,6 +145,8 @@ class PrepareData:
             self.logger.log(f"[*] Saving data to: {save_path}...", level=self.verbose) 
             save_data(data, save_path, custom_names)
             self.logger.log(f"[*] Data saved successfully.\n", level=self.verbose) 
+        self.logger.log("✅ Data saving completed", level=self.verbose)
+        print_section_separator()
     ###
     def fit_scaler(self, train_data: dict[pd.DataFrame]):
         """Fits the scaler to the training data.
@@ -169,6 +168,7 @@ class PrepareData:
         self.logger.log("✅ Scaler has been fitted to training data.", level=self.verbose)
         self.scaler.save(self.path_save_data)
         self.logger.log(f"✅ Scaler has been saved in {self.path_save_data}.", level=self.verbose)
+        print_section_separator()
     ###
     # Alternative method: if you already have an scaler you can load it
     def load_scaler(self, folder_path: str):
@@ -190,6 +190,7 @@ class PrepareData:
             self.logger.error(f"❌ [Scaler:load_scaler] Failed to load scaler: {e}", level=self.verbose)
         except Exception as e:
             self.logger.error(f"❌ [Scaler:load_scaler] An unexpected error occurred: {e}", level=self.verbose)
+        print_section_separator()
     ###
     def scale_data(self, data: dict[pd.DataFrame]):
         """Transforms the provided dict[pd.DataFrame] in the RBP expression dataframe using the fitted scaler.
@@ -214,6 +215,7 @@ class PrepareData:
         scaled_data = data.copy()  # Make a copy of the original data to avoid modifying it
         # Scale the RBP data and add it to the scaled_data dictionary
         scaled_data['scaled_rbp_df'] = self.scaler.transform(data['rbp_df'])  # Scale the RBP data
+        print('\n')
         return scaled_data
     ###
     def scale_train_val_data(self, train_data: dict[pd.DataFrame], val_data: dict[pd.DataFrame]) -> tuple:
@@ -235,6 +237,8 @@ class PrepareData:
         """
         scaled_train_data = self.scale_data(train_data)
         scaled_val_data = self.scale_data(val_data)
+        self.logger.log("✅ Train and Val data scaling completed.", level=self.verbose)
+        print_section_separator()
         return scaled_train_data, scaled_val_data
     ###
     def create_tensor_dataset(self, data: dict[pd.DataFrame]) -> DeepRBPExpressionDataset:

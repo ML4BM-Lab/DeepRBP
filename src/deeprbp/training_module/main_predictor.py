@@ -9,7 +9,8 @@ from ..data_loading.config_loader import ConfigParser
 from ..data_preparation.data_module import DeepRBPDataModule
 from .model import PredictorModel
 
-from ..util.utils import print_gpu_memory_info, set_random_seed, find_best_checkpoint
+from ..util.utils import (print_if_main, setup_output_directory, 
+                          print_gpu_memory_info, set_random_seed, find_best_checkpoint)
 from .evaluation import evaluate_and_visualize_metrics_by_category
 from .preds2visualization import plot_all_metrics_history
 
@@ -21,38 +22,42 @@ def main():
     args = parse_args()
     
     # Load configuration and auxiliary file
-    print('\n[main_predictor] 🚀 Loading configuration...')
+    print_if_main('\n[main_predictor] 🚀 Loading configuration...')
     config = ConfigParser(args.config_path) 
 
+    # Determine the output directory based on gpu rank or cpu device
+    output_dir = setup_output_directory(args.output_dir)
+    print_if_main('\n[main_predictor] Output directory for main process: ', output_dir)
+
     # Load data module and prepare data for training
-    print('\n[main_predictor] 🚀 Initializing DataModule...')
-    dm = DeepRBPDataModule(config, args.output_dir)
-    print('[main_predictor] 🚀 Preparing data for training...')
-    dm.prepare_data() # Load or prepare the necessary data
+    print_if_main('\n[main_predictor] 🚀 Initializing DataModule...')
+    dm = DeepRBPDataModule(config, output_dir)
+    print_if_main('[main_predictor] 🚀 Preparing data for training...')
     dm.setup('fit')  
-    print('\n[main_predictor] ──────────────────────────────────────')
+    print_if_main('\n[main_predictor] ──────────────────────────────────────')
 
     # Create model
-    print('\n[main_predictor] 🚀 Creating the model...')
+    print_if_main('\n[main_predictor] 🚀 Creating the model...')
     model = PredictorModel(
             config=config,
             input_size=len(dm.train_dataset.rbp_names), 
             output_size=len(dm.train_dataset.trans_names),
             gene_names=dm.train_dataset.gene_names,
             trans_names=dm.train_dataset.trans_names,
-            getBM=dm.getBM
+            getBM=dm.getBM,
+            verbose=args.verbose
     )
-    print('[main_predictor] 🚀 Model created:', model)
-    print('\n[main_predictor] ──────────────────────────────────────')
+    print_if_main('[main_predictor] 🚀 Model created:', model)
+    print_if_main('\n[main_predictor] ──────────────────────────────────────')
 
     # Define lightning trainer
-    print('\n[main_predictor] 🚀 Defining the Lightning trainer...')
-    callbacks = get_callbacks(args)
+    print_if_main('\n[main_predictor] 🚀 Defining the Lightning trainer...')
+    callbacks = get_callbacks(args, output_dir)
     trainer = L.Trainer(
             accelerator="gpu" if config.get('cuda') and torch.cuda.is_available() else "cpu",
             devices= int(os.environ.get('SLURM_NTASKS')), # Extract GPUs per node int(os.environ.get('SLURM_NTASKS'))
             num_nodes= int(os.environ.get('SLURM_JOB_NUM_NODES', 1)),  # Number of GPU nodes for distributed training. Default: 1. Extract number of nodes int(os.environ.get('SLURM_JOB_NUM_NODES', 1))
-            logger=CSVLogger(f"{args.output_dir}/csv_logs", name="deep_rbp_predictor", version=0), 
+            logger=CSVLogger(f"{output_dir}/csv_logs", name="deep_rbp_predictor", version=0), 
             callbacks=callbacks,       
             max_epochs=3,    
             deterministic=True,               # Set to True for reproducibility
@@ -65,55 +70,57 @@ def main():
             # plugins=SLURMEnvironment(auto_requeue=False), # Custom plugins (default None)
             sync_batchnorm=True              # Synchronize batch normalization (default False) PROBAR CON ESTO EN FALSE
     )
-    print('\n[main_predictor] ──────────────────────────────────────')
+    print_if_main('\n[main_predictor] ──────────────────────────────────────')
 
     # Model training
-    print('\n[main_predictor] 🚀 Starting model training...')
+    print_if_main('\n[main_predictor] 🚀 Starting model training...')
     trainer.fit(model, dm)
-    print('\n[main_predictor] ──────────────────────────────────────')
+    print_if_main('\n[main_predictor] ──────────────────────────────────────')
 
-    # Plot training history for different metrics
-    print('\n[main_predictor] 🚀 Plotting training history...')
-    metrics_file_path = os.path.join(args.output_dir, 'csv_logs', 'deep_rbp_predictor', 'version_0', 'metrics.csv')
-    if os.path.exists(metrics_file_path):
-        metrics_df = pd.read_csv(metrics_file_path)
-        plot_all_metrics_history(metrics_df, f'{args.output_dir}/metrics_training_history')
-    else:
-        print(f"[main_predictor] ❌ Metrics file does not exist at: {metrics_file_path}")
-    print('\n[main_predictor] ──────────────────────────────────────')
+    # Evaluation on test set (only run this on rank 0 (GPU-0 or CPU))
+    if trainer.global_rank == 0 or not torch.cuda.is_available():
+        # Plot training history for different metrics
+        print('\n[main_predictor] 🚀 Plotting training history...')
+        metrics_file_path = os.path.join(output_dir, 'csv_logs', 'deep_rbp_predictor', 'version_0', 'metrics.csv')
+        if os.path.exists(metrics_file_path):
+            metrics_df = pd.read_csv(metrics_file_path)
+            plot_all_metrics_history(metrics_df, f'{output_dir}/metrics_training_history')
+        else:
+            print(f"[main_predictor] ❌ Metrics file does not exist at: {metrics_file_path}")
+        print('\n[main_predictor] ──────────────────────────────────────')
 
     # Load model checkpoint
-    print('\n[main_predictor] 🚀 Loading the best model checkpoint...')
-    checkpoint_dir = f'{args.output_dir}/checkpoint_model'
+    print_if_main('\n[main_predictor] 🚀 Loading the best model checkpoint...')
+    checkpoint_dir = callbacks[1].dirpath #f'{output_dir}/checkpoint_model'
     model_ckpt_path = find_best_checkpoint(checkpoint_dir)
-    print(f"[main_predictor] 🚀 Using checkpoint: {model_ckpt_path}")
+    print_if_main(f"[main_predictor] 🚀 Using checkpoint: {model_ckpt_path}")
     model = PredictorModel.load_from_checkpoint(model_ckpt_path)
-    print('\n[main_predictor] ──────────────────────────────────────')
+    print_if_main('\n[main_predictor] ──────────────────────────────────────')
 
     # Evaluation on test set (general!, se puede hacer lo mismo con el train y val?? o hay que usar para ello el .predict?) (AQUI IGUAL HAY QUE METER TB LOS GLOBALES PARA EL TRAIN Y VAL)
-    print('\n[main_predictor] 🚀 Evaluating on the test set...')
-    dm.setup('test') 
+    print_if_main('\n[main_predictor] 🚀 Evaluating on the test set...')
+    dm.setup('test')
     trainer.test(model, dm)
-    print('\n[main_predictor] ──────────────────────────────────────')
+    print_if_main('\n[main_predictor] ──────────────────────────────────────')
 
     # Evaluation of the model's performance by category
-    print('\n[main_predictor] 🚀 Evaluating model performance by category...')
+    print_if_main('\n[main_predictor] 🚀 Evaluating model performance by category...')
     datasets = [(dm.train_data, 'train'), (dm.val_data, 'val'), (dm.test_data, 'test')]
 
     for data, set_name in datasets:
-        print(f"[main_predictor] 🚀 Evaluating on the {set_name} set...")
+        print_if_main(f"[main_predictor] 🚀 Evaluating on the {set_name} set...")
         evaluate_and_visualize_metrics_by_category(
             test_data=data,
             trainer=trainer,
             model=model,
             dm=dm,
-            output_dir=args.output_dir,
+            output_dir=output_dir,
             set_name=set_name,
             plot_results=config.get('plot_results')
-        )
-    print('\n[main_predictor] 🚀 Process completed.')
+         )
+    print_if_main('\n[main_predictor] 🚀 Process completed.')
 
-def get_callbacks(args):
+def get_callbacks(args, output_dir):
     """Define and return the callbacks for training.
     Args:
         args: The argument parser or an object containing configuration settings.
@@ -121,16 +128,16 @@ def get_callbacks(args):
         list: A list of callbacks to be used in the Trainer.
     """
     early_stopping = EarlyStopping(
-        monitor='val_loss',  # The metric to monitor
+        monitor='validation_loss',  # The metric to monitor
         min_delta=args.min_delta,  # Minimum change to qualify as an improvement
         patience=args.patience,  # How many epochs to wait after the last improvement
         verbose=True,  # Print messages when stopping
         mode='min'             
     )
     ckpt_callback = ModelCheckpoint(
-        dirpath=f'{args.output_dir}/checkpoint_model',  # Custom directory for checkpoints
-        filename='deeprbp-predictor-{epoch:02d}-{val_loss:.2f}',
-        monitor='val_loss',   
+        dirpath=f'{output_dir}/checkpoint_model',  # Custom directory for checkpoints
+        filename='deeprbp-predictor-{epoch:02d}-{validation_loss:.2f}',
+        monitor='validation_loss',   
         verbose=True,
         save_top_k=args.save_top_k,
         mode='min',  
@@ -153,10 +160,13 @@ def parse_args():
                              'If save_top_k == -1, all models are saved.', 
                         type=int, 
                         default=1)
+    parser.add_argument('--verbose', help='Verbosity level (0: no prints, 1: general prints, 2: debug prints)', type=int, default=1)
     return parser.parse_args()
 
 if __name__ == "__main__":
-    if os.environ.get("LOCAL_RANK")=="0":
+    if os.environ.get("LOCAL_RANK")=="0": 
         print_gpu_memory_info()
     set_random_seed()
+    # Set precision
+    torch.set_float32_matmul_precision("high")
     main()

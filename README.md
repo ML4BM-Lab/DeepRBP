@@ -188,7 +188,6 @@ You can use the following `config` file:
 #### **Example Configuration File (`config_hyper_optimization.yaml`)**
 ```yaml
 train_path_files: '/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train'
-test_path_files: '/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Test' # just for making predictions with the best params after optimization
 sample_category: "detailed_category"   
 sample_fraction: 0.5
 test_fraction: 0.2
@@ -207,7 +206,6 @@ where,
   - **`metadata_path`**: Metadata file (sample-level information).  
   - **`gene_expr_path`**: File with gene expression data per isoform in TPM.  
   
-- **`test_path_files`**: Paths to input folder containing the test data. In the Optuna optimization script
 this data it is just used to test the model using the best parameters selected by the MSE between the log2p TPM values 
 between predicted and real values on a validation set.
 - **`sample_category`**: Metadata column used to stratify samples.  
@@ -221,28 +219,60 @@ between predicted and real values on a validation set.
 - **`val_batch_size`**: Batch size used for the validation data loader.
 - **`plot_results`**: Enable or disable visualization of results. 
 
-*Option 1: Direct Command Execution*
+
+#### Step 1: Create the Optuna Study
+Before running any hyperparameter optimization, you must first initialize an Optuna study where the results will be stored. This step sets up the study with a `TPESampler` and a `MedianPruner`, and creates a local `SQLite` database to store the optimization history.
+
+To create the study, simply run the following command from the terminal:
+
 ```bash
-run-hyper-optimization-optuna --config_path '/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_hyper_optimization.yaml' \
-                              --n_trials 1000 \
-                              --output_dir '/scratch/jsanchoz/DeepRBP/output/results/hyperpameter_optimization' \
-                              --num_workers 0 \
-                              --min_delta 0.001 \
-                              --patience 30                    
+create-optuna-study --output_dir /scratch/jsanchoz/DeepRBP/output/results/hyperparameter_optimization_SLURM 
 ```
+where,
+- **`--output_dir`: Path where the Optuna storage (optuna.db) will be saved.
 
-In this command:
-* `config_path` specifies the configuration file.
-* `n_trials` is the number of combinations you want to test with Optuna.
-* `output_dir` indicates the directory where you want to save the results.
-* `num_workers` is the number of worker threads to use for loading data with DataLoader. Increasing this number can improve data loading speed, especially with large datasets.
-* `min_delta` is the minimum change in the monitored metric to qualify as an improvement. This value is used to determine when to stop training early. If the improvement is less than this threshold, the training might halt.
-* `patience` is the number of epochs to wait after the last improvement before stopping the training process. This allows the model some time to improve before deciding to terminate the training early.
+#### Step 2: Submit the Hyperparameter Optimization Job via SLURM
+For this step, we do not provide a command-line entry point, as it is intended to be executed exclusively on a high-performance computing (HPC) cluster due to the significant computational resources required.
 
-*Option 2: Submit Job via SLURM*
+We perform 1,000 hyperparameter optimization trials using Optuna with a `TPESampler`. According to the Optuna documentation, the recommended number of trials for this sampler typically ranges between 100 and 1,000 to explore the search space effectively.
+
+To parallelize the workload, the SLURM job is configured to run with 4 GPUs (NVIDIA A100), where each GPU handles 250 trials. Based on our setup, the job completes in approximately 90 hours.
+
+To launch the optimization job, simply run the following command (adjust the SLURM script as needed for your HPC setup):
 ```bash
 sbatch slurm/run_hyper_optimization_optuna.sh
 ```
+
+Below is a description of the main arguments used in the hyperparameter optimization step:
+
+* `--storage_path`: Full path to the Optuna SQLite database file where all trial information will be stored.
+* `--n_trials`: Number of parameter combinations to try using Optuna. 💡 We run 250 trials per GPU (total 1000 trials), as recommended by Optuna's TPE sampler (100–1000 trials for best results).
+* `--config_path`: Path to the YAML config file defining model architecture and training parameters.
+* `--output_dir`: Directory to save all results, logs, and intermediate files during the optimization.
+* `--num_workers`: Number of worker threads for data loading. `0` is safe for most environments; increase if your system allows.
+* `--min_delta`: Minimum performance improvement threshold to continue training. If the monitored metric improves less than this value, it may trigger early stopping.
+* `--patience`: Number of epochs to wait without improvement before stopping training.
+* `--gpu_id`: The GPU index to use for the trial batch. 🎯 This allows running one optimization job per GPU in parallel.
+
+#### Step 3: Analyze the Hyperparameter Optimization results
+Use the following command to analyze the results of your Optuna hyperparameter search and generate summary plots:
+
+```bash
+analyze-optuna-results --storage_path /scratch/jsanchoz/DeepRBP/output/results/OLDhyperparameter_optimization_SLURM_FIRST/optuna.db \
+                       --output_dir /scratch/jsanchoz/DeepRBP/output/results/OLDhyperparameter_optimization_SLURM_FIRST/analyze_results
+```
+
+This will:
+* Load the Optuna study from the SQLite database.
+* Export trial results to a CSV file.
+* Generate and save informative plots (e.g., optimization history, parameter importance, timeline, etc.) in both PNG and PDF formats.
+
+
+
+# ((((EJECUTANDO AHORA ESTA PARTE DE LOS RESULTADOS JOSEBA!!!)))
+
+
+
 
 #####
 ## Executing DeepRBP Predictor (using optimized hyperparameters)
@@ -298,7 +328,8 @@ run-deeprbp-predictor \
   --num_workers 4 \
   --min_delta 0.001 \
   --patience 30 \
-  --save_top_k 1
+  --save_top_k 1 \
+  --verbose 1
 ```
 
 ### Explanation of Arguments
@@ -340,6 +371,33 @@ sbatch run_predictor.sh
 ### **Option 1: Running the Python Script**  
 # para esto haz un jupyter notebook para que el usuario pueda usar el modelo sobre su propio data si quiere.
  
+
+
+
+
+
+### aqui joseba
+#TODO: 
+-1)	Entrenar cada tipo tumoral con la arquitectura final y predecir vs entrenar con todo y predecir y hacer la matriz de confusion. que demuestra que es mejor entrenar un modelo con todo que con uno solo (usa para ello un Notebook de jupyter brother!).
+
+-2)	Idoia: comparar el Predictor con un decisión tree o SVM como otro baseline. Mira multi output regressor.
+
+├── benchmark_methods/             # Folder para métodos de evaluación
+│   │   ├── svm_benchmark.py           # Script para evaluar SVM
+│   │   ├── decision_tree_benchmark.py  # Script para evaluar árboles de decisión
+
+
+-3)	Ángel me ha dicho una idea sobre: DeepLIFT de los RBPs que están el mismo complejo debería estar más correlado que los que no. Correlacion complejo > Correlacion no complejo, para ver si detectamos complejos y familias de rbp que se autoregulan. Lo saco de está página web:
+
+La adición de los hidden layers puede hacer que la red aprendar interacciones y oposum ver familias.
+https://mips.helmholtz-muenchen.de/corum/
+descarga de aquí : https://mips.helmholtz-muenchen.de/corum/?query=(fcg_id=1)
+
+
+
+
+
+
 
 
 
@@ -441,91 +499,57 @@ To execute the explainability pipeline on our model trained with DeepLIFT, you h
 
 ---
 ### **Option 1: Running the Scripts**  
-To execute DeepRBP Explainer with a specific tumor type on the **TCGA** test dataset, you need to use the config file used for training the predictor model and a `config_tcga_model_explain.yaml` configuration file for the explainability:
+To execute DeepRBP Explainer with a specific tumor type on the **TCGA** test dataset, you need to use the config file used for training the predictor model and a `config_model_explain.yaml` (config_model_explain_deeplift_knock_t_stat.yaml) configuration file for the explainability:
 
-
-
-
-
-
-
-
-# esto hay que actualizar socio:
-
-#### Configuration Parameters Explanation
-**`data_paths`**
-Contains the entire test data. You can later select the tumor type using `select_category` and `sample_category`. The first parameter selects the tumor type, while the second refers to the column associated with the tumor type in your metadata CSV. In `data_paths`, you have the expression of RBPs in log2p, transcripts in log2p, and genes in TPM, along with the metadata.
-
-**`trained_model_dir`**
-Directory path to the previously trained predictive model.
-
-**`model_file`**
-The name of the trained model file.
-
-**`scaler_dir`**
-Directory where the scaler is saved (in a joblib format) along with the sigma value.
-
-**`explanation_method`**
-The method you will use to compute the TxRBP and GxRBP explainability scores. Alternatively, you can use the Pseudoknockdown method, which simulates a knockdown or knockup.
-
-**`reference_data`**
-Required only by DeepLIFT to perform calculations.
-
-**`batch_reduction_method`**
-Specifies how we collapse the dimension of the samples once we have calculated the scores for each sample. An alternative option could be `sum_scores`.
-
-**`gene_collapse_method`**
-Set to `"max_absolute_value"`, which is the method used to collapse the TxRBP scores matrix to GxRBP. This method takes the highest absolute value score among the transcripts of a gene and retains its sign.
-
-**`getBM_path`**
-Path to the file that relates gene IDs with transcript IDs and disease conditions.
-
-**`sample_category`**
-Column name in metada that refers to samples' tumor type to help filtering samples.
-
-**`select_category`**
-The specific tumor type(s) you want to select.
-
-**`disease_condition`**
-The column in the metadata to stratify on.
-
-**`select_condition`**
-Conditions for filtering the samples, such as "Primary_Tumor" or potentially including "Solid_Tissue_Normal".
-by tumor type. You could select only primary tumors or also include normal samples. You could calculate scores for 
-normal samples and then run for tumor samples in a new execution to study the differences.
-
-#### **Example Configuration File (`config_tcga_model_explain.yaml`)**
+#### **Example Configuration File (`config_model_explain_deeplift_knock_t_stat.yaml`)**
 
 ```yaml
-data_paths:
-  rbp_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Test/test_RBPs_log2p_tpm.csv"
-  isoform_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Test/test_trans_log2p_tpm.csv"
-  gene_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Test/test_gn_tpm.csv"
-  metadata_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Test/test_phenotype_metadata.csv"
-
-trained_model_dir: "/scratch/jsanchoz/DeepRBP/output/results/run_deeprbp_predictor/results"
-model_file: "best_model.pt"
-scaler_dir: "/scratch/jsanchoz/DeepRBP/output/results/run_deeprbp_predictor/results"
-explanation_method: "DeepLIFT" # or alternatively: Pseudoknockdown
-reference_data: "knockdown_reference" # required when explanation_method is "DeepLIFT". Alternative values: median_reference, half_reference
-batch_reduction_method: "t-statistic" # alternative value: sum_scores
-gene_collapse_method: "max_absolute_value"
-getBM_path: "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/getBM.csv"
+test_path_files: '/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Test'
 sample_category: "detailed_category"  # The column in metadata to stratify on
-disease_condition: "sample_type"
+disease_condition: "sample_type" # The column in metadata to stratify on
 select_category: "Liver_Hepatocellular_Carcinoma"
 select_condition: 
   - "Primary_Tumor"
   #- "Solid_Tissue_Normal"
-seed: 42
+explanation_method: "DeepLIFT"
+reference_data: "knockout_reference"
+batch_reduction_method: "t-statistic"
+gene_collapse_method: "max_absolute_value"
+getBM_path: "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/getBM.csv"
+gene_col_name: "Gene_ID"
+trans_col_name: "Transcript_ID"
 ```
+where,
+- **`scaler_dir`**: Directory where the scaler is saved (in a joblib format) along with the sigma value.
+- **`sample_category`**: Column name in metada that refers to samples' tumor type to help filtering samples.
+- **`disease_condition`**: The column in the metadata to stratify on.
+- **`select_category`**: The specific tumor type(s) you want to select.
+- **`select_condition`**: Conditions for filtering the samples, such as "Primary_Tumor" or potentially including "Solid_Tissue_Normal".
+by tumor type. You could select only primary tumors or also include normal samples. You could calculate scores for 
+normal samples and then run for tumor samples in a new execution to study the differences.
+- **`explanation_method`**: The method you will use to compute the TxRBP explainability scores. Alternatively, you can use the `Pseudoknockdown` method, which simulates a knockdown or knockup.
+- **`reference_data`**: Required only by DeepLIFT to perform calculations.
+- **`batch_reduction_method`**: Specifies how we collapse the dimension of the samples once we have calculated the scores for each sample. An alternative option could be `sum_scores`.
+- **`gene_collapse_method`**: Set to `"max_absolute_value"`, which is the method used to collapse the TxRBP scores matrix to GxRBP. This method takes the highest absolute value score among the transcripts of a gene and retains its sign.
 
 ```bash  
 run-deeprbp-explainer \
-  --config_path_explain "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_model_explain_deeplift_knock_t_stat.yaml" \
-  --config_path_train "/scratch/jsanchoz/DeepRBP/output/results/run_deeprbp_predictor/results/config.yaml" \
-  --output_dir "/scratch/jsanchoz/DeepRBP/output/results/explainability_deeplift_knock_t_stat"
+  --config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_model_explain_deeplift_knock_t_stat.yaml" \
+  --model_ckpt_path "/scratch/jsanchoz/DeepRBP/output/results/run_deeprbp_predictor/checkpoint_model/deeprbp-predictor-epoch=31-val_loss=0.11.ckpt" \
+  --scaler_dir "/scratch/jsanchoz/DeepRBP/output/results/run_deeprbp_predictor/data" \
+  --output_dir "/scratch/jsanchoz/DeepRBP/output/results/explainability_deeplift_knock_t_stat_EXAMPLE"
 ```
+
+<!-- run-deeprbp-explainer \
+  --config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/config_alternative/config_model_explain_pseudoknock_control_kout.yaml" \
+  --model_ckpt_path "/scratch/jsanchoz/DeepRBP/output/results/run_deeprbp_predictor/checkpoint_model/deeprbp-predictor-epoch=31-val_loss=0.11.ckpt" \
+  --scaler_dir "/scratch/jsanchoz/DeepRBP/output/results/run_deeprbp_predictor/data" \
+  --output_dir "/scratch/jsanchoz/DeepRBP/output/results/explainability_knockeo_EXAMPLE" -->
+   
+
+
+
+
 
 ### **Option 2: Submit a Job in a HPC**   
 ```bash

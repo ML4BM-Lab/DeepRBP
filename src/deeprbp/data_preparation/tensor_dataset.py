@@ -58,3 +58,11 @@ class DeepRBPExpressionDataset(Dataset):
         return len(next(iter(self.features.values())))
     def __getitem__(self, idx: int):
         return {feature: values[idx] for feature, values in self.features.items()}
+    def to_numpy(self): # method added for being used in alternative model benchmark
+        """Convert the features stored in the dataset to NumPy arrays.
+
+        Returns:
+            dict: A dictionary containing NumPy arrays for RBPs, genes, and transcripts.
+        """
+        # Convert each tensor to a NumPy array
+        return {feature: self.features[feature].numpy() for feature in self.features}
