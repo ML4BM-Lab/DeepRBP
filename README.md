@@ -198,7 +198,6 @@ cuda: True
 val_batch_size: 256
 plot_results: False
 ```
-
 where,
 - **`train_path_files`**: Paths to input folder containing the data to model:
   - **`rbp_path`**: File containing RBP expression data in log2(TPM+1).  
@@ -220,7 +219,7 @@ between predicted and real values on a validation set.
 - **`plot_results`**: Enable or disable visualization of results. 
 
 
-#### Step 1: Create the Optuna Study
+#### Step 1: Create the Optuna Study (ALREADY CREATED!)
 Before running any hyperparameter optimization, you must first initialize an Optuna study where the results will be stored. This step sets up the study with a `TPESampler` and a `MedianPruner`, and creates a local `SQLite` database to store the optimization history.
 
 To create the study, simply run the following command from the terminal:
@@ -231,10 +230,10 @@ create-optuna-study --output_dir /scratch/jsanchoz/DeepRBP/output/results/hyperp
 where,
 - **`--output_dir`: Path where the Optuna storage (optuna.db) will be saved.
 
-#### Step 2: Submit the Hyperparameter Optimization Job via SLURM
+#### Step 2: Submit the Hyperparameter Optimization Job via SLURM (EXECUTING NOW THIS JOSEBA)
 For this step, we do not provide a command-line entry point, as it is intended to be executed exclusively on a high-performance computing (HPC) cluster due to the significant computational resources required.
 
-We perform 1,000 hyperparameter optimization trials using Optuna with a `TPESampler`. According to the Optuna documentation, the recommended number of trials for this sampler typically ranges between 100 and 1,000 to explore the search space effectively.
+We perform 1,000 hyperparameter optimization trials using Optuna with a `TPESampler`. According to the Optuna documentation, the recommended number of trials for this sampler typically ranges between 100 and 1,000 to explore the search space effectively. To speed up the optimization process and avoid unnecessary computation on poorly performing configurations, we use an early stopping strategy with a `MedianPruner`. This pruner stops unpromising trials early by comparing their intermediate results to the median of previously completed trials, helping to allocate resources more efficiently during the search. In our setup, pruning is disabled until at least five trials have completed, and within each trial, it is further delayed until 30 steps have been reached. After that point, the pruning condition is checked every 10 steps based on the latest available intermediate values. These parameter values follow the commonly used in `Optuna`'s official examples.
 
 To parallelize the workload, the SLURM job is configured to run with 4 GPUs (NVIDIA A100), where each GPU handles 250 trials. Based on our setup, the job completes in approximately 90 hours.
 
@@ -254,7 +253,18 @@ Below is a description of the main arguments used in the hyperparameter optimiza
 * `--patience`: Number of epochs to wait without improvement before stopping training.
 * `--gpu_id`: The GPU index to use for the trial batch. 🎯 This allows running one optimization job per GPU in parallel.
 
-#### Step 3: Analyze the Hyperparameter Optimization results
+The hyperparameter that are going to be optimised are:
+- **`num_hidden_layers`**: Number of hidden layers.
+- **`hidden1_nodes`**: Number of nodes in the first hidden layer.
+- **`uniform_nodes`**:  Whether to use uniform nodes across layers.
+- **`node_shrink_factor`**: Factor to reduce nodes in layers.
+- **`activation_func`**: Activation function to use (e.g., 'relu', 'tanh').
+- **`learning_rate`**: Learning rate for the optimizer.
+- **`optimizer_name`**:  Name of the optimizer (e.g., 'adamW').
+- **`batch_norm_eps`**: Epsilon value for batch normalization.
+- **`batch_norm_momentum`** Momentum value for batch normalization.
+
+#### Step 3: Analyze the Hyperparameter Optimization results (NO EJECUTADO)
 Use the following command to analyze the results of your Optuna hyperparameter search and generate summary plots:
 
 ```bash
@@ -270,6 +280,17 @@ This will:
 
 
 # ((((EJECUTANDO AHORA ESTA PARTE DE LOS RESULTADOS JOSEBA!!!)))
+
+
+
+### Trying alternative Machine Learning benchmark methods  
+
+Vamos a comparar nuestro DeepRBP Predictor model basado en Deep Learning con otros benchmark traditional Machine learning models.
+
+
+
+
+
 
 
 
@@ -298,25 +319,8 @@ trans_col_name: "Transcript_ID"
 cuda: True
 train_batch_size: 128
 val_batch_size: 256
-
-num_hidden_layers: 1
-hidden1_nodes: 64
-uniform_nodes: False
-node_shrink_factor: 4
-activation_func: relu
-learning_rate: 0.001
-optimizer_name: adamW
 plot_results: True
 ```
-
-where,
-- **`num_hidden_layers`**: Number of hidden layers.
-- **`hidden1_nodes`**: Number of nodes in the first hidden layer.
-- **`uniform_nodes`**:  Whether to use uniform nodes across layers.
-- **`node_shrink_factor`**: Factor to reduce nodes in layers.
-- **`activation_func`**: Activation function to use (e.g., 'relu', 'tanh').
-- **`learning_rate`**: Learning rate for the optimizer.
-- **`optimizer_name`**:  Name of the optimizer (e.g., 'adamW').
 
 Once the `config` file is ready, execute the script as follows, specifying the path `output_dir` where you want to save the results:
 

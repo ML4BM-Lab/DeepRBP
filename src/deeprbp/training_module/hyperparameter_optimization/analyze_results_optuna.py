@@ -58,7 +58,6 @@ def main():
     height_cm = 12
     figsize_inch = (width_cm / 2.54, height_cm / 2.54)
 
-
     # 📊 Optimization History
     plt.figure(figsize=figsize_inch)
     optuna_plt.plot_optimization_history(study)

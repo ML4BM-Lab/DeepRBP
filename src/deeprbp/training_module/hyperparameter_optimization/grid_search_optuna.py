@@ -1,26 +1,20 @@
 # /src/deeprbp/training_module/hyperparameter_optimization/grid_search_optuna.py
 
-import pickle
 import os
 import argparse
-import matplotlib.pyplot as plt
 import torch
-import time
 
 import lightning as L
-from lightning.pytorch.callbacks import EarlyStopping
 from lightning.pytorch.loggers import CSVLogger
 
 import optuna
-from optuna.samplers import TPESampler
-import optuna.visualization.matplotlib as optuna_plt
 from optuna.integration import PyTorchLightningPruningCallback
 from optuna.storages import RDBStorage
 
 from ...data_loading.config_loader import ConfigParser
 from ...data_preparation.data_module import DeepRBPDataModule
-from ..model import PredictorModel
-from ...util.utils import print_if_main, setup_output_directory, log_section_separator, print_gpu_memory_info, set_random_seed
+from ..model import TunablePredictorModel as PredictorModel
+from ...util.utils import print_if_main, setup_output_directory, print_gpu_memory_info, set_random_seed
 
 def parse_args():   
     parser = argparse.ArgumentParser(description='Hyperparameter optimization using Optuna.')
@@ -47,7 +41,6 @@ def main():
     print_if_main('\n[grid_search_optuna] 🚀 Initializing DataModule...')
     dm = DeepRBPDataModule(config, output_dir)
     print_if_main('[grid_search_optuna] 🚀 Preparing data for training...')
-    dm.prepare_data() # Load or prepare the necessary data
     dm.setup('fit')  
     print_if_main('\n[grid_search_optuna] ──────────────────────────────────────')
 
@@ -65,7 +58,6 @@ def main():
     study.optimize(lambda trial: objective(trial, config, dm, args), n_trials=args.n_trials)
     print_if_main("[grid_search_optuna] ✅ Optimization completed.")
 
-  
 def objective(trial, config, dm, args): 
     # Suggest Optuna: Sample hyperparameters for this Trial. Solo el proceso principal sugiere hiperparámetros
     trial_params = {
@@ -121,7 +113,7 @@ def objective(trial, config, dm, args):
             save_dir=os.path.join(args.output_dir, f"optuna_logs/gpu_{args.gpu_id}"),
             name=f"trial_{trial.number}"
         )
-        
+
         trainer = L.Trainer( # actually maybe trainer could be created outside and just change the number of epochs.
             accelerator="gpu" if config.get('cuda') and torch.cuda.is_available() else "cpu",
             devices=1, #int(os.environ.get('SLURM_NTASKS')),  

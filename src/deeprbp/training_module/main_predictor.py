@@ -39,7 +39,6 @@ def main():
     # Create model
     print_if_main('\n[main_predictor] 🚀 Creating the model...')
     model = PredictorModel(
-            config=config,
             input_size=len(dm.train_dataset.rbp_names), 
             output_size=len(dm.train_dataset.trans_names),
             gene_names=dm.train_dataset.gene_names,
@@ -59,7 +58,7 @@ def main():
             num_nodes= int(os.environ.get('SLURM_JOB_NUM_NODES', 1)),  # Number of GPU nodes for distributed training. Default: 1. Extract number of nodes int(os.environ.get('SLURM_JOB_NUM_NODES', 1))
             logger=CSVLogger(f"{output_dir}/csv_logs", name="deep_rbp_predictor", version=0), 
             callbacks=callbacks,       
-            max_epochs=3,    
+            max_epochs=args.epochs,
             deterministic=True,               # Set to True for reproducibility
             accumulate_grad_batches=1,        # Accumulate gradients over multiple batches (default 1) -- In this case, if your global batch size is 20,000 and you set accumulate_grad_batches=4, each GPU will still receive 5,000 samples per mini-batch, but the optimizer will only perform an update after processing 4 mini-batches, effectively simulating a global batch size of 20,000.
             inference_mode=True,              # Whether to run in inference mode (default True) -- Whether to use torch.inference_mode() or torch.no_grad() during evaluation (validate/test/predict).
@@ -91,7 +90,7 @@ def main():
 
     # Load model checkpoint
     print_if_main('\n[main_predictor] 🚀 Loading the best model checkpoint...')
-    checkpoint_dir = callbacks[1].dirpath #f'{output_dir}/checkpoint_model'
+    checkpoint_dir = callbacks[1].dirpath  
     model_ckpt_path = find_best_checkpoint(checkpoint_dir)
     print_if_main(f"[main_predictor] 🚀 Using checkpoint: {model_ckpt_path}")
     model = PredictorModel.load_from_checkpoint(model_ckpt_path)

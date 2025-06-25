@@ -107,37 +107,6 @@ class DataImporter:
             self.logger.error(f"❌ Error loading files: {e}", level=1)
             raise
     
-###
-# path = '/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train'
-
-# # Ejemplo 1: Carga Completa Sin Filtrado
-# data_importer = DataImporter(base_path=path, verbose=1)
-# data = data_importer.load()
-# print("Datos cargados:", data.keys())
-
-# # Ejemplo 2: Carga Con Filtrado
-# data_importer = DataImporter(
-#     base_path=path,
-#     verbose=1,
-#     sample_category="detailed_category",
-#     select_category="Liver_Hepatocellular_Carcinoma",
-#     disease_condition="sample_type",
-#     select_condition=["Primary_Tumor", "Solid_Tissue_Normal"]
-# )
-# filtered_data = data_importer.load()
-# print("Datos filtrados:", filtered_data.keys())
-
-# # Ejemplo 3: Carga Completa Con Reducción de Tamaño
-# data_importer = DataImporter(
-#     base_path=path,
-#     verbose=1,
-#     sample_category="detailed_category",
-#     sample_fraction=0.1  # Reducir el tamaño al 10%
-# )
-# reduced_data = data_importer.load()
-# print("Datos cargados y reducidos:", reduced_data.keys())
-
-
 class DataSplitter:
     def __init__(self, data: Dict[str, pd.DataFrame], sample_category: str = "detailed_category", verbose: int = 1):
         """
@@ -256,7 +225,6 @@ class Scaler:
         self.sigma = existing_sigma
         if self.scaler is not None and self.sigma is not None:
             self.logger.log("✅ [Scaler] Existing scaler and sigma loaded. Ready for transformation.")
-        #print_section_separator()
     def fit(self, train_set):
         """
         Fit a StandardScaler to the training dataset and compute the standard deviation (sigma) for clipping.
@@ -326,7 +294,6 @@ class Scaler:
             self.logger.log(f"✅ [Scaler:save] Sigma saved to: {sigma_file}")
         else:
             self.logger.error("❌ [Scaler:save] No sigma available to save.", ValueError)
-        #print_section_separator()
     @classmethod
     def load(cls, folder_path):
         """
@@ -353,7 +320,6 @@ class Scaler:
         sigma = np.load(sigma_file)
         logger.log(f"✅ [Scaler:load] Scaler loaded from: {scaler_file}")
         logger.log(f"✅ [Scaler:load] Sigma loaded from: {sigma_file}")
-        #print_section_separator()
         return cls(existing_scaler=scaler, existing_sigma=sigma)
     
     # You can load the scaler later from disk if needed

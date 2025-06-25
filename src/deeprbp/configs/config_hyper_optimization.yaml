@@ -1,6 +1,5 @@
 # src/deeprbp/configs/config_hyper_optimization.yaml
 train_path_files: '/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train'
-test_path_files: '/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Test' # just for making predictions with the best params after optimization
 sample_category: "detailed_category"   
 sample_fraction: 0.5
 test_fraction: 0.2

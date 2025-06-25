@@ -6,8 +6,7 @@ import pandas as pd
 from torch.utils.data import DataLoader
 from scipy.stats import spearmanr, pearsonr
 from sklearn.metrics import mean_squared_error, r2_score
-from typing import List, Dict, Any
-from tqdm import tqdm 
+from typing import List, Dict
 import torch
 import lightning as L
 
@@ -64,7 +63,6 @@ def spearmanr_per_gene(gene_names, getBM, trans_names, outputs, labels): # new
     gene_corrs_dict_max = {}
     nan_count_genes = 0  # Counter for NaN correlations
     nan_count_max_trans = 0  # Counter for NaN max transcript correlations
-    
     # Loop through each gene to calculate Spearman correlations
     for gene_id in gene_names:
         related_transcripts = getBM[getBM['Gene_ID'] == gene_id]['Transcript_ID'].values
@@ -189,7 +187,6 @@ def evaluate_and_visualize_metrics_by_category(
         # Append the metrics dictionary to the results list
         results_list.append(metrics)
         # Optional: Plot results
-
         # Do plot only for rank 0 (GPU-0 or CPU))
         if trainer.global_rank == 0 or not torch.cuda.is_available():
             if plot_results:

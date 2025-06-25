@@ -19,7 +19,6 @@ echo "########################################"
 
 module load Python
 source activate /data/jsanchoz/conda-env/DeepRBP
-
 PYTHON_EXEC="/data/jsanchoz/conda-env/DeepRBP/bin/python"
 
 # Check Python version

@@ -19,7 +19,7 @@ def main():
     # 👉 Opción 2: PostgreSQL (descomenta si usas PostgreSQL)
     # # storage = RDBStorage(url="postgresql://optuna_user:supersecurepassword@your-db-host:5432/optuna_db")
     sampler = TPESampler(seed=42)
-    pruner = MedianPruner(n_startup_trials=5, n_warmup_steps=10)
+    pruner = MedianPruner(n_startup_trials=5, n_warmup_steps=30, interval_steps=10) #parameter values used by optuna in their tutorials
     
     print(f"🧪 Creating the study: 'deeprbp_gridsearch_optuna' at '{args.output_dir}'...")
     optuna.create_study(

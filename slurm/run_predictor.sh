@@ -41,7 +41,7 @@ torchrun \
     --master_port=$(shuf -i 20000-30000 -n 1) \
     -m deeprbp.training_module.main_predictor \
     --config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_model_train.yaml" \
-    --output_dir "/scratch/jsanchoz/DeepRBP/output/results/run_deeprbp_predictor_SLURM" \
+    --output_dir "/scratch/jsanchoz/DeepRBP/output/results/run_deeprbp_predictor_SLURM_try9_06" \
     --epochs 100 \
     --num_workers 4 \
     --min_delta 0.001 \

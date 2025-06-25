@@ -1,31 +1,28 @@
+# src/deeprbp/training_module/model.py
 
+from typing import List, Optional
 import pandas as pd
-# Pytorch modules
 import torch
 import torch.nn as nn
 from scipy.stats import spearmanr, pearsonr
 from sklearn.metrics import r2_score
-
-from ..util.logger import Logger
-
 # Pytorch-Lightning
 import lightning as L
 from torchmetrics import MeanMetric
 
+from ..util.logger import Logger
+from ..data_loading.config_loader import ConfigParser
 from .evaluation import spearmanr_per_gene
 
-from typing import List, Any, Optional
 import warnings
 # Suppress FutureWarnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.simplefilter(action='ignore', category=Warning)
 
-class PredictorModel(L.LightningModule): # cambiar nombre a TunablePredictorModel: LightningModule diseñado para la optimización de hiperparámetros del modelo predictor.
+class BaseLightningModule(L.LightningModule):  
     """
+    Base Lightning module for predictor model training and evaluation
     Args:
-        config (object): Class object with the model hyperparameter settings.
-        input_size (int): Size of the input features.
-        output_size (int): Size of the output features.
         gene_names (List[str]): A list of gene IDs used in the model.
         trans_names (List[str]): A list of transcript IDs used in the model.
         getBM (pd.DataFrame): DataFrame containing mapping of Gene_ID to Transcript_ID.
@@ -34,34 +31,226 @@ class PredictorModel(L.LightningModule): # cambiar nombre a TunablePredictorMode
                                  - 1: Basic logging (show progress and essential logs).
                                  - 2: Detailed logging (show additional information).
                                  Default is 1.
-
-    Hyperparameters:
-        - activation_func (str): Activation function to use (e.g., 'relu', 'tanh').
-        - batch_norm_eps (float): Epsilon value for batch normalization.
-        - batch_norm_momentum (float): Momentum value for batch normalization.
-        - hidden1_nodes (int): Number of nodes in the first hidden layer.
-        - learning_rate (float): Learning rate for the optimizer.
-        - node_shrink_factor (float): Factor to reduce nodes in layers.
-        - num_hidden_layers (int): Number of hidden layers.
-        - optimizer_name (str): Name of the optimizer (e.g., 'adamW').
-        - uniform_nodes (bool): Whether to use uniform nodes across layers.
     """
-    def __init__(self, config: Any, input_size: int, output_size: int, 
-                 gene_names: List[str], trans_names: List[str], getBM: pd.DataFrame, 
-                 input_features: Optional[str] = None, output_features: Optional[str] = None,
-                 verbose: int = 0):  # default=1
+    def __init__(self, gene_names: List[str], trans_names: List[str], getBM: pd.DataFrame,
+                 input_features: Optional[str] = None, output_features: Optional[str] = None, 
+                 verbose: int = 0):
         super().__init__()
-        self.save_hyperparameters(ignore=['verbose']) # save all the variables passed to init simply by calling 
-        # Model configuration
-        self.verbose = verbose
-        self.debugging = Logger(verbose=self.verbose)
-        self.input_size = input_size 
-        self.output_size = output_size
         self.input_features = input_features if input_features is not None else ('scaled_rbp_df', 'gene_df')
-        self.output_features = output_features if output_features is not None else ('isoform_df',)   
+        self.output_features = output_features if output_features is not None else ('isoform_df',)  
+        self.criterion = nn.MSELoss()
         self.gene_names = gene_names
         self.trans_names = trans_names
         self.getBM = getBM
+        self.verbose = verbose
+        self.debugging = Logger(verbose=self.verbose)
+        self.initialize_metrics()
+    def initialize_metrics(self):
+        """Initializes metrics for training, validation, and testing. 
+        This method sets up the following metrics using `MeanMetric` from `torchmetrics`:
+        - **Mean Squared Error (MSE)**: It's the loss functionm, measures the average squared difference between log2(tpm+1) predictions vs actual values.
+        - **Pearson Correlation**: Assesses linear correlation between predictions and actual values, ranging from -1 to 1.
+        - **Spearman Correlation**: Evaluates rank correlation, indicating the strength of monotonic relationships, also ranging from -1 to 1.
+        - **R² (Coefficient of Determination)**: Indicates the proportion of variance explained by the model, with values from 0 to 1.
+        """ 
+        # Initialize train metrics
+        self.train_loss = MeanMetric()
+        self.train_corr_spearman = MeanMetric()
+        self.train_corr_pearson = MeanMetric()
+        self.train_r2 = MeanMetric()
+        # Initialize validation metrics
+        self.validation_loss = MeanMetric()
+        self.validation_corr_spearman = MeanMetric()
+        self.validation_corr_pearson = MeanMetric()
+        self.validation_r2 = MeanMetric()
+        # Initialize test metrics
+        self.test_loss = MeanMetric()
+        self.test_corr_spearman = MeanMetric()
+        self.test_corr_pearson = MeanMetric()
+        self.test_r2 = MeanMetric()
+        self.test_corr_spearman_per_gene = MeanMetric()
+        self.test_corr_spearman_per_gene_max = MeanMetric()
+    ###
+    def _prepare_batch(self, batch):
+        """Prepares the inputs and targets from the batch.
+        
+        Args:
+            batch (dict): Batch of data containing input and target features.
+        
+        Returns:
+            tuple: A tuple containing (inputs, targets).
+        """
+        inputs = [batch[feature].float() for feature in self.input_features]
+        targets = [batch[feature].float() for feature in self.output_features]
+        targets = torch.stack(targets).squeeze(0)
+        # Print the devices of inputs and targets
+        for i, input_tensor in enumerate(inputs):
+            self.debugging.log(f"[_prepare_batch] Input feature {i} device: {input_tensor.device}", level=2)
+        self.debugging.log(f"[_prepare_batch] Targets device: {targets.device}", level=2)
+        return inputs, targets
+    ###
+    def training_step(self, train_batch, batch_idx):  
+        """Performs a training step."""
+        inputs, labels = self._prepare_batch(train_batch)
+        rbp_expr, gen_expr = inputs
+        outputs = self(rbp_expr, gen_expr)  # Model predictions
+        loss = self.criterion(labels, outputs)
+        self._update_metrics("train", loss, outputs, labels)
+        return loss
+    ###
+    def validation_step(self, val_batch, batch_idx):
+        inputs, labels = self._prepare_batch(val_batch)
+        rbp_expr, gen_expr = inputs
+        outputs = self(rbp_expr, gen_expr)  
+        loss = self.criterion(labels, outputs)
+        self._update_metrics("validation", loss, outputs, labels)
+    ###
+    def test_step(self, test_batch, batch_idx):
+        """Performs a test step."""
+        inputs, labels = self._prepare_batch(test_batch)
+        rbp_expr, gen_expr = inputs
+        outputs = self(rbp_expr, gen_expr)   
+        loss = self.criterion(labels, outputs)
+        self._update_metrics("test", loss, outputs, labels)
+    ###
+    def _update_metrics(self, data_type, loss, outputs, labels):
+        """Updates the metrics dynamically based on data_type: 'train', 'validation', 'test'."""
+        self.debugging.log(f"[_update_metrics] Outputs device: {outputs.device}", level=2)
+        self.debugging.log(f"[_update_metrics] Labels device: {labels.device}", level=2)
+        self.debugging.log(f"[_update_metrics] Loss device: {loss.device}", level=2)
+        # Update loss
+        getattr(self, f"{data_type}_loss")(loss.cpu())
+        # Convert to numpy for sklearn/scipy metrics
+        labels_np = labels.flatten().cpu().numpy()
+        outputs_np = outputs.flatten().cpu().detach().numpy()
+        # Update correlation and R² metrics
+        getattr(self, f"{data_type}_corr_pearson")(pearsonr(labels_np, outputs_np)[0])
+        getattr(self, f"{data_type}_corr_spearman")(spearmanr(labels_np, outputs_np)[0])
+        getattr(self, f"{data_type}_r2")(r2_score(labels_np, outputs_np))
+        # Only for test: per-gene Spearman
+        if data_type == "test":
+            results = spearmanr_per_gene(
+                    gene_names=self.gene_names, 
+                    getBM=self.getBM, 
+                    trans_names=self.trans_names, 
+                    outputs=outputs.cpu().detach().numpy(), 
+                    labels=labels.cpu().numpy()
+            )
+            self.test_corr_spearman_per_gene(results["mean_corr"])
+            self.test_corr_spearman_per_gene_max(results["mean_corr_max"])
+    ###
+    def _log_metrics(self, data_type):
+        """Logs the metrics for the specified dataset type and returns the computed values."""
+        base_metrics = ["loss", "corr_pearson", "corr_spearman", "r2"]
+        # additional test metrics
+        if data_type == "test":
+            base_metrics += ["corr_spearman_per_gene", "corr_spearman_per_gene_max"]
+        metrics_dict = {
+            f"{data_type}_{metric_name}": getattr(self, f"{data_type}_{metric_name}").compute()
+            for metric_name in base_metrics
+        }
+        self.log_dict(metrics_dict, on_epoch=True, logger=True)
+        return metrics_dict
+    ###
+    def _reset_metrics(self, data_type):
+        """Resets metrics for the specified dataset type."""
+        base_metrics = ["loss", "corr_pearson", "corr_spearman", "r2"]
+        if data_type == "test":
+            base_metrics += ["corr_spearman_per_gene", "corr_spearman_per_gene_max"]
+        for metric_name in base_metrics:
+            getattr(self, f"{data_type}_{metric_name}").reset()
+    ###
+    def on_validation_epoch_end(self):
+        """Called at the end of the validation epoch."""
+        # Skip logging and printing during validation sanity check
+        if self.trainer.sanity_checking:
+            return
+        # Log metrics and retrieve computed values
+        train_metrics = self._log_metrics("train")
+        val_metrics = self._log_metrics("validation")
+        device = self.device  # Get the current device
+        epoch = self.current_epoch # Get the current epoch number
+        # Print metrics and device information in a single line
+        if self.trainer.local_rank==0:
+            print(f"Epoch end {epoch} | "
+            f"Device: {device} | "
+            f"Training Loss: {train_metrics['train_loss']:.4f} | "
+            f"Training Pearson Corr.: {train_metrics['train_corr_pearson']:.4f} | "
+            f"Training Spearman Corr.: {train_metrics['train_corr_spearman']:.4f} | "
+            f"Training R²: {train_metrics['train_r2']:.4f} | "
+            f"Validation Loss: {val_metrics['validation_loss']:.4f} | "
+            f"Validation Pearson Corr.: {val_metrics['validation_corr_pearson']:.4f} | "
+            f"Validation Spearman Corr.: {val_metrics['validation_corr_spearman']:.4f} | "
+            f"Validation R²: {val_metrics['validation_r2']:.4f} | ")
+        # Reset metrics for the next epoch
+        self._reset_metrics("train")
+        self._reset_metrics("validation")
+    ###
+    def on_test_epoch_end(self):
+        """Called at the end of the test epoch."""
+        device = self.device  # Get the current device
+        # Log and reset test metrics
+        test_metrics = self._log_metrics("test")
+        # Print metrics and device information in a single line
+        if self.trainer.local_rank==0:
+            print(f"Device: {device} | "
+                f"Test Loss: {test_metrics['test_loss']:.4f} | "
+                f"Test Pearson Corr.: {test_metrics['test_corr_pearson']:.4f} | "
+                f"Test Spearman Corr.: {test_metrics['test_corr_spearman']:.4f} | "
+                f"Test R²: {test_metrics['test_r2']:.4f} | "
+                f"Test Spearman Corr. per Gene: {test_metrics['test_corr_spearman_per_gene']:.4f} | "
+                f"Test Spearman Corr. per Gene (max trans): {test_metrics['test_corr_spearman_per_gene_max']:.4f} | ")
+        self._reset_metrics("test")
+    ###
+    def predict_step(self, batch, batch_idx):
+        """Performs a prediction step and returns both predictions and targets.
+        
+        Args:
+            batch (dict): Batch of data containing input features and targets.
+            batch_idx (int): Index of the batch.
+        
+        Returns:
+            tuple: A tuple containing (predictions, targets).
+        """
+        inputs, targets = self._prepare_batch(batch)  # Get both inputs and targets
+        rbp_expr, gen_expr = inputs
+        predictions = self(rbp_expr, gen_expr)
+        return predictions, targets  # Return both predictions and targets
+
+# 
+class TunablePredictorModel(BaseLightningModule):
+    """
+    A PyTorch Lightning module designed for hyperparameter optimization of the isoform predictor.
+    Args:
+        input_size (int): Size of the input features.
+        output_size (int): Size of the output features.
+        config (object): Class object with the model hyperparameter settings.
+        gene_names (List[str]): List of gene names.
+        trans_names (List[str]): List of transcript names.
+        getBM (pd.DataFrame): DataFrame containing mapping of Gene_ID to Transcript_ID.
+        input_features (Optional[str]): Feature colum in loader to use as input.
+        output_features (Optional[str]): Feature column in loader to use as predict.
+        verbose (int): Verbosity level.
+    
+    Hyperparameters:
+        - num_hidden_layers (int): Number of hidden layers.
+        - hidden1_nodes (int): Number of nodes in the first hidden layer.
+        - uniform_nodes (bool): Whether to use uniform nodes across layers.
+        - node_shrink_factor (float): Factor to reduce nodes in layers.
+        - activation_func (str): Activation function to use (e.g., 'relu', 'tanh').
+        - batch_norm_eps (float): Epsilon value for batch normalization.
+        - batch_norm_momentum (float): Momentum value for batch normalization.
+        - optimizer_name (str): Name of the optimizer (e.g., 'adamW').
+        - learning_rate (float): Learning rate for the optimizer. 
+    """
+    def __init__(self, input_size: int, output_size: int, config: ConfigParser,
+                 gene_names: List[str], trans_names: List[str], getBM: pd.DataFrame,
+                 input_features: Optional[str] = None, output_features: Optional[str] = None, 
+                 verbose: int = 0):
+        super().__init__(gene_names, trans_names, getBM, input_features, output_features, verbose)
+        self.save_hyperparameters(ignore=['verbose']) # save all the variables passed to init simply by calling 
+        self.input_size = input_size
+        self.output_size = output_size
         # Hyperparameters
         self.num_hidden_layers = config.get('num_hidden_layers')
         self.hidden1_nodes = config.get('hidden1_nodes')
@@ -70,7 +259,6 @@ class PredictorModel(L.LightningModule): # cambiar nombre a TunablePredictorMode
         self.activation_name = config.get('activation_func')
         self.batch_norm_eps = config.get('batch_norm_eps', 1e-5)   
         self.batch_norm_momentum = config.get('batch_norm_momentum', 0.1) 
-        self.criterion = nn.MSELoss()
         # Training parameters
         self.optimizer_name = config.get('optimizer_name')
         self.learning_rate = config.get('learning_rate')
@@ -97,10 +285,6 @@ class PredictorModel(L.LightningModule): # cambiar nombre a TunablePredictorMode
         self.hparams.batch_norm_momentum = self.batch_norm_momentum
         self.hparams.optimizer_name = self.optimizer_name
         self.hparams.learning_rate = self.learning_rate
-        # Intialize metrics
-        #self.metrics = self.initialize_metrics()
-        self.initialize_metrics()
-    ###
     def _configure_layers(self):
         """Configures the model layers based on configuration."""
         if self.num_hidden_layers > 0:
@@ -182,32 +366,6 @@ class PredictorModel(L.LightningModule): # cambiar nombre a TunablePredictorMode
         else:
             self.log(f"Unsupported optimizer '{self.optimizer_name}'. Valid options: ['sgd90', 'asgd', 'adam', 'adagrad', 'adadelta', 'adamW']")
     ###
-    def initialize_metrics(self):
-        """Initializes metrics for training, validation, and testing. 
-        This method sets up the following metrics using `MeanMetric` from `torchmetrics`:
-        - **Mean Squared Error (MSE)**: It's the loss functionm, measures the average squared difference between log2(tpm+1) predictions vs actual values.
-        - **Pearson Correlation**: Assesses linear correlation between predictions and actual values, ranging from -1 to 1.
-        - **Spearman Correlation**: Evaluates rank correlation, indicating the strength of monotonic relationships, also ranging from -1 to 1.
-        - **R² (Coefficient of Determination)**: Indicates the proportion of variance explained by the model, with values from 0 to 1.
-        """ 
-        # Initialize train metrics
-        self.train_loss = MeanMetric()
-        self.train_corr_spearman = MeanMetric()
-        self.train_corr_pearson = MeanMetric()
-        self.train_r2 = MeanMetric()
-        # Initialize validation metrics
-        self.validation_loss = MeanMetric()
-        self.validation_corr_spearman = MeanMetric()
-        self.validation_corr_pearson = MeanMetric()
-        self.validation_r2 = MeanMetric()
-        # Initialize test metrics
-        self.test_loss = MeanMetric()
-        self.test_corr_spearman = MeanMetric()
-        self.test_corr_pearson = MeanMetric()
-        self.test_r2 = MeanMetric()
-        self.test_corr_spearman_per_gene = MeanMetric()
-        self.test_corr_spearman_per_gene_max = MeanMetric()
-    ##
     def forward(self, rbp_expr, gen_expr): # this was updated to work with the new modules
         """Defines the forward pass of the model.
         
@@ -216,7 +374,7 @@ class PredictorModel(L.LightningModule): # cambiar nombre a TunablePredictorMode
             gen_expr (torch.Tensor): Additional gene input for the final output scaling.
         
         Returns:
-            torch.Tensor: Predicted transcript abundance.
+            torch.Tensor: Predicted transcript expression in log2(TPM+1).
         """
         x = rbp_expr  
         # Pass through all hidden layers
@@ -230,167 +388,70 @@ class PredictorModel(L.LightningModule): # cambiar nombre a TunablePredictorMode
         # Log-transform and scale
         out = torch.log2((out * gen_expr) + 1)
         return out
-    ###
-    def _prepare_batch(self, batch):
-        """Prepares the inputs and targets from the batch.
-        
-        Args:
-            batch (dict): Batch of data containing input and target features.
-        
-        Returns:
-            tuple: A tuple containing (inputs, targets).
-        """
-        inputs = [batch[feature].float() for feature in self.input_features]
-        targets = [batch[feature].float() for feature in self.output_features]
-        targets = torch.stack(targets).squeeze(0)
 
-        # Print the devices of inputs and targets
-        for i, input_tensor in enumerate(inputs):
-            self.debugging.log(f"[_prepare_batch] Input feature {i} device: {input_tensor.device}", level=2)
-        self.debugging.log(f"[_prepare_batch] Targets device: {targets.device}", level=2)
-        return inputs, targets
-    ###
-    def training_step(self, train_batch, batch_idx):  
-        """Performs a training step."""
-        inputs, labels = self._prepare_batch(train_batch)
-        rbp_expr, gen_expr = inputs
-        outputs = self(rbp_expr, gen_expr)  # Model predictions
-        loss = self.criterion(labels, outputs)
-        self._update_metrics("train", loss, outputs, labels)
-        return loss
-    ###
-    def validation_step(self, val_batch, batch_idx):
-        inputs, labels = self._prepare_batch(val_batch)
-        rbp_expr, gen_expr = inputs
-        outputs = self(rbp_expr, gen_expr)  
-        loss = self.criterion(labels, outputs)
-        self._update_metrics("validation", loss, outputs, labels)
-    ###
-    def test_step(self, test_batch, batch_idx):
-        """Performs a test step."""
-        inputs, labels = self._prepare_batch(test_batch)
-        rbp_expr, gen_expr = inputs
-        outputs = self(rbp_expr, gen_expr)   
-        loss = self.criterion(labels, outputs)
-        self._update_metrics("test", loss, outputs, labels)
-    ###
-    def _update_metrics(self, data_type, loss, outputs, labels):
-        """Updates the metrics dynamically based on data_type: 'train', 'validation', 'test'."""
+
+
+class PredictorModel(BaseLightningModule): # Despues de los resultados de la optimizacion estoy hay que cambiar.
+    """A PyTorch Lightning module used to train the isoform predictor and to serve as the 
+    reference model for downstream DeepRBP explainability analysis.
     
-        self.debugging.log(f"[_update_metrics] Outputs device: {outputs.device}", level=2)
-        self.debugging.log(f"[_update_metrics] Labels device: {labels.device}", level=2)
-        self.debugging.log(f"[_update_metrics] Loss device: {loss.device}", level=2)
-
-        # Update loss
-        getattr(self, f"{data_type}_loss")(loss.cpu())
-
-        # Convert to numpy for sklearn/scipy metrics
-        labels_np = labels.flatten().cpu().numpy()
-        outputs_np = outputs.flatten().cpu().detach().numpy()
-        
-        # Update correlation and R² metrics
-        getattr(self, f"{data_type}_corr_pearson")(pearsonr(labels_np, outputs_np)[0])
-        getattr(self, f"{data_type}_corr_spearman")(spearmanr(labels_np, outputs_np)[0])
-        getattr(self, f"{data_type}_r2")(r2_score(labels_np, outputs_np))
-
-        # Only for test: per-gene Spearman
-        if data_type == "test":
-            results = spearmanr_per_gene(
-                    gene_names=self.gene_names, 
-                    getBM=self.getBM, 
-                    trans_names=self.trans_names, 
-                    outputs=outputs.cpu().detach().numpy(), 
-                    labels=labels.cpu().numpy()
-            )
-            self.test_corr_spearman_per_gene(results["mean_corr"])
-            self.test_corr_spearman_per_gene_max(results["mean_corr_max"])
-    ###
-    def _log_metrics(self, data_type):
-        """Logs the metrics for the specified dataset type and returns the computed values."""
-        base_metrics = ["loss", "corr_pearson", "corr_spearman", "r2"]
-
-        # additional test metrics
-        if data_type == "test":
-            base_metrics += ["corr_spearman_per_gene", "corr_spearman_per_gene_max"]
-
-        metrics_dict = {
-            f"{data_type}_{metric_name}": getattr(self, f"{data_type}_{metric_name}").compute()
-            for metric_name in base_metrics
-        }
-
-        self.log_dict(metrics_dict, on_epoch=True, logger=True)
-        return metrics_dict
+    Args:
+        input_size (int): Size of the input features.
+        output_size (int): Size of the output features.
+        gene_names (List[str]): List of gene names.
+        trans_names (List[str]): List of transcript names.
+        getBM (pd.DataFrame): DataFrame containing mapping of Gene_ID to Transcript_ID.
+        input_features (Optional[str]): Feature colum in loader to use as input.
+        output_features (Optional[str]): Feature column in loader to use as predict.
+        verbose (int): Verbosity level.
     
-    ###
-    def _reset_metrics(self, data_type):
-        """Resets metrics for the specified dataset type."""
-        base_metrics = ["loss", "corr_pearson", "corr_spearman", "r2"]
-        if data_type == "test":
-            base_metrics += ["corr_spearman_per_gene", "corr_spearman_per_gene_max"]
+    Hyperparameters:
+        - learning_rate (float): Learning rate for the optimizer. 
+    """
+    def __init__(self, input_size: int, output_size: int, 
+                 gene_names: List[str], trans_names: List[str], getBM: pd.DataFrame,
+                 input_features: Optional[str] = None, output_features: Optional[str] = None, 
+                 verbose: int = 0):
+        
+        super().__init__(gene_names, trans_names, getBM, input_features, output_features, verbose)
+        self.save_hyperparameters(ignore=['verbose']) # save all the variables passed to init simply by calling 
+        
+        self.input_size = input_size
+        self.output_size = output_size
+        
+        ### (CHANGE THIS TO WRITE THE FINAL MODEL)
+        self.learning_rate = 0.0001
 
-        for metric_name in base_metrics:
-            getattr(self, f"{data_type}_{metric_name}").reset()
-    ###
-    def on_validation_epoch_end(self):
-        """Called at the end of the validation epoch."""
-        # Skip logging and printing during validation sanity check
-        if self.trainer.sanity_checking:
-            return
-        
-        # Log metrics and retrieve computed values
-        train_metrics = self._log_metrics("train")
-        val_metrics = self._log_metrics("validation")
-      
-        device = self.device  # Get the current device
-        epoch = self.current_epoch # Get the current epoch number
+        # Define the actual neural network
+        self.abundance_estimator = nn.Sequential(
+            nn.Linear(input_size, 128),
+            nn.BatchNorm1d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.BatchNorm1d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True),
+            nn.ReLU(),
+            nn.Linear(64, output_size),
+            nn.Sigmoid()
+        )
 
-        # Print metrics and device information in a single line
-        if self.trainer.local_rank==0:
-            print(f"Epoch end {epoch} | "
-            f"Device: {device} | "
-            f"Training Loss: {train_metrics['train_loss']:.4f} | "
-            f"Training Pearson Corr.: {train_metrics['train_corr_pearson']:.4f} | "
-            f"Training Spearman Corr.: {train_metrics['train_corr_spearman']:.4f} | "
-            f"Training R²: {train_metrics['train_r2']:.4f} | "
-            f"Validation Loss: {val_metrics['validation_loss']:.4f} | "
-            f"Validation Pearson Corr.: {val_metrics['validation_corr_pearson']:.4f} | "
-            f"Validation Spearman Corr.: {val_metrics['validation_corr_spearman']:.4f} | "
-            f"Validation R²: {val_metrics['validation_r2']:.4f} | ")
-        
-        # Reset metrics for the next epoch
-        self._reset_metrics("train")
-        self._reset_metrics("validation")
-    ###
-    def on_test_epoch_end(self):
-        """Called at the end of the test epoch."""
-        device = self.device  # Get the current device
-        # Log and reset test metrics
-        test_metrics = self._log_metrics("test")
-        # Print metrics and device information in a single line
-        if self.trainer.local_rank==0:
-            print(f"Device: {device} | "
-                f"Test Loss: {test_metrics['test_loss']:.4f} | "
-                f"Test Pearson Corr.: {test_metrics['test_corr_pearson']:.4f} | "
-                f"Test Spearman Corr.: {test_metrics['test_corr_spearman']:.4f} | "
-                f"Test R²: {test_metrics['test_r2']:.4f} | "
-                f"Test Spearman Corr. per Gene: {test_metrics['test_corr_spearman_per_gene']:.4f} | "
-                f"Test Spearman Corr. per Gene (max trans): {test_metrics['test_corr_spearman_per_gene_max']:.4f} | ")
-        self._reset_metrics("test")
-    ###
-    def predict_step(self, batch, batch_idx):
-        """Performs a prediction step and returns both predictions and targets.
-        
-        Args:
-            batch (dict): Batch of data containing input features and targets.
-            batch_idx (int): Index of the batch.
-        
+    def configure_optimizers(self):
+        """Configures the optimizer"
         Returns:
-            tuple: A tuple containing (predictions, targets).
+            torch.optim.Optimizer: Configured optimizer instance.
         """
-        inputs, targets = self._prepare_batch(batch)  # Get both inputs and targets
-        rbp_expr, gen_expr = inputs
-        predictions = self(rbp_expr, gen_expr)
-        return predictions, targets  # Return both predictions and targets
+        return torch.optim.AdamW(self.parameters(), lr=self.learning_rate)
 
+    def forward(self, rbp_expr, gen_expr):
+        """Defines the forward pass of the model.
+            Args:
+            rbp_expr (torch.Tensor): Input features (e.g., RBP).
+            gen_expr (torch.Tensor): Additional gene input for the final output scaling.
+            
+            Returns:
+                torch.Tensor: Predicted transcript expression in log2(TPM+1).
+        """
+        x = self.abundance_estimator(rbp_expr)
+        out = torch.log2((x * gen_expr) + 1)
+        return out
 
 

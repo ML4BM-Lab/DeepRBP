@@ -10,14 +10,6 @@ trans_col_name: "Transcript_ID"
 cuda: True
 train_batch_size: 128
 val_batch_size: 256
-num_hidden_layers: 1
-hidden1_nodes: 64
-uniform_nodes: False
-node_shrink_factor: 4
-activation_func: relu
-learning_rate: 0.001
-optimizer_name: adamW
 plot_results: True
-
 
 

@@ -176,14 +176,12 @@ def setup_output_directory(output_dir: str) -> str:
     """
     local_rank = int(os.environ.get("LOCAL_RANK", 0))
     print(f"Local Rank: {local_rank}")
-
     if local_rank == 0 or not torch.cuda.is_available():
         # Running on CPU or main process (rank 0)
         unique_output_dir = output_dir
     else:
         # Running on GPU, create unique directory for this GPU
         unique_output_dir = os.path.join(output_dir, f"gpu_{local_rank}")
-
     if unique_output_dir:
         os.makedirs(unique_output_dir, exist_ok=True)
         print(f"Directory ensured: {unique_output_dir}")
