@@ -45,22 +45,36 @@ class DeepRBPDataModule(L.LightningDataModule):
         self.getBM = pd.read_csv(self.config.get('getBM_path'))
         self.trans_col_name=self.config.get('trans_col_name', default="Transcript_ID") # just used on create_tensor_dataset
         self.gene_col_name=self.config.get('gene_col_name', default="Gene_ID")
-        # Load paths for training and testing data
-        self.train_path_files = self.config.get('train_path_files')
-        self.val_fraction = self.config.get('test_fraction')
+        # Load paths for training and testing data)
         self.test_path_files = self.config.get('test_path_files', None)
+        # A. Classic full-dataset path
+        self.train_path_files = self.config.get('train_path_files', None)  
+        self.val_fraction = self.config.get('test_fraction', None)
+        # B. Optional: pre-split dataset paths for reproducibility
+        self.pre_split_train_path = self.config.get('pre_split_train_path', None)
+        self.pre_split_val_path = self.config.get('pre_split_val_path', None)
+        if self.pre_split_train_path and self.train_path_files:
+            raise ValueError("[DeepRBPDataModule] ❌ Specify either 'pre_split_train_path' or 'train_path_files', not both.")
+        if self.pre_split_val_path and self.val_fraction:
+            raise ValueError("[DeepRBPDataModule] ❌ Specify either 'pre_split_val_path' or 'val_fraction', not both.")
         # Load batch sizes for training and validation
-        self.train_batch_size = self.config.get('train_batch_size', None) 
+        self.train_batch_size = self.config.get('train_batch_size', 128) 
         self.val_batch_size = self.config.get('val_batch_size', 256)
         # Load sampling information
-        self.sample_category = self.config.get('sample_category') 
+        self.sample_category = self.config.get('sample_category', None) 
         self.toy_sample_fraction = self.config.get('sample_fraction', None) # Used for filtering samples
+        ##
+        self.select_category = self.config.get('select_category', None) # new
+        self.disease_condition = self.config.get('disease_condition', None) # new
+        self.select_condition = self.config.get('select_condition', None) # new
+        ##
         # Initialize the PrepareData instance for data preparation
         self.prep_data = PrepareData(self.getBM, self.trans_col_name, self.gene_col_name, 
                                      self.sample_category, self.output_dir, self.verbose) 
         # Flags to check if data has already been prepared or set up
         self.is_train_setup = False
         self.is_test_setup = False
+        ###
     def setup(self, stage=None):
         """Split, transform data and create tensor datasets. Called on each GPU separately - stage defines if we are at fit or test step.
         Setup is called from every process across all the nodes. Setting state here is recommended.
@@ -68,14 +82,25 @@ class DeepRBPDataModule(L.LightningDataModule):
         if stage == 'fit' or stage is None:
             if not self.is_train_setup:
                 print_if_main("[DeepRBPDataModule] 🛠 Setting up Training data ...")
-                # Loading training data
-                self.training_all_data = self.prep_data.load_data(
-                        path=self.train_path_files, sample_fraction=self.toy_sample_fraction
-                )
-                print_if_main("[DeepRBPDataModule] 🛠 Dividing data into Training and Validation ...")
-                # Split data on train and validation
-                self.train_data, self.val_data = self.prep_data.split_data(self.training_all_data, self.val_fraction)
-                self.prep_data.save_split_data(self.train_data, self.val_data)
+                if self.pre_split_train_path and self.pre_split_val_path:
+                    print_if_main("[DeepRBPDataModule] 📂 Loading pre-split training and validation datasets ...")
+                    self.train_data = self.prep_data.load_data(path=self.pre_split_train_path)
+                    self.val_data = self.prep_data.load_data(path=self.pre_split_val_path)
+                    print(self.train_data)
+                    print(self.val_data)
+                else:
+                    print_if_main("[DeepRBPDataModule] 📂 Loading full dataset and splitting into train/val ...")
+                    self.training_all_data = self.prep_data.load_data(
+                        path=self.train_path_files, 
+                        sample_fraction=self.toy_sample_fraction,
+                        select_category=self.select_category,
+                        disease_condition=self.disease_condition,
+                        select_condition=self.select_condition
+                    )
+                    print_if_main("[DeepRBPDataModule] 🛠 Dividing data into Training and Validation ...")
+                    # Split data on train and validation
+                    self.train_data, self.val_data = self.prep_data.split_data(self.training_all_data, self.val_fraction)
+                    self.prep_data.save_split_data(self.train_data, self.val_data)
                 # Transform data
                 self.prep_data.fit_scaler(self.train_data) 
                 self.train_data, self.val_data = self.prep_data.scale_train_val_data(self.train_data, self.val_data)
@@ -167,5 +192,3 @@ class DeepRBPDataModule(L.LightningDataModule):
             return custom_loader
         else:
             raise ValueError("Invalid mode. Choose 'train', 'val', 'test', or 'predict'.")
-    
-

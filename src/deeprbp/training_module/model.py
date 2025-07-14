@@ -389,8 +389,6 @@ class TunablePredictorModel(BaseLightningModule):
         out = torch.log2((out * gen_expr) + 1)
         return out
 
-
-
 class PredictorModel(BaseLightningModule): # Despues de los resultados de la optimizacion estoy hay que cambiar.
     """A PyTorch Lightning module used to train the isoform predictor and to serve as the 
     reference model for downstream DeepRBP explainability analysis.
@@ -412,16 +410,12 @@ class PredictorModel(BaseLightningModule): # Despues de los resultados de la opt
                  gene_names: List[str], trans_names: List[str], getBM: pd.DataFrame,
                  input_features: Optional[str] = None, output_features: Optional[str] = None, 
                  verbose: int = 0):
-        
         super().__init__(gene_names, trans_names, getBM, input_features, output_features, verbose)
         self.save_hyperparameters(ignore=['verbose']) # save all the variables passed to init simply by calling 
-        
         self.input_size = input_size
         self.output_size = output_size
-        
         ### (CHANGE THIS TO WRITE THE FINAL MODEL)
         self.learning_rate = 0.0001
-
         # Define the actual neural network
         self.abundance_estimator = nn.Sequential(
             nn.Linear(input_size, 128),
@@ -433,14 +427,12 @@ class PredictorModel(BaseLightningModule): # Despues de los resultados de la opt
             nn.Linear(64, output_size),
             nn.Sigmoid()
         )
-
     def configure_optimizers(self):
         """Configures the optimizer"
         Returns:
             torch.optim.Optimizer: Configured optimizer instance.
         """
         return torch.optim.AdamW(self.parameters(), lr=self.learning_rate)
-
     def forward(self, rbp_expr, gen_expr):
         """Defines the forward pass of the model.
             Args:

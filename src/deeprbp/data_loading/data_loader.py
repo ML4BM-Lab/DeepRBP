@@ -48,22 +48,21 @@ class DataImporter:
             'metadata_path': os.path.join(self.base_path, f"phenotype_metadata.csv")
         }
     ###
-    def filter_data_by_category_and_condition(self, data: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
-        """Filters the dataset based on the specified sample category and disease condition(s).
-
-        Args:
-            data (Dict[str, pd.DataFrame]): The dictionary containing expression data and metadata dataframes
-            
-        Returns:
-            Dict[str, pd.DataFrame]: The filtered dataset based on the specified category and condition.
-        """
-        self.logger.log(f"\n[*] Filtering samples by category {self.select_category} and disease conditon {self.select_condition}", level=1)
+    def filter_data_by_category(self, data: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
+        self.logger.log(f"\n[*] Filtering samples by category '{self.select_category}'...", level=1)
         selected_sample_ids = data['metadata_df'][
-            (data['metadata_df'][self.sample_category] == self.select_category) &
-            (data['metadata_df'][self.disease_condition].isin(self.select_condition))
+            data['metadata_df'][self.sample_category] == self.select_category
         ].index.tolist()
         data = filter_data_by_sample_ids(data, selected_sample_ids)
-        self.logger.log("Data filtered by sample category and disease condition successfully.", level=1)
+        self.logger.log("✅ Data filtered by category successfully.", level=1)
+        return data
+    def filter_data_by_condition(self, data: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
+        self.logger.log(f"\n[*] Filtering samples by disease condition(s): {self.select_condition}...", level=1)
+        selected_sample_ids = data['metadata_df'][
+            data['metadata_df'][self.disease_condition].isin(self.select_condition)
+        ].index.tolist()
+        data = filter_data_by_sample_ids(data, selected_sample_ids)
+        self.logger.log("✅ Data filtered by disease condition successfully.", level=1)
         return data
     ###
     def reduce_dataset_size(self, data: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
@@ -96,8 +95,10 @@ class DataImporter:
                 else:
                     self.logger.error(f"❌ File not found: {path}")
             # Optionally filter the data if filtering parameters are provided
-            if self.sample_category and self.select_category and self.disease_condition and self.select_condition:
-                data = self.filter_data_by_category_and_condition(data)
+            if self.sample_category and self.select_category:
+                data = self.filter_data_by_category(data)
+            if self.disease_condition and self.select_condition:
+                data = self.filter_data_by_condition(data)
             # Optionally reduce dataset size if sample_fraction is provided
             if self.sample_fraction is not None:
                 data = self.reduce_dataset_size(data)

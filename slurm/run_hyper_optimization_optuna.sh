@@ -17,9 +17,9 @@ echo "Starting job at: $(date)"
 echo "Current time in Hondarribia: $(TZ='Europe/Madrid' date '+%Y-%m-%d %H:%M:%S')"
 echo "########################################"
 
-module load Python
-source activate /data/jsanchoz/conda-env/DeepRBP
-PYTHON_EXEC="/data/jsanchoz/conda-env/DeepRBP/bin/python"
+module load Miniforge3
+conda activate /data/jsanchoz/conda-env/DeepRBP
+#PYTHON_EXEC="/data/jsanchoz/conda-env/DeepRBP/bin/python" (esto está haciendo que falle)
 
 # Check Python version
 python --version
@@ -30,6 +30,7 @@ conda info --envs
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 
 export PYTHONPATH="/scratch/jsanchoz/DeepRBP/src:$PYTHONPATH"
+export PYTHONUNBUFFERED=1
 python -c "import deeprbp; print('Package found')"
 
 # Lanzar un proceso por GPU

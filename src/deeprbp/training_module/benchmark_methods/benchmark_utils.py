@@ -1,5 +1,8 @@
-# src/deeprbp/training_module/benchmark_methods/utils_benchmark.py
+# src/deeprbp/training_module/benchmark_methods/benchmark_utils.py
 
+import numpy as np
+import random
+import os
 from sklearn.svm import SVR
 from sklearn.linear_model import LinearRegression, ElasticNet, Ridge
 from sklearn.tree import DecisionTreeRegressor
@@ -8,7 +11,11 @@ from xgboost import XGBRegressor
 from lightgbm import LGBMRegressor
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.multioutput import MultiOutputRegressor
-import numpy as np
+
+def set_seed(seed=42):
+    random.seed(seed)
+    np.random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
 
 def generate_X_y_data(data_np, calculate_abundance=True):
     """
@@ -22,6 +29,7 @@ def generate_X_y_data(data_np, calculate_abundance=True):
           containing the target isoform expression data in log2tpm+1.
         - 'gene_df' (numpy.ndarray): A 2D array of shape (n_samples, n_genes)
           containing gene expression data in TPM.
+          
     - calculate_abundance (bool): If True, calculate the target `y` as abundances using
       the formula (2 ** transcript_data - 1) / gene_data, setting y to 0 where gene_data is 0.
       If False, set `y` directly to transcript_data.
@@ -37,12 +45,22 @@ def generate_X_y_data(data_np, calculate_abundance=True):
     # Calculate y based on the calculate_abundance flag
     if calculate_abundance:
         # Calculate y, setting y to 0 where gene_data is 0
-        y = np.where(gene_data == 0, 0, (2 ** transcript_data - 1) / gene_data)
         print("Calculating y as abundances using the formula: (2 ** transcript_data - 1) / gene_data")
+        tpm_transcript = 2 ** transcript_data - 1
+        y = np.zeros_like(tpm_transcript, dtype=np.float32)
+        np.divide(tpm_transcript, gene_data, out=y, where=gene_data != 0)
+        #y = np.where(gene_data == 0, 0, (2 ** transcript_data - 1) / gene_data)
     else:
-        y = transcript_data
         print("Setting y directly to transcript_data.")
+        y = transcript_data
     return X_data, y
+
+# podriamos probar de aquí la que no hemos probado: 
+# vamos a probar dos approaches: due possibili metodi
+        # - o calcular directamente la expression del transcrito (sin usar la expresion de los genes para entrenar)
+        # - o calcular el isoforma abundance como nuestro modelo y luego posteriormente ya multiplicamos por la expresion del gen
+# en ambos casos al final calculamos las métricas que calculamos tb para nuestro modelo 
+# en log2tpm+1
 
 def create_multi_output_regressor(selected_algorithm: str, **kwargs):
     """
@@ -75,9 +93,7 @@ def create_multi_output_regressor(selected_algorithm: str, **kwargs):
     >>> model = create_multi_output_regressor('random_forest', n_estimators=100)
     """
     # Select the base model based on the specified algorithm
-    if selected_algorithm == 'linear_regression':
-        model = LinearRegression(**kwargs)
-    elif selected_algorithm == 'svr':
+    if selected_algorithm == 'svr':
         model = SVR(kernel='rbf', **kwargs)   
     elif selected_algorithm == 'decision_tree':
         model = DecisionTreeRegressor(**kwargs)
@@ -99,3 +115,4 @@ def create_multi_output_regressor(selected_algorithm: str, **kwargs):
         raise ValueError(f"Unsupported algorithm: {selected_algorithm}")
     multioutput_model = MultiOutputRegressor(model)
     return multioutput_model
+

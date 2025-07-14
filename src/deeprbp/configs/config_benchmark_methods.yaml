@@ -1,0 +1,11 @@
+# src/deeprbp/configs/config_benchmark_methods.yaml
+pre_split_train_path: '/scratch/jsanchoz/DeepRBP/final_results/hyp_optimization_optuna/job1/data/Train'  
+pre_split_val_path: '/scratch/jsanchoz/DeepRBP/final_results/hyp_optimization_optuna/job1/data/Validation'
+#sample_category: "detailed_category"  #esto en principio no necesito
+getBM_path: "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/getBM.csv"
+gene_col_name: "Gene_ID"
+trans_col_name: "Transcript_ID"
+plot_results: False
+
+
+

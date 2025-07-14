@@ -157,7 +157,6 @@ def evaluate_and_visualize_metrics_by_category(
         )
         # Generate predictions
         print_if_main(f"[evaluate_and_visualize_metrics_by_category] 🔮 Generating predictions for category '{category}'...")
-        #results = trainer.predict(model, dataloaders=test_loader)
         results = trainer.predict(model, dataloaders=dm.predict_dataloader(mode='predict', custom_loader=test_loader))
         true_values = []
         predictions = []

@@ -37,7 +37,9 @@ setup(
         "lightning",
         "GPUtil",
         "optuna-integration[pytorch_lightning]",
-        "tabulate"
+        "tabulate",
+        "xgboost",             
+        "lightgbm" 
     ],
     entry_points={
         'console_scripts': [

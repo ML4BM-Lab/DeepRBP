@@ -263,6 +263,9 @@ The hyperparameter that are going to be optimised are:
 - **`optimizer_name`**:  Name of the optimizer (e.g., 'adamW').
 - **`batch_norm_eps`**: Epsilon value for batch normalization.
 - **`batch_norm_momentum`** Momentum value for batch normalization.
+- **`batch_size`** Number of samples processed before the model parameters are updated.
+- **`num_epochs`** Number of full passes over the training dataset during training.
+ 
 
 #### Step 3: Analyze the Hyperparameter Optimization results (NO EJECUTADO)
 Use the following command to analyze the results of your Optuna hyperparameter search and generate summary plots:
@@ -279,17 +282,49 @@ This will:
 
 
 
-# ((((EJECUTANDO AHORA ESTA PARTE DE LOS RESULTADOS JOSEBA!!!)))
-
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 
 
 ### Trying alternative Machine Learning benchmark methods  
+In this section, we benchmark our **DeepRBP predictor**—a deep learning-based model—against a series of traditional machine learning regressors.
+We evaluate the following algorithms using a `MultiOutputRegressor` setup to predict isoform abundances: `svr`, `decision_tree`, `random_forest`, `gradient_boosting`, `xgboost`, `lightgbm`, `knn`, `elastic_net`, `ridge`.
 
-Vamos a comparar nuestro DeepRBP Predictor model basado en Deep Learning con otros benchmark traditional Machine learning models.
+Each model predicts isoform-level abundances, which are then scaled by their corresponding gene expression (TPM) values to produce transcript TPMs. As in our Deep Learning model, we apply a log2(TPM + 1) transformation before computing metrics.
+
+We calculate the following evaluation metrics:
+
+- **R²**
+- **Mean Squared Error (MSE)**
+- **Pearson correlation**
+- **Spearman correlation (Computed for both **all transcripts** and **aggregated per gene**.)**
+
+To ensure a fair comparison with our deep learning models (which were optimized via Optuna), we reuse the **same training and validation splits** from the previous pipeline step. Final results are saved in a CSV table for all benchmark algorithms.
+
+---
+
+#### Configuration
+To run the benchmark, define a configuration YAML file like the following:
+
+```yaml
+# src/deeprbp/configs/config_benchmark_methods.yaml
+pre_split_train_path: '/scratch/jsanchoz/DeepRBP/output/results/stuff/run_deeprbp_predictor_SLURM_try9_06/data/Train' # cambiar esto cuando tengamos ya los resultados de la optimizacion de optuna y sus divisiones reales
+pre_split_val_path: '/scratch/jsanchoz/DeepRBP/output/results/stuff/run_deeprbp_predictor_SLURM_try9_06/data/Validation'
+getBM_path: "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/getBM.csv"
+gene_col_name: "Gene_ID"
+trans_col_name: "Transcript_ID"
+plot_results: False
+```
+
+#### Run via SLURM
+To launch the benchmark experiments on your HPC cluster:
+
+```bash
+sbatch slurm/run_benchmark_models.sh
+```
 
 
 
-
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 
 
 
@@ -376,11 +411,54 @@ sbatch run_predictor.sh
 # para esto haz un jupyter notebook para que el usuario pueda usar el modelo sobre su propio data si quiere.
  
 
+### Tumor-Specific vs General Training Benchmark
+<!-- 
+# JOSEBA HAY QUE TOMAR UNA DECISION SOBRE ESTO: train_batch_size = 32, # esto habrá que cambiar (y piensa que muchos tipos tumorales no tendran el suficiente numero de muestras para hacer un batch size grande). Hay que definir unas reglas justas para todos los specific tipos tumorales (no usar el batch size de optuna pork no tiene sentido)
+    val_batch_size = 64, -->
+
+In this section, we evaluate whether training `DeepRBPredictor` on a single tumor type improves isoform usage prediction performance compared to using a general model trained on all tumor types combined.
+
+We compare two training strategies:
+
+- *General model*: trained on all available tumor types using the best architecture selected through Optuna (via run_predictor.sh).
+- *Tumor-specific models*: individually trained models for each tumor type using the same optimized architecture.
+
+For each tumor type, we evaluate isoform prediction accuracy using:
+
+- The general model trained across all tumors.
+- The tumor-specific model trained only on that tumor type.
+
+This allows us to quantify performance gains or losses when using specialized training versus a more generalizable approach.
+
+To run this analysis:
+
+```bash
+sh /scratch/jsanchoz/DeepRBP/slurm/run_tcga_specific_vs_general_training.sh
+```
+
+This script performs the following steps:
+
+- Trains one model per tumor type using a previously optimized architecture.
+- Loads performance results from the best general model, trained on all tumor types together (via `run_predictor.sh`).
+- Evaluates and compares both strategies (tumor-specific vs general) across all cancer types using multiple performance metrics.
+- Generates publication-ready plots and summary tables:
+- The main manuscript plot includes only selected tumor types: Liver, Kidney, and AML.
+- The supplementary figure includes all tumor types.
+- All plots are generated for multiple metrics (e.g., Spearman, Pearson, R², MSE...) to allow flexibility and completeness in the analysis.
+
+The goal is to assess whether tumor-specific training offers meaningful improvements in isoform prediction for each cancer type, or if the general model already provides sufficient performance across contexts.
 
 
 
 
-### aqui joseba
+
+
+
+
+
+
+
+### aqui joseba (cuando todo esto esté ejecutado bien puedes borrar lo de aquí)
 #TODO: 
 -1)	Entrenar cada tipo tumoral con la arquitectura final y predecir vs entrenar con todo y predecir y hacer la matriz de confusion. que demuestra que es mejor entrenar un modelo con todo que con uno solo (usa para ello un Notebook de jupyter brother!).
 
@@ -649,20 +727,36 @@ The parameters, in order, are as follows:
   An integer specifying the maximum number of iterations for processing RBPs and genes for plotting. Default is `5`.
 
 
+## Complex-level Correlation Analysis
+In this section we perform a exploratory analysis of RBP explainability scores through the lens of protein complexes to investigate whether RBPs that form part of the same protein complex (e.g., CORUM) exhibit higher correlation in their explainability score patterns across genes compared to unrelated RBPs.
 
+A correlation matrix of shape n_RBPs × n_RBPs is computed from the DeepRBP score matrix (n_RBPs × n_genes), measuring similarity between RBP profiles. Then we:
 
+- reorder the correlation matrix to group complex RBPs together.
+- generate a minimal pheatmap-style heatmap, focusing on the upper triangle to simplify large complexes.
+- perform a Wilcoxon rank-sum test to compare within-complex vs outside-complex correlation values.
+- Create a boxplot contrasting correlation distributions (within vs outside).
 
+Finally we collect all p-values and summarize them using Stouffer’s method.
 
+To run this module:
 
+```bash
+sh /scratch/jsanchoz/DeepRBP/slurm/run_corum_complex_analysis.sh
+```
+### NMF-based Complex Detection Analysis
+In this section, we apply Non-negative Matrix Factorization (NMF) to discover latent protein complexes from gene × RBP explainability score matrices. Starting from the number of known CORUM complexes, we vary the number of components (complexes) and evaluate reconstruction error to find a meaningful decomposition.
 
+For each tested number of components, the script:
+- factorizes the gene × RBP score matrix into component loadings (genes) and feature loadings (RBPs),
+- saves heatmaps of the feature loading matrix (components vs RBPs),
+- plots the reconstruction error trend across tested component numbers.
 
+To run:
 
-
-
-
-
-(WORKING NOW ON THIS PART!!!)**
-
+```bash
+sh /scratch/jsanchoz/DeepRBP/slurm/run_nmf_complex_analysis.sh
+```
 
 
 

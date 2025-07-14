@@ -39,18 +39,15 @@ class PrepareData:
         self.verbose = verbose
         self.logger = Logger(self.verbose)  # Initialize the logger with verbosity level
         self.logger.log("📁 Initializing Data Preparation...", level=1)
-        ###
         self.getBM = getBM 
         self.trans_col_name = trans_col_name
         self.gene_col_name = gene_col_name
         self.sample_category = sample_category
-        ###
         # Optional output directory
         self.path_save_data = os.path.join(output_dir, 'data') if output_dir else None
         self.scaler = None
         self.logger.log("✅ Initialization done", level=1)
         print_section_separator()
-    ###
     def load_data(self, path: str,
                   select_category: str = None, 
                   disease_condition: str = None, 
@@ -89,7 +86,6 @@ class PrepareData:
         self.logger.log("✅ Data import completed", level=self.verbose)
         print_section_separator()
         return data
-    ###
     def split_data(self, data: Dict[str, pd.DataFrame], test_fraction: float, 
                    test_name: str = 'validation') -> Tuple[Dict[str, pd.DataFrame], Dict[str, pd.DataFrame]]:
         """Splits data into training and validation (or test) sets.
@@ -109,7 +105,6 @@ class PrepareData:
         self.logger.log("\n✂️ Splitting data into train and validation (or test) sets...", level=self.verbose)
         splitter = DataSplitter(data, self.sample_category)
         return splitter.split_data_sets(test_fraction, test_name)
-    ###
     def save_split_data(self, train_data: pd.DataFrame, valid_data: pd.DataFrame):
         """Saves the training and validation data to specified paths.
         Args:
@@ -128,17 +123,17 @@ class PrepareData:
             raise ValueError("Output directory is not defined. Set output_dir during initialization.")
         # Define paths and filenames for saving data
         data_to_save = [
-            (train_data, os.path.join(self.path_save_data, 'Train'), {
-                'rbp_df': 'train_RBPs_log2p_tpm.csv',
-                'isoform_df': 'train_trans_log2p_tpm.csv',
-                'gene_df': 'train_gn_tpm.csv',
-                'metadata_df': 'train_phenotype_metadata.csv'
+            (train_data, os.path.join(self.path_save_data, 'Train'), { # new he quitado aqui los nombres de train y val en los ficheros que está guardando para que sea consistente
+                'rbp_df': 'RBPs_log2p_tpm.csv',
+                'isoform_df': 'trans_log2p_tpm.csv',
+                'gene_df': 'gn_tpm.csv',
+                'metadata_df': 'phenotype_metadata.csv'
             }),
             (valid_data, os.path.join(self.path_save_data, 'Validation'), {
-                'rbp_df': 'val_RBPs_log2p_tpm.csv',
-                'isoform_df': 'val_trans_log2p_tpm.csv',
-                'gene_df': 'val_gn_tpm.csv',
-                'metadata_df': 'val_phenotype_metadata.csv'
+                'rbp_df': 'RBPs_log2p_tpm.csv',
+                'isoform_df': 'trans_log2p_tpm.csv',
+                'gene_df': 'gn_tpm.csv',
+                'metadata_df': 'phenotype_metadata.csv'
             })
         ]
         for data, save_path, custom_names in data_to_save:
@@ -147,7 +142,6 @@ class PrepareData:
             self.logger.log(f"[*] Data saved successfully.\n", level=self.verbose) 
         self.logger.log("✅ Data saving completed", level=self.verbose)
         print_section_separator()
-    ###
     def fit_scaler(self, train_data: dict[pd.DataFrame]):
         """Fits the scaler to the training data.
         Args:
@@ -169,7 +163,6 @@ class PrepareData:
         self.scaler.save(self.path_save_data)
         self.logger.log(f"✅ Scaler has been saved in {self.path_save_data}.", level=self.verbose)
         print_section_separator()
-    ###
     # Alternative method: if you already have an scaler you can load it
     def load_scaler(self, folder_path: str):
         """Load an already trained scaler from the specified directory and assign it to self.scaler.
@@ -191,7 +184,6 @@ class PrepareData:
         except Exception as e:
             self.logger.error(f"❌ [Scaler:load_scaler] An unexpected error occurred: {e}", level=self.verbose)
         print_section_separator()
-    ###
     def scale_data(self, data: dict[pd.DataFrame]):
         """Transforms the provided dict[pd.DataFrame] in the RBP expression dataframe using the fitted scaler.
 
@@ -217,7 +209,6 @@ class PrepareData:
         scaled_data['scaled_rbp_df'] = self.scaler.transform(data['rbp_df'])  # Scale the RBP data
         print('\n')
         return scaled_data
-    ###
     def scale_train_val_data(self, train_data: dict[pd.DataFrame], val_data: dict[pd.DataFrame]) -> tuple:
         """Scales both training and validation datasets using the fitted scaler.
 
@@ -240,7 +231,6 @@ class PrepareData:
         self.logger.log("✅ Train and Val data scaling completed.", level=self.verbose)
         print_section_separator()
         return scaled_train_data, scaled_val_data
-    ###
     def create_tensor_dataset(self, data: dict[pd.DataFrame]) -> DeepRBPExpressionDataset:
         """Creates a DeepRBPExpressionDataset instance from a provided dictionary of DataFrames.
 
@@ -263,7 +253,6 @@ class PrepareData:
         )
         self.logger.log("✅ Tensor dataset created.", level=self.verbose)
         return dataset
-    ###
     def create_data_loader(self, dataset: DeepRBPExpressionDataset, batch_size: int, shuffle: bool = False, drop_last: bool = False, 
                            num_workers: int = 0) -> DataLoader:
         """Creates a DataLoader instance for the provided dataset.

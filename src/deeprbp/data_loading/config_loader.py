@@ -4,15 +4,19 @@ import os
 import yaml
 
 class ConfigParser:
-    def __init__(self, config_path):
+    def __init__(self, config_path=None, **kwargs):
         """
-        Initializes the ConfigParser with the path to the YAML configuration file.
+        Initializes the ConfigParser with the path to the YAML configuration file or keyword arguments.
 
         Parameters:
-        - config_path (str): Path to the YAML configuration file.
+        - config_path (str): Optional path to the YAML configuration file.
+        - **kwargs: Key-value pairs to use as configuration data.
         """
         self.config_path = config_path
-        self.config_data = self._load_config()  
+        if config_path:
+            self.config_data = self._load_config()
+        else:
+            self.config_data = kwargs  # use provided kwargs directly 
     def _load_config(self):
         """
         Loads the configuration data from the YAML file.

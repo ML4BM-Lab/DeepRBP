@@ -2,7 +2,6 @@
 
 import pandas as pd
 import torch
-from torchinfo import summary
 from typing import List, Dict
 import os
 import GPUtil
