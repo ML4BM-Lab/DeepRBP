@@ -82,8 +82,8 @@ class DataImporter:
     ###
     def load(self) -> Dict[str, pd.DataFrame]:
         """Load data dictionary from the specified paths and store it in the object.
-            If sample_category and select_category are provided, the data will be filtered accordingly.
-            If sample_fraction is provided, the dataset size will be reduced.
+            If sample_category and select_category are provided with metadata_path, the data will be filtered accordingly.
+            If sample_fraction is provided with metadata_path, the dataset size will be reduced.
         """
         try:
             self.logger.log("📥 Loading data from specified paths...")
@@ -93,16 +93,21 @@ class DataImporter:
                     data[f"{key.split('_')[0]}_df"] = pd.read_csv(path, index_col=0)
                     self.logger.log(f"✅ Loaded {key} data from {path}.")
                 else:
-                    self.logger.error(f"❌ File not found: {path}")
-            # Optionally filter the data if filtering parameters are provided
-            if self.sample_category and self.select_category:
-                data = self.filter_data_by_category(data)
-            if self.disease_condition and self.select_condition:
-                data = self.filter_data_by_condition(data)
-            # Optionally reduce dataset size if sample_fraction is provided
-            if self.sample_fraction is not None:
-                data = self.reduce_dataset_size(data)
-            #print_section_separator()
+                    #self.logger.error(f"❌ File not found: {path}")
+                    self.logger.warn(f"⚠️ File not found: {path}") 
+            # Check if metadata is available before applying filters
+            if 'metadata_df' in data:
+                # Optionally filter the data if filtering parameters are provided
+                if self.sample_category and self.select_category:
+                    data = self.filter_data_by_category(data)
+                if self.disease_condition and self.select_condition:
+                    data = self.filter_data_by_condition(data)
+                # Optionally reduce dataset size if sample_fraction is provided
+                if self.sample_fraction is not None:
+                    data = self.reduce_dataset_size(data)
+            else:
+                self.logger.log("⚠️ No metadata_df found. Skipping category, condition, and fraction filtering. " \
+                "Make sure this is the expected behavior.", level=1)
             return data  # Return raw loaded data
         except Exception as e:
             self.logger.error(f"❌ Error loading files: {e}", level=1)

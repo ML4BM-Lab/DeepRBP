@@ -219,13 +219,13 @@ between predicted and real values on a validation set.
 - **`plot_results`**: Enable or disable visualization of results. 
 
 
-#### Step 1: Create the Optuna Study (ALREADY CREATED!)
+#### Step 1: Create the Optuna Study  
 Before running any hyperparameter optimization, you must first initialize an Optuna study where the results will be stored. This step sets up the study with a `TPESampler` and a `MedianPruner`, and creates a local `SQLite` database to store the optimization history.
 
 To create the study, simply run the following command from the terminal:
 
 ```bash
-create-optuna-study --output_dir /scratch/jsanchoz/DeepRBP/output/results/hyperparameter_optimization_SLURM 
+create-optuna-study --output_dir /scratch/jsanchoz/DeepRBP/output/results/hyperparameter_optimization_SLURM
 ```
 where,
 - **`--output_dir`: Path where the Optuna storage (optuna.db) will be saved.
@@ -233,7 +233,9 @@ where,
 #### Step 2: Submit the Hyperparameter Optimization Job via SLURM (EXECUTING NOW THIS JOSEBA)
 For this step, we do not provide a command-line entry point, as it is intended to be executed exclusively on a high-performance computing (HPC) cluster due to the significant computational resources required.
 
-We perform 1,000 hyperparameter optimization trials using Optuna with a `TPESampler`. According to the Optuna documentation, the recommended number of trials for this sampler typically ranges between 100 and 1,000 to explore the search space effectively. To speed up the optimization process and avoid unnecessary computation on poorly performing configurations, we use an early stopping strategy with a `MedianPruner`. This pruner stops unpromising trials early by comparing their intermediate results to the median of previously completed trials, helping to allocate resources more efficiently during the search. In our setup, pruning is disabled until at least five trials have completed, and within each trial, it is further delayed until 30 steps have been reached. After that point, the pruning condition is checked every 10 steps based on the latest available intermediate values. These parameter values follow the commonly used in `Optuna`'s official examples.
+We perform 1,000 hyperparameter optimization trials using Optuna with a `TPESampler`. According to the Optuna documentation, the recommended number of trials for this sampler typically ranges between 100 and 1,000 to explore the search space effectively. In our setup, we have configured n_startup_trials=40 to allow for thorough initial random exploration before the sampler begins using its Bayesian optimization. This ensures sufficient information is gathered before focusing on specific areas of the search space. 
+
+To accelerate the optimization process and avoid unnecessary computation on poorly performing configurations, we use an early stopping strategy with a `MedianPruner`. This pruner halts unpromising trials early by comparing their intermediate results to the median of previously completed trials, helping to allocate resources more efficiently during the search. In our configuration, pruning is disabled until at least 50 trials have been completed, reflecting a conservative approach. Within each trial, pruning is further delayed until 30 steps have been reached. After that point, the pruning condition is checked every 10 steps based on the latest available intermediate values. These parameter values follow the commonly used in `Optuna`'s official examples.
 
 To parallelize the workload, the SLURM job is configured to run with 4 GPUs (NVIDIA A100), where each GPU handles 250 trials. Based on our setup, the job completes in approximately 90 hours.
 
@@ -271,8 +273,8 @@ The hyperparameter that are going to be optimised are:
 Use the following command to analyze the results of your Optuna hyperparameter search and generate summary plots:
 
 ```bash
-analyze-optuna-results --storage_path /scratch/jsanchoz/DeepRBP/output/results/OLDhyperparameter_optimization_SLURM_FIRST/optuna.db \
-                       --output_dir /scratch/jsanchoz/DeepRBP/output/results/OLDhyperparameter_optimization_SLURM_FIRST/analyze_results
+analyze-optuna-results --storage_path /scratch/jsanchoz/DeepRBP/output/results/hyperparameter_optimization_SLURM/optuna.db \
+                       --output_dir /scratch/jsanchoz/DeepRBP/output/results/hyperparameter_optimization_SLURM/analyze_results
 ```
 
 This will:
@@ -287,7 +289,7 @@ This will:
 
 ### Trying alternative Machine Learning benchmark methods  
 In this section, we benchmark our **DeepRBP predictor**—a deep learning-based model—against a series of traditional machine learning regressors.
-We evaluate the following algorithms using a `MultiOutputRegressor` setup to predict isoform abundances: `svr`, `decision_tree`, `random_forest`, `gradient_boosting`, `xgboost`, `lightgbm`, `knn`, `elastic_net`, `ridge`.
+We evaluate the following algorithms using a `MultiOutputRegressor` setup to predict isoform abundances: `svr`, `decision_tree`, `elastic_net`, `ridge`.
 
 Each model predicts isoform-level abundances, which are then scaled by their corresponding gene expression (TPM) values to produce transcript TPMs. As in our Deep Learning model, we apply a log2(TPM + 1) transformation before computing metrics.
 
@@ -307,19 +309,21 @@ To run the benchmark, define a configuration YAML file like the following:
 
 ```yaml
 # src/deeprbp/configs/config_benchmark_methods.yaml
-pre_split_train_path: '/scratch/jsanchoz/DeepRBP/output/results/stuff/run_deeprbp_predictor_SLURM_try9_06/data/Train' # cambiar esto cuando tengamos ya los resultados de la optimizacion de optuna y sus divisiones reales
-pre_split_val_path: '/scratch/jsanchoz/DeepRBP/output/results/stuff/run_deeprbp_predictor_SLURM_try9_06/data/Validation'
+pre_split_train_path: '/scratch/jsanchoz/DeepRBP/final_results/hyp_optimization_optuna/job1/data/Train'  
+pre_split_val_path: '/scratch/jsanchoz/DeepRBP/final_results/hyp_optimization_optuna/job1/data/Validation'
+#sample_category: "detailed_category"  #esto en principio no necesito
 getBM_path: "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/getBM.csv"
 gene_col_name: "Gene_ID"
 trans_col_name: "Transcript_ID"
 plot_results: False
+
 ```
 
 #### Run via SLURM
 To launch the benchmark experiments on your HPC cluster:
 
 ```bash
-sbatch slurm/run_benchmark_models.sh
+sbatch slurm/run_benchmark_ridge.sh
 ```
 
 
@@ -363,7 +367,7 @@ Once the `config` file is ready, execute the script as follows, specifying the p
 run-deeprbp-predictor \
   --config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_model_train.yaml" \
   --output_dir "/scratch/jsanchoz/DeepRBP/output/results/run_deeprbp_predictor" \
-  --epochs 1000 \
+  --epochs 10 \
   --num_workers 4 \
   --min_delta 0.001 \
   --patience 30 \
@@ -412,23 +416,24 @@ sbatch run_predictor.sh
  
 
 ### Tumor-Specific vs General Training Benchmark
-<!-- 
-# JOSEBA HAY QUE TOMAR UNA DECISION SOBRE ESTO: train_batch_size = 32, # esto habrá que cambiar (y piensa que muchos tipos tumorales no tendran el suficiente numero de muestras para hacer un batch size grande). Hay que definir unas reglas justas para todos los specific tipos tumorales (no usar el batch size de optuna pork no tiene sentido)
-    val_batch_size = 64, -->
-
-In this section, we evaluate whether training `DeepRBPredictor` on a single tumor type improves isoform usage prediction performance compared to using a general model trained on all tumor types combined.
+In this section, we evaluate whether training `DeepRBPredictor` on all tumor types combined improves transcript expression prediction performance compared to using a model trained on a single tumor type.
 
 We compare two training strategies:
 
-- *General model*: trained on all available tumor types using the best architecture selected through Optuna (via run_predictor.sh).
-- *Tumor-specific models*: individually trained models for each tumor type using the same optimized architecture.
+- *General model*: Trained on all available tumor types using the best architecture selected through Optuna, employing a consistent training-validation split for all tumor types (via run_predictor.sh).
+- *Tumor-specific models*: Individually trained models for each tumor type using the same optimized architecture. The training-validation splits are consistent with those used for the general model.
 
-For each tumor type, we evaluate isoform prediction accuracy using:
+Batch sizes for tumor-specific models are determined by the number of samples available:
+- For tumor types with fewer than 100 training samples: A small batch size, such as 8, is used.
+- For tumor types with 100-300 training samples: A medium batch size, such as 32, is employed.
+- For tumor types with more than 300 training samples: A larger batch size, such as 64, is utilized.
+<!-- # programa aun que yo diga cual es el batch size que hay que utilizar para cada uno que creo que eso no está puesto -->
 
+For each tumor type, we evaluate isoform expression prediction accuracy using:
 - The general model trained across all tumors.
 - The tumor-specific model trained only on that tumor type.
 
-This allows us to quantify performance gains or losses when using specialized training versus a more generalizable approach.
+ This allows us to quantify the generalization capabilities of the model trained on all tumor types versus the specialized training approach.
 
 To run this analysis:
 
@@ -438,22 +443,20 @@ sh /scratch/jsanchoz/DeepRBP/slurm/run_tcga_specific_vs_general_training.sh
 
 This script performs the following steps:
 
-- Trains one model per tumor type using a previously optimized architecture.
+- Trains one model per tumor type using a previously optimized architecture, with early stopping applied to ensure model convergence.
 - Loads performance results from the best general model, trained on all tumor types together (via `run_predictor.sh`).
-- Evaluates and compares both strategies (tumor-specific vs general) across all cancer types using multiple performance metrics.
+- Evaluates and compares both strategies (tumor-specific vs general) based on transcript expression prediction across all cancer types using multiple performance metrics.
 - Generates publication-ready plots and summary tables:
-- The main manuscript plot includes only selected tumor types: Liver, Kidney, and AML.
-- The supplementary figure includes all tumor types.
+  - The main manuscript plot includes only selected tumor types: Liver, Kidney, and AML.
+  - The supplementary figure includes all tumor types.
 - All plots are generated for multiple metrics (e.g., Spearman, Pearson, R², MSE...) to allow flexibility and completeness in the analysis.
 
-The goal is to assess whether tumor-specific training offers meaningful improvements in isoform prediction for each cancer type, or if the general model already provides sufficient performance across contexts.
+The goal is to assess whether the general model provides sufficient performance across contexts, potentially offering better generalization than models trained on individual tumor types.
 
 
 
 
-
-
-
+ 
 
 
 
@@ -461,13 +464,6 @@ The goal is to assess whether tumor-specific training offers meaningful improvem
 ### aqui joseba (cuando todo esto esté ejecutado bien puedes borrar lo de aquí)
 #TODO: 
 -1)	Entrenar cada tipo tumoral con la arquitectura final y predecir vs entrenar con todo y predecir y hacer la matriz de confusion. que demuestra que es mejor entrenar un modelo con todo que con uno solo (usa para ello un Notebook de jupyter brother!).
-
--2)	Idoia: comparar el Predictor con un decisión tree o SVM como otro baseline. Mira multi output regressor.
-
-├── benchmark_methods/             # Folder para métodos de evaluación
-│   │   ├── svm_benchmark.py           # Script para evaluar SVM
-│   │   ├── decision_tree_benchmark.py  # Script para evaluar árboles de decisión
-
 
 -3)	Ángel me ha dicho una idea sobre: DeepLIFT de los RBPs que están el mismo complejo debería estar más correlado que los que no. Correlacion complejo > Correlacion no complejo, para ver si detectamos complejos y familias de rbp que se autoregulan. Lo saco de está página web:
 
@@ -759,13 +755,275 @@ sh /scratch/jsanchoz/DeepRBP/slurm/run_nmf_complex_analysis.sh
 ```
 
 
+## Evaluation of Explainability Scores Using real RBP knockdown data
+This section describes how to validate explainability scores using real RNA-binding protein (RBP) knockdown RNA-seq data.
+
+*Environment Setup*
+First, create a conda environment with Kallisto installed:
+
+```bash
+conda create -n kallisto_env -c bioconda kallisto
+conda activate kallisto_env
+```
+
+### Dataset Download and Quantification
+To evaluate explainability using real knockdown data, we need RNA-seq quantification data at the transcript level. For this, we use publicly available RBP knockdown datasets, which we process using Kallisto, a fast and accurate tool for pseudoalignment-based quantification.
+
+For each dataset, we provide a dedicated script that:
+
+1. Downloads paired-end RNA-seq FASTQ files from the corresponding GEO accession.
+2. Downloads the GENCODE transcriptome (e.g., v23) if not already present.
+3. Builds a Kallisto index (only once per transcriptome version).
+4. Runs Kallisto quantification with 100 bootstraps per sample.
+5. Saves the results in a structured output folder, where each sample has its own subdirectory with:
+  - **abundance.tsv**: transcript-level quantification
+  - **abundance.h5**: binary HDF5 version of the same data
+
+**Example: GSE136366**
+To process the dataset GSE136366 (TDP-43 knockdown), run the following script:
+
+```bash
+sbatch /scratch/jsanchoz/DeepRBP/slurm/download_GSE136366_kd_data.sh
+```
+This will download and quantify all samples, and save the output in:
+
+`/scratch/jsanchoz/DeepRBP/data/explainability_module/real_kds/GSE136366/kallisto_output/`
+ 
+Each sample will have its own folder inside this directory, containing both `abundance.tsv` and `abundance.h5`.
+
+### Differential Expression with voom-limma  
+After quantifying all samples with Kallisto, use the following command to run differential expression analysis between 
+the two experimental conditions: control and knockdown:
+
+```bash
+module load R/4.3.2
+Rscript /scratch/jsanchoz/DeepRBP/src/deeprbp/explainability_module/real_knockdowns/run_voom-limma.R \
+  --path=/scratch/jsanchoz/DeepRBP/data/explainability_module/real_kds/GSE136366 \
+  --output_dir=/scratch/jsanchoz/DeepRBP/output/results/real_knockdowns/GSE136366 \
+  --path_getBM=/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/getBM.csv \
+  --condition_control=Rescued_tdp43 \
+  --condition_kd=tdp43_ko
+```
+
+*Input arguments*
+- **--path**: Path to the directory containing the Kallisto quantification output and the info_samples.txt file.
+- **--output_dir**: Directory where the vool-limma results will be saved.
+- **--path_getBM**: Path to the CSV file with transcript-to-gene mapping. Used to map transcripts to genes during aggregation.
+- **--condition_control**: Label that identifies the control samples in info_samples.txt. Must match the second column (V2) of that file.
+- **--condition_kd**: Label that identifies the knockdown samples in info_samples.txt.
+Must also match what's in column V2.
+
+The script will generate a new folder inside the dataset directory: `voom-limma_output/`
+
+This folder contains:
+
+- **DE_genes_<condition_kd>_vs_<condition_control>.csv**: Differential expression results at the gene level
+- **DE_transcripts_<condition_kd>_vs_<condition_control>.csv**: Differential expression results at the transcript level
+Each file includes statistics such as log-fold change, adjusted p-values, and B-statistics from the voom-limma analysis.
+
+In the dataset folder, make sure you have the following file:
+- **info_samples.txt**: a tab-separated file containing metadata for each sample. In the 'run_accession' column, you can read the sample name (for example SRR10045016), and if you go to the folder with the same name in path_data, you will find the data containing abundance and ``expression data in TPM``.
+
+### Data Preprocessing: Read and process raw samples to generate the input data for DeepRBP 
+Once the Kallisto quantification step is completed and `abundance.tsv` files are available for all samples, the next step is to preprocess the expression data to generate the model input matrices required by DeepRBP.
+For this step we need to go back to the `/data/jsanchoz/conda-env/DeepRBP` environment.
+
+This step includes:
+
+1. Merging transcript and gene-level expression matrices (TPM) across samples.
+2. Filtering and selecting relevant genes and transcripts.
+3. Extracting RNA-binding protein (RBP) expression matrices.
+4. Performing a log2(TPM + 1) transformation.
+5. Transposing matrices so that samples are rows and features are columns.
+6. Saving the process ed matrices to disk.
+
+*Running the preprocessing script*
+To run the preprocessing pipeline on the knockdown dataset `GSE136366`, execute:
+
+```bash
+preprocess-realkd-data \
+    --path_dataset '/scratch/jsanchoz/DeepRBP/data/explainability_module/real_kds/GSE136366' \
+    --output_dir '/scratch/jsanchoz/DeepRBP/data/explainability_module/real_kds/GSE136366/processed' \
+    --condition_control 'Rescued_tdp43' \
+    --condition_knockdown 'tdp43_ko' 
+```
+<!-- preprocess-realkd-data \
+    --path_dataset '/scratch/jsanchoz/DeepRBP/data/explainability_module/real_kds/GSE75491' \
+    --output_dir '/scratch/jsanchoz/DeepRBP/data/explainability_module/real_kds/GSE75491/processed' \
+    --condition_control 'Control' \
+    --condition_knockdown 'RBM47 KD' -->
+
+<!-- preprocess-realkd-data \
+    --path_dataset '/scratch/jsanchoz/DeepRBP/data/explainability_module/real_kds/PRJEB39343' \
+    --output_dir '/scratch/jsanchoz/DeepRBP/data/explainability_module/real_kds/PRJEB39343/processed_MBNL1' \
+    --condition_control 'HFE145siNeg_1' \
+    --condition_knockdown 'HFE145siMBNL1' -->
+
+<!-- FUS, TAF15, TARDBP -->
+
+<!-- preprocess-realkd-data \ # kd1
+    --path_dataset '/scratch/jsanchoz/DeepRBP/data/explainability_module/real_kds/GSE77702' \
+    --output_dir '/scratch/jsanchoz/DeepRBP/data/explainability_module/real_kds/GSE77702/processed_FUS' \
+    --condition_control 'Control' \
+    --condition_knockdown 'FUS KD' -->
+
+<!-- preprocess-realkd-data \ # kd2
+    --path_dataset '/scratch/jsanchoz/DeepRBP/data/explainability_module/real_kds/GSE77702' \
+    --output_dir '/scratch/jsanchoz/DeepRBP/data/explainability_module/real_kds/GSE77702/processed_TAF15' \
+    --condition_control 'Control' \
+    --condition_knockdown 'TAF15 KD' -->
+
+<!-- preprocess-realkd-data \ # kd3
+    --path_dataset '/scratch/jsanchoz/DeepRBP/data/explainability_module/real_kds/GSE77702' \
+    --output_dir '/scratch/jsanchoz/DeepRBP/data/explainability_module/real_kds/GSE77702/processed_TARDBP' \
+    --condition_control 'Control' \
+    --condition_knockdown 'TARDBP KD' -->
+
+This will:
+- Read the sample metadata from `info_samples.txt` inside the dataset folder.
+- Load the transcript-to-gene mapping file `getBM.csv` from the selected_genes_dir.
+- Identify the sample IDs for each condition.
+- Process and save the following matrices for both `control` and `knockdown` conditions:
+  - **RBPs_log2p_tpm.csv**: RBP expression matrix
+  - **trans_log2p_tpm.csv**: transcript expression matrix
+  - **gn_tpm.csv**: gene expression matrix
+
+
+In this case all outputs are saved in : `/scratch/jsanchoz/DeepRBP/data/explainability_module/real_kds/raw/GSE136366/processed/<condition>/`
+
+where <condition> is either `control` or `knockdown`.
+ 
+*Input Arguments*
+- `--path_dataset`: Path to the dataset root (must contain `kallisto_output/` and `info_samples.txt`).
+- `--output_dir`: Directory where the processed matrices will be saved.
+- `--condition_control`: Label used in `info_samples.txt` to identify `control` samples.
+- `--condition_knockdown`: Label used to identify `knockdown` samples.
+
+**📝 Notes**
+- The `info_samples.txt` file must contain a column with sample IDs (`run_accession`) and a column with condition labels (e.g., `tdp43_ko`, `Rescued_tdp43`).
+- This script uses **TPM-normalized transcript and gene expression values**.
+- The processing pipeline uses **selected gene sets related to cancer and splicing** if `--gene_selection` is set to `True` (default).
+- This step is required **before running explainability analyses or training a model** on real knockdown data.
+
+
+### Executing DeepRBP Evaluation and Explainability on Knockdown Data
+This section outlines the process to execute the main script for evaluating the DeepRBP model and calculating explainability scores using real RBP knockdown data.
+
+The script leverages a configuration file to define key parameters such as the path to the trained scaler, the model checkpoint, the explainability method, and other necessary settings.
+It processes input data and labels for both control and knockdown conditions.
+
+**Configuration File**
+The configuration file (`config_real_knockdowns.yaml`) includes:
+- **scaler_dir**: Path where the trained scaler is stored. This scaler is used to normalize input data to the same scale as during the model's training phase.
+- **model_checkpoint_path**: Specifies the location of the trained model's checkpoint file.
+- **explanation_method**: Defines the method used for explainability, such as "DeepLIFT".
+- **reference_data**: Reference data type for the explainability analysis.
+- **batch_reduction_method**: Method used to reduce batch-level explainability results.
+- **gene_collapse_method**: Approach for aggregating transcript-level data to gene-level.
+- **getBM_path**: Path to the CSV file for transcript-to-gene mapping, essential for data aggregation.
+- **gene_col_name** and **trans_col_name**: Columns in the mapping file that identify gene and transcript IDs, respectively.
+
+*Example Configuration File*
+Below is an example of how the `config_real_knockdowns.yaml` might be structured:
+
+```YAML
+scaler_dir: "/scratch/jsanchoz/DeepRBP/output/results/stuff"
+model_checkpoint_path: "/scratch/jsanchoz/DeepRBP/output/results/run_deeprbp_predictor/checkpoint_model/deeprbp-predictor-epoch=09-validation_loss=4.40.ckpt"
+explanation_method: "DeepLIFT"
+reference_data: "knockout_reference"
+batch_reduction_method: "t-statistic"
+gene_collapse_method: "max_absolute_value"
+getBM_path: "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/getBM.csv"
+gene_col_name: "Gene_ID"
+trans_col_name: "Transcript_ID"
+```
+
+#### Running the Script*
+To execute the script on the dataset `GSE136366`, use the following command:
+```bash
+run-deeprbp-realkd \
+    --config_path '/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_real_knockdowns.yaml' \
+    --processed_data_dir '/scratch/jsanchoz/DeepRBP/data/explainability_module/real_kds/GSE136366/processed' \
+    --output_dir '/scratch/jsanchoz/DeepRBP/output/results/real_knockdowns/GSE136366'
+```
+
+*Running via SLURM*
+If you prefer to execute the script using SLURM for job scheduling, follow these steps:
+
+```bash
+cd slurm
+sbatch run_realkds.sh
+```
+
+Steps Performed by the Script:
+- **Load and Scale Data**: The script loads processed data from `processed_data_dir` and scales it using the pre-trained scaler defined in the configuration file.
+- **Model Evaluation**: It evaluates the DeepRBP trained predictor on both `control` and `knockdown` datasets, making predictions and calculating performance metrics in `log2(TPM + 1)` format.
+- **Explainability Analysis**: The script computes explainability scores specifically for the `control` dataset, utilizing the method specified in the configuration file (e.g., "DeepLIFT").
+- **Save Results**: Finally, it saves all evaluation metrics and explainability scores to the specified `output_dir`.
+
+
+### Comparing RBP Explainability Scores Between DE and Non-DE Genes/Transcripts
+The script `generate_realkd_plot.R`  generates visualizations of explainability scores for RNA-binding proteins (RBPs) across multiple real knockdown experiments. It compares scores between differentially expressed (DE) and non-differentially expressed genes/transcripts, using statistical testing.
+
+*Pipeline Overview*
+1. **Load scores from real knockdown results:** Transcript-level and gene-level explainability scores and DE results from voom-limma.
+2. **Filter significant features:** Keep only those with `adj.P.Val < 0.05` from DE analysis
+3. **Prepare melted dataframes:** Annotate DE vs non-DE and Extract scores for each RBP using getBM mapping.
+4. **Statistical testing:** Mann-Whitney-Wilcoxon test between DE and non-DE with bonferroni adj.
+5. **Generate plots:** Boxplots with jittered points, Annotated with significance levels, Legends and titles formatted
+6. **Arrange and export:** All transcript plots combined into a single PDF, All gene plots combined into another PDF
+
+*How to Run*
+```bash
+cd /scratch/jsanchoz/DeepRBP/src/deeprbp/explainability_module/real_knockdowns # change as needed
+Rscript generate_realkd_plot.R \
+  --output_dir "/Users/joseba/Desktop/real_knockdowns/figures" \
+  --path_getBM "/Users/joseba/Desktop/data:real_kds/getBM.csv" \
+  --path_results "/Users/joseba/Desktop/real_knockdowns" \
+  --experiment_list "PRJEB39343,GSE75491,GSE77702-FUS,GSE77702-TAF15,GSE77702-TARDBP,GSE136366" \
+  --rbp_interest_list "MBNL1,RBM47,FUS,TAF15,TARDBP,TARDBP"
+```
+*Input Arguments*
+- **output_dir**: Directory to save output plots (PDFs)
+- **path_getBM**:	Path to CSV file mapping Gene_ID to Gene_name (used to match RBPs)
+- **path_results**:	Path to folder containing real knockdown results (with subfolders for each experiment)
+- **experiment_list**: Comma-separated list of experiment names
+- **rbp_interest_list**: Comma-separated list of RBP names (must match getBM$Gene_name) corresponding to experiments
+⚠️ The number of experiments and RBPs must match one-to-one.
+
+*Output*
+Two arranged PDF figures saved to `output_dir`: 
+- **transcripts_arranged.pdf**: Boxplots of scores for DE vs non-DE transcripts
+- **genes_arranged.pdf**: Boxplots of scores for genes with DE transcripts vs others
+
+Each figure contains multiple subplots (one per experiment), with statistical comparisons (Wilcoxon test) annotated.
 
 
 
 
 
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 
-# nuevo organigrama !!! (puede estar aun sujeto a muchos cambios) ACTUALIZA ESTO BROTHER!!!
+# asi se veía mi modelo viejo: 
+<!-- DeepRBP(
+  (linear0): Linear(in_features=1282, out_features=1024, bias=True)
+  (bn0): BatchNorm1d(1024, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+  (a_function0): ReLU()
+  (linear1): Linear(in_features=1024, out_features=128, bias=True)
+  (bn1): BatchNorm1d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+  (a_function1): ReLU()
+  (final_layer): Linear(in_features=128, out_features=11462, bias=True)
+) -->
+
+
+
+# JOSEBA CUANDO ACABES TODAS LAS EJECUCIONES Y EL MANUSCRITO!!!!! 
+# CUANDO ACABE TODO EL PROYECTO VAMOS A CREAR UN README GENERAL QUE EXPLIQUE TODO EL PROYECTO.
+# UN README PARA EL TRAINING (CON APARTADOS EXTRA DE ENTRENAR FROM SCRATCH POSIBLEMENTE EN OTRO README)
+# UN README PARA EL EXPLAINABILITY (CON DIVISION POR SUBSECCIONES)
+
+
+<!-- # nuevo organigrama !!! (puede estar aun sujeto a muchos cambios) ACTUALIZA ESTO BROTHER!!!
 /DeepRBP
 ├── data (esto hay que actualizar)
 │   ├── training_module                       
@@ -834,9 +1092,7 @@ sh /scratch/jsanchoz/DeepRBP/slurm/run_nmf_complex_analysis.sh
 │   ├── Tutorial_replicate_postar3.ipynb  # Tutorial para replicar los resultados en POSTAR3
 │   └── Tutorial_replicate_real_kds.ipynb  # Tutorial para replicar knockdown experiments -->
 
-
-
-src/  # Main code for the DeepRBP package
+<!-- src/  # Main code for the DeepRBP package
 │
 ├── deeprbp/
 │   ├── __init__.py                      # Initialize the DeepRBP package
@@ -908,4 +1164,4 @@ src/  # Main code for the DeepRBP package
 # ME QUEDA QUE EL PREP_MODEL_INPUTS COJA LOS COUNTS DE LOS TRANS Y TODOS LOS GENES.
 # hacer el pseucode.py y que el deeplift_handler pueda trabajar con todos los casos.
 # hacer merge de este branch en git y publicar la versión!
-# hacer notebooks!
+# hacer notebooks! --> -->

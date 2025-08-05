@@ -1,0 +1,14 @@
+# src/deeprbp/configs/config_real_knockdowns.yaml
+
+scaler_dir: "/scratch/jsanchoz/DeepRBP/output/results/stuff"
+model_checkpoint_path: '/scratch/jsanchoz/DeepRBP/output/results/run_deeprbp_predictor/checkpoint_model/deeprbp-predictor-epoch=09-validation_loss=4.40.ckpt'
+explanation_method: "DeepLIFT"
+reference_data: "knockout_reference"
+batch_reduction_method: "t-statistic"
+gene_collapse_method: "max_absolute_value"
+getBM_path: "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/getBM.csv"
+gene_col_name: "Gene_ID"
+trans_col_name: "Transcript_ID"
+
+
+ 

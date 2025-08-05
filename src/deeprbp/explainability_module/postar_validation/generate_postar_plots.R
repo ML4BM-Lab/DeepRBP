@@ -228,8 +228,9 @@ create_postar_plots <- function(
         y.position = "y.position.2")
     
     # Create a vector to store labels dynamically
-    labels <- letters[(label_counter - 1) * 2 + 1:2]  # Create labels A, B, C, D, etc.
-    
+    #labels <- letters[(label_counter - 1) * 2 + 1:2]  # Create labels A, B, C, D, etc.
+    labels <- LETTERS[(label_counter - 1) * 2 + 1:2]  # Create labels A, B, C, D, etc.
+
     # Concatenate the figures
     plot_figure <- ggarrange(plotlist = plotlist, nrow = 1, ncol = 2, 
                              labels = labels, #labels = c("A", "B"), 

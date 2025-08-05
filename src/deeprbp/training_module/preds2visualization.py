@@ -150,7 +150,11 @@ def plot_transcript_to_gene_ratio_distributions(
     plt.xlabel("Transcript-to-Gene Ratio", fontsize=10)
     plt.ylabel("Frequency", fontsize=10)
     plt.axvline(mean_label, color=color_label, linestyle='dashed', linewidth=1.5)
-    plt.text(mean_label + 0.1, plt.ylim()[1] * 0.9, f'Mean: {mean_label:.3f}\nSTD: {std_label:.3f}', color=color_label, fontsize=9)
+    plt.text(mean_label + 0.01, plt.ylim()[1] * 0.9, f'Mean: {mean_label:.3f}\nSTD: {std_label:.3f}', color=color_label, fontsize=9)
+    x_min = 0.8
+    x_max = 1.2
+    plt.xlim((x_min, x_max))
+    plt.xticks(np.arange(x_min, x_max + 0.01, 0.05))
     # Adjust layout
     plt.tight_layout()
     os.makedirs(os.path.dirname(output_path), exist_ok=True)

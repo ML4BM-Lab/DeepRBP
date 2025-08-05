@@ -1,4 +1,5 @@
 #!/bin/bash
+#SBATCH --partition=general
 #SBATCH --qos=regular
 #SBATCH --job-name=run_explainer
 #SBATCH --cpus-per-task=1

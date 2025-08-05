@@ -1,6 +1,7 @@
 # src/deeprbp/data_preprocessing/preprocess_data.py
 
 import os
+import copy
 import pandas as pd
 import numpy as np
 from typing import Union, List
@@ -292,11 +293,9 @@ def select_genes_for_modeling(getBM: pd.DataFrame,
                                                     getBM=getBM, 
                                                     parm_match_columns=parm_match_columns)
         print('[select_genes_for_modeling] Successfully loaded selected genes datasets.')
-    
     else:
         getBM_filtered = getBM
         print('[select_genes_for_modeling] Filtering completed. Only protein coding genes are selected.')
-
     # Retrieve unique gene and transcript IDs
     list_genes = getBM_filtered['Gene_ID'].unique().tolist()
     list_transcripts = getBM_filtered['Transcript_ID'].tolist()
@@ -399,90 +398,121 @@ def generate_model_input_matrices(data: dict,
     print('\n')
     return output_data, df_phenotype_study
 
-def transform_expression_data(data: dict) -> dict:
+def transform_expression_data(data: dict, 
+                              from_log2p: bool = True,
+                              epsilon: float = 0.001,
+                              epsilon_counts: float = 1.0,
+                              counts_are_log2p: bool = True) -> dict:
     """
-    Transforms expression data for RBPs, transcripts, and genes.
+    Transforms expression data (TPM or log2p(TPM)) for RBPs, transcripts, genes, and optionally counts.
 
-    Args:
-    - data (dict): Dictionary containing cleaned 'df_genes' and 'df_trans' DataFrames.
+    Parameters:
+    - data (dict): Dictionary containing expression DataFrames. Expected keys include:
+        - 'df_rbp_gene', 'df_trans', 'df_genes' (required)
+        - 'df_counts' (optional)
+    - from_log2p (bool): Whether to first transform from log2p(TPM + epsilon) to TPM. Default is True.
+    - epsilon (float): Value that was added before log2. Used in inverse log2p. Default is 0.001.
+    - epsilon_counts (float): Value used in log2p(COUNT + epsilon_counts) for counts inversion.
+    - counts_are_log2p (bool): Whether df_counts is in log2p. If False, no transformation is applied.
+
     Returns:
-    - dict: Dictionary with transformed gene and transcript DataFrames.
+    - dict: Updated dictionary with transformed expression matrices.
     """
-    print('Transforming transcript and RBP expression data to log2p(TPM), gene to TPM and counts...')
-    
-    # Transform first to TPM
-    data['df_rbp_gene'] = np.power(2, data['df_rbp_gene']) - 0.001
-    data['df_trans'] = np.power(2, data['df_trans']) - 0.001
-    data['df_genes'] = np.power(2, data['df_genes']) - 0.001
-    
-    # Clip min tpm expression value to 0
-    data['df_rbp_gene'] = data['df_rbp_gene'].clip(lower=0)
-    data['df_trans'] = data['df_trans'].clip(lower=0)
-    data['df_genes'] = data['df_genes'].clip(lower=0)
-    
-    # Transform RBP and transcript to log2p(tpm)
-    data['df_rbp_gene'] = np.log2(data["df_rbp_gene"] + 1)
-    data['df_trans'] = np.log2(data["df_trans"] + 1)
-
-    # Transform counts and round
-    data['df_counts'] = np.power(2, data['df_counts']) - 1
-    data['df_counts'] = data['df_counts'].round().astype(int)
-    print('[transform_expression_data] Transformation done\n')
+    print('[transform_expression_data] Starting transformation...')
+    data = copy.deepcopy(data)
+    # Define which keys to transform normally (TPM/log2p)
+    expression_keys = [k for k in data.keys() if k != 'df_counts']
+    # Step 1: If from_log2p, convert back to TPM
+    if from_log2p:
+        print('[transform_expression_data] Inverting log2p(TPM + ε) to TPM...')
+        print(f'  • TPM from_log2p: {from_log2p}  (epsilon = {epsilon})')
+        for key in expression_keys:
+            print(f'  ↪️ Inverting {key}')
+            data[key] = np.power(2, data[key]) - epsilon
+    # Step 2: Clip negative values (just in case)
+    for key in expression_keys:
+        data[key] = data[key].clip(lower=0)
+    # Step 3: Apply log2p(x + 1) to df_trans y df_rbp_gene
+    for key in ['df_trans', 'df_rbp_gene']:
+        if key in data:
+            print(f'  🔁 Applying log2p(x + 1) to {key}')
+            data[key] = np.log2(data[key] + 1)
+    # Step 4: Process df_counts if present
+    if 'df_counts' in data:
+        if counts_are_log2p:
+            print(f'[transform_expression_data] Inverting log2p(COUNTS + {epsilon_counts})...')
+            data['df_counts'] = np.power(2, data['df_counts']) - epsilon_counts
+            data['df_counts'] = data['df_counts'].clip(lower=0)
+        else:
+            print('[transform_expression_data] df_counts is already in raw count scale (no inverse log2p).')
+        print('[transform_expression_data] Rounding and converting df_counts to integers...')
+        data['df_counts'] = data['df_counts'].round().astype(int)
+    print('[transform_expression_data] ✅ Transformation complete.\n')
     return data
 
 def transpose_dataframes(data: dict) -> dict:
     """
-    Transposes the expression DataFrames to have patients as index and genes (or transcript IDs) as columns.
+    Transposes the expression DataFrames to have patients (samples) as index and genes/transcripts as columns.
 
-    Args:
-    - data (dict): Dictionary containing DataFrames to transpose:
-  
+    Parameters:
+    - data (dict): Dictionary containing expression DataFrames.
+
     Returns:
-    - dict: Dictionary with transposed DataFrames for RBP, transcripts, and mapped genes.
+    - dict: Dictionary with transposed DataFrames.
     """
-    print('Transposing expression data...')
-    data['df_rbp_gene'] = data['df_rbp_gene'].T
-    data['df_trans'] = data['df_trans'].T
-    data['df_genes'] = data['df_genes'].T
-    data['df_counts'] = data['df_counts'].T
-    print('[transpose_dataframes] Transposition done\n')
+    print('[transpose_dataframes] Transposing expression data...')
+    data = data.copy()
+    for key in ['df_rbp_gene', 'df_trans', 'df_genes', 'df_counts']:
+        if key in data:
+            print(f'  🔁 Transposing {key}')
+            data[key] = data[key].T
+    print('[transpose_dataframes] ✅ Transposition complete.\n')
     return data
 
-def save_processed_data(data: dict, df_phenotype_study: pd.DataFrame, output_dir: str, study_name: str) -> None:
+def save_processed_data(
+    data: dict,
+    output_dir: str,
+    df_phenotype_study: pd.DataFrame = None,
+    study_name: str = None
+) -> None:
     """
-    Saves the processed data chunks and phenotype metadata to CSV files in the specified output directory.
+    Saves processed expression matrices and optional phenotype metadata to CSV files.
 
-    Args:
-    - data (dict): Dictionary containing processed data matrices.
-    - df_phenotype_study (DataFrame): DataFrame containing phenotype data for the specific study.
-    - output_dir (str): Directory where output files will be saved.
-    - study_name (str): Name of the study (e.g., 'TCGA', 'GTEX').
+    Parameters:
+    - data (dict): Dictionary containing expression matrices (e.g. df_rbp_gene, df_trans, df_genes, df_counts).
+    - output_dir (str): Base directory to save files.
+    - df_phenotype_study (pd.DataFrame, optional): Phenotype metadata to save (default: None).
+    - study_name (str, optional): Name of the study to create a subdirectory (default: None).
     """
-    print(f'[save_processed_data] Saving processed data for study: {study_name}...')
-    path = os.path.join(output_dir, study_name)
+    print('[save_processed_data] Saving processed data...')
+    # Determine output path
+    path = os.path.join(output_dir, study_name) if study_name else output_dir
     os.makedirs(path, exist_ok=True)
-    
-    path_rbp = os.path.join(path, 'RBPs_log2p_tpm.csv')
-    path_trans = os.path.join(path, 'trans_log2p_tpm.csv')
-    path_gn = os.path.join(path, 'gn_tpm.csv')
-    path_gn_counts = os.path.join(path, 'gn_counts.csv')
-    path_phenotype = os.path.join(path, 'phenotype_metadata.csv')
-    
-    print(f'[save_processed_data] Saving RBP expression matrix to {path_rbp}...')
-    data['df_rbp_gene'].to_csv(path_rbp, mode='a', header=not os.path.exists(path_rbp))
-
-    print(f'[save_processed_data] Saving transcript expression matrix to {path_trans}...')
-    data['df_trans'].to_csv(path_trans, mode='a', header=not os.path.exists(path_trans))
-
-    print(f'[save_processed_data] Saving gene expression matrix mapped to transcripts to {path_gn}...')
-    data['df_genes'].to_csv(path_gn, mode='a', header=not os.path.exists(path_gn))
-
-    print(f'[save_processed_data] Saving gene count matrix to {path_gn_counts}...')
-    data['df_counts'].to_csv(path_gn_counts, mode='a', header=not os.path.exists(path_gn_counts))
-
-    print(f'[save_processed_data] Saving phenotype metadata to {path_phenotype}...')
-    df_phenotype_study.loc[data['df_rbp_gene'].index].to_csv(path_phenotype, mode='a', header=not os.path.exists(path_phenotype))
-    print('[save_processed_data] Data saving completed.\n')
+    # Mapping of keys to filenames
+    save_map = {
+        'df_rbp_gene': 'RBPs_log2p_tpm.csv',
+        'df_trans': 'trans_log2p_tpm.csv',
+        'df_genes': 'gn_tpm.csv',
+        'df_counts': 'gn_counts.csv'
+    }
+    # Save each DataFrame if it exists
+    for key, filename in save_map.items():
+        if key in data:
+            file_path = os.path.join(path, filename)
+            print(f'[save_processed_data] Saving {key} to {file_path}...')
+            data[key].to_csv(file_path, mode='a', header=not os.path.exists(file_path))
+        else:
+            print(f'[save_processed_data] Skipping {key} (not found in data).')
+    # Save phenotype metadata if provided
+    if df_phenotype_study is not None and 'df_rbp_gene' in data:
+        path_phenotype = os.path.join(path, 'phenotype_metadata.csv')
+        print(f'[save_processed_data] Saving phenotype metadata to {path_phenotype}...')
+        df_phenotype_study.loc[data['df_rbp_gene'].index].to_csv(
+            path_phenotype, mode='a', header=not os.path.exists(path_phenotype)
+        )
+    elif df_phenotype_study is None:
+        print('[save_processed_data] Skipping phenotype metadata (not provided).')
+    print('[save_processed_data] ✅ Data saving completed.\n')
 
 def process_data_chunk(  
                     df_genes: pd.DataFrame,  
@@ -568,8 +598,12 @@ def process_data_chunk(
         data_transformed = transpose_dataframes(data_transformed)
 
         # Save the processed data and phenotype metadata
-        save_processed_data(data_transformed, df_phenotype_study, output_dir, study_name)
+        save_processed_data(data = data_transformed, 
+                            df_phenotype_study = df_phenotype_study, 
+                            output_dir = output_dir, 
+                            study_name = study_name)
         print('\n')
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Preprocess gene and transcript expression data for model input generation.')
@@ -634,3 +668,95 @@ def main():
 if __name__ == '__main__':
     main()
 
+
+
+
+# old version: this was applied to create tcga data and was modified for real kd data preparation. The new implementation should still work
+# for tcga but we still have this in case it will create any error to future users.
+
+
+
+# def transform_expression_data(data: dict) -> dict:
+#     """
+#     Transforms expression data for RBPs, transcripts, and genes.
+
+#     Args:
+#     - data (dict): Dictionary containing cleaned 'df_genes' and 'df_trans' DataFrames.
+#     Returns:
+#     - dict: Dictionary with transformed gene and transcript DataFrames.
+#     """
+#     print('Transforming transcript and RBP expression data to log2p(TPM), gene to TPM and counts...')
+    
+    # # Transform first to TPM
+    # data['df_rbp_gene'] = np.power(2, data['df_rbp_gene']) - 0.001
+    # data['df_trans'] = np.power(2, data['df_trans']) - 0.001
+    # data['df_genes'] = np.power(2, data['df_genes']) - 0.001
+    
+    # # Clip min tpm expression value to 0
+    # data['df_rbp_gene'] = data['df_rbp_gene'].clip(lower=0)
+    # data['df_trans'] = data['df_trans'].clip(lower=0)
+    # data['df_genes'] = data['df_genes'].clip(lower=0)
+    
+    # # Transform RBP and transcript to log2p(tpm)
+    # data['df_rbp_gene'] = np.log2(data["df_rbp_gene"] + 1)
+    # data['df_trans'] = np.log2(data["df_trans"] + 1)
+
+    # # Transform counts and round
+    # data['df_counts'] = np.power(2, data['df_counts']) - 1
+    # data['df_counts'] = data['df_counts'].round().astype(int)
+    # print('[transform_expression_data] Transformation done\n')
+    # return data
+
+# def transpose_dataframes(data: dict) -> dict:
+#     """
+#     Transposes the expression DataFrames to have patients as index and genes (or transcript IDs) as columns.
+
+#     Args:
+#     - data (dict): Dictionary containing DataFrames to transpose:
+  
+#     Returns:
+#     - dict: Dictionary with transposed DataFrames for RBP, transcripts, and mapped genes.
+#     """
+#     print('Transposing expression data...')
+#     data['df_rbp_gene'] = data['df_rbp_gene'].T
+#     data['df_trans'] = data['df_trans'].T
+#     data['df_genes'] = data['df_genes'].T
+#     data['df_counts'] = data['df_counts'].T
+#     print('[transpose_dataframes] Transposition done\n')
+#     return data
+
+# def save_processed_data(data: dict, df_phenotype_study: pd.DataFrame, output_dir: str, study_name: str) -> None:
+#     """
+#     Saves the processed data chunks and phenotype metadata to CSV files in the specified output directory.
+
+#     Args:
+#     - data (dict): Dictionary containing processed data matrices.
+#     - df_phenotype_study (DataFrame): DataFrame containing phenotype data for the specific study.
+#     - output_dir (str): Directory where output files will be saved.
+#     - study_name (str): Name of the study (e.g., 'TCGA', 'GTEX').
+#     """
+#     print(f'[save_processed_data] Saving processed data for study: {study_name}...')
+#     path = os.path.join(output_dir, study_name)
+#     os.makedirs(path, exist_ok=True)
+    
+#     path_rbp = os.path.join(path, 'RBPs_log2p_tpm.csv')
+#     path_trans = os.path.join(path, 'trans_log2p_tpm.csv')
+#     path_gn = os.path.join(path, 'gn_tpm.csv')
+#     path_gn_counts = os.path.join(path, 'gn_counts.csv')
+#     path_phenotype = os.path.join(path, 'phenotype_metadata.csv')
+    
+#     print(f'[save_processed_data] Saving RBP expression matrix to {path_rbp}...')
+#     data['df_rbp_gene'].to_csv(path_rbp, mode='a', header=not os.path.exists(path_rbp))
+
+#     print(f'[save_processed_data] Saving transcript expression matrix to {path_trans}...')
+#     data['df_trans'].to_csv(path_trans, mode='a', header=not os.path.exists(path_trans))
+
+#     print(f'[save_processed_data] Saving gene expression matrix mapped to transcripts to {path_gn}...')
+#     data['df_genes'].to_csv(path_gn, mode='a', header=not os.path.exists(path_gn))
+
+#     print(f'[save_processed_data] Saving gene count matrix to {path_gn_counts}...')
+#     data['df_counts'].to_csv(path_gn_counts, mode='a', header=not os.path.exists(path_gn_counts))
+
+#     print(f'[save_processed_data] Saving phenotype metadata to {path_phenotype}...')
+#     df_phenotype_study.loc[data['df_rbp_gene'].index].to_csv(path_phenotype, mode='a', header=not os.path.exists(path_phenotype))
+#     print('[save_processed_data] Data saving completed.\n')

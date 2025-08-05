@@ -49,7 +49,9 @@ setup(
             'analyze-optuna-results=src.deeprbp.training_module.hyperparameter_optimization.analyze_results_optuna:main',
             'run-deeprbp-predictor=src.deeprbp.training_module.main_predictor:main',
             'run-deeprbp-explainer=src.deeprbp.explainability_module.main_explainer:main',
-            'run-postar-validator=src.deeprbp.explainability_module.postar_validation.postar_validator:main'
+            'run-postar-validator=src.deeprbp.explainability_module.postar_validation.postar_validator:main',
+            'preprocess-realkd-data=src.deeprbp.explainability_module.real_knockdowns.preprocess_realkd_data:main',
+            'run-deeprbp-realkd=src.deeprbp.explainability_module.real_knockdowns.main_real_knockdowns:main'
         ],
     },
     zip_safe=False,

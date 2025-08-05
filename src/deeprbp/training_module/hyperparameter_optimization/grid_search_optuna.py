@@ -3,6 +3,9 @@
 import os
 import argparse
 import torch
+import sqlite3
+import datetime
+import time
 
 import lightning as L
 from lightning.pytorch.loggers import CSVLogger
@@ -11,6 +14,8 @@ import optuna
 from optuna.integration import PyTorchLightningPruningCallback
 from optuna.storages import RDBStorage
 
+from .backup_manager import BackupManager
+from .create_optuna_study import get_sampler_and_pruner
 from ...data_loading.config_loader import ConfigParser
 from ...data_preparation.data_module import DeepRBPDataModule
 from ..model import TunablePredictorModel as PredictorModel
@@ -49,16 +54,30 @@ def main():
         engine_kwargs={"connect_args": {"timeout": 10}},
     )
 
+    sampler, pruner = get_sampler_and_pruner()
+    print_if_main(f"🔍 Sampler configuration: n_startup_trials=0, seed=None")
+    print_if_main(f"🔍 Pruner configuration: n_startup_trials=200, n_warmup_steps=100, interval_steps=10")
+
     study = optuna.load_study(
         study_name="deeprbp_gridsearch_optuna",
         storage=storage,
+        sampler=sampler,
+        pruner=pruner
+    )
+
+    print(f"Loaded study '{study.study_name}' with {len(study.trials)} created trials.")
+
+    # Instantiate the backup manager
+    backup_manager = BackupManager(
+        db_path=args.storage_path,
+        backup_dir="/scratch/jsanchoz/DeepRBP/output/results/hyperparameter_optimization_SLURM/optuna_backups_preemption-gpu_job10"
     )
 
     print_if_main("[grid_search_optuna] 🎯 Executing optimization loop...")
-    study.optimize(lambda trial: objective(trial, config, dm, args), n_trials=args.n_trials)
+    study.optimize(lambda trial: objective(trial, config, dm, args, backup_manager), n_trials=args.n_trials)
     print_if_main("[grid_search_optuna] ✅ Optimization completed.")
 
-def objective(trial, config, dm, args): 
+def objective(trial, config, dm, args, backup_manager): 
     # Suggest Optuna: Sample hyperparameters for this Trial. Solo el proceso principal sugiere hiperparámetros
     trial_params = {
         'num_hidden_layers': trial.suggest_int('num_hidden_layers', 0, 4),
@@ -66,7 +85,7 @@ def objective(trial, config, dm, args):
         'uniform_nodes': trial.suggest_categorical('uniform_nodes', [True, False]),
         'node_shrink_factor': trial.suggest_categorical('node_shrink_factor', [2, 4, 8]),
         'activation_func': trial.suggest_categorical('activation_func', ["relu", "tanh", "sigmoid"]),
-        'learning_rate': trial.suggest_categorical('learning_rate', [0.0001, 0.001, 0.01]),
+        'learning_rate': trial.suggest_loguniform('learning_rate', 1e-5, 1e-1),
         'optimizer_name': trial.suggest_categorical('optimizer_name', ['sgd90', 'asgd', 'adam', 'adagrad', 'adadelta', 'adamW']),
         'batch_size': trial.suggest_categorical('batch_size', [32, 64, 128, 256, 512, 1024, 2048]), 
         'num_epochs': trial.suggest_categorical('num_epochs', [50, 100, 500, 1000, 2000, 3000]),   
@@ -170,6 +189,12 @@ def objective(trial, config, dm, args):
         
         print_if_main('\n[objective] ✅ Trial finalization completed.')
         torch.cuda.empty_cache()  # If using GPU, clear the cache
+
+        # Perform Backup if necessary time has passed
+        if backup_manager.should_backup():
+            backup_manager.backup_database()
+            backup_manager.update_backup_time()
+            print_if_main("\n[objective] 🔄 Backup performed.")
         
 if __name__ == "__main__":
     print_gpu_memory_info()

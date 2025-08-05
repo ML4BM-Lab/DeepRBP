@@ -1,5 +1,6 @@
 # src/deeprbp/data_preparation/data_module.py
 
+import os
 import pandas as pd
 import lightning as L
 
@@ -120,8 +121,11 @@ class DeepRBPDataModule(L.LightningDataModule):
                 # Loading test data
                 print_if_main("[DeepRBPDataModule] 🛠 Setting up Test data...")
                 self.test_data = self.prep_data.load_data(path=self.test_path_files)
+                # Try to get scaler_dir from config, fallback to output_dir/data
+                scaler_path = self.config.get('scaler_dir', os.path.join(self.output_dir, 'data'))
                 if self.prep_data.scaler is None:
-                    self.prep_data.load_scaler(self.output_dir+'/data')
+                    self.prep_data.load_scaler(scaler_path)
+                    # en el punto 4 me gustaría que hubiera mas info acerca de esto con buenas practicas, normalmente se va a usar el scaler que ya está guardado en output_dir/data pero si hay un scaler_dir en config lo carga de ahi.
                 self.test_data = self.prep_data.scale_data(self.test_data)
                 self.test_dataset = self.prep_data.create_tensor_dataset(self.test_data)
                 if self.trainer is not None and hasattr(self.trainer, 'is_global_zero') and self.trainer.is_global_zero:
