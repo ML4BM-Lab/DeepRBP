@@ -2,7 +2,7 @@
 import os
 import pandas as pd
 
-from .main_specific_vs_general import LIST_TUMOR_TYPES
+from .constants import LIST_TUMOR_TYPES
 
 def collect_cross_tumor_metrics(base_output_dir, metric_name, all_output_dir=None):
     """

@@ -5,7 +5,6 @@ import pandas as pd
 import os
 import torch
 
-from ...data_preprocessing.split_data_and_save import run_split_data_and_save
 from ...data_loading.config_loader import ConfigParser
 from ...data_preparation.data_module import DeepRBPDataModule
 
@@ -15,16 +14,7 @@ from ...util.utils import (print_if_main, setup_output_directory,
 from ..utils_training import train_and_evaluate_model
 from .utils_specific import collect_cross_tumor_metrics
 from .plot_specific import plot_metric_confusion_matrix
-
-LIST_TUMOR_TYPES = [
-        'Thyroid_Carcinoma', 'Testicular_Germ_Cell_Tumor','Prostate_Adenocarcinoma', 'Skin_Cutaneous_Melanoma', 'Sarcoma',
-        'Mesothelioma', 'Uterine_Corpus_Endometrioid_Carcinoma', 'Pheochromocytoma_&_Paraganglioma', 'Uterine_Carcinosarcoma',
-        'Lung_Adenocarcinoma', 'Stomach_Adenocarcinoma', 'Uveal_Melanoma', 'Thymoma', 'Lung_Squamous_Cell_Carcinoma', 'Rectum_Adenocarcinoma',
-        'Ovarian_Serous_Cystadenocarcinoma', 'Pancreatic_Adenocarcinoma', 'Kidney_Clear_Cell_Carcinoma', 'Glioblastoma_Multiforme',
-        'Head_&_Neck_Squamous_Cell_Carcinoma', 'Liver_Hepatocellular_Carcinoma', 'Colon_Adenocarcinoma', 'Cervical_&_Endocervical_Cancer', 
-        'Diffuse_Large_B_Cell_Lymphoma', 'Breast_Invasive_Carcinoma', 'Esophageal_Carcinoma', 'Kidney_Chromophobe', 'Kidney_Papillary_Cell_Carcinoma',
-        'Cholangiocarcinoma', 'Acute_Myeloid_Leukemia', 'Bladder_Urothelial_Carcinoma', 'Brain_Lower_Grade_Glioma', 'Adrenocortical_Cancer'
-    ] 
+from .constants import LIST_TUMOR_TYPES, BATCH_SIZE_BY_TUMOR
 
 def main(): 
     args = parse_args()
@@ -35,8 +25,8 @@ def main():
         getBM_path = "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/getBM.csv",
         gene_col_name = "Gene_ID",
         trans_col_name = "Transcript_ID",
-        train_batch_size = args.train_batch_size, # esto habrá que cambiar (y piensa que muchos tipos tumorales no tendran el suficiente numero de muestras para hacer un batch size grande). Hay que definir unas reglas justas para todos los specific tipos tumorales (no usar el batch size de optuna pork no tiene sentido)
-        val_batch_size = args.val_batch_size,
+        train_batch_size = 8, 
+        val_batch_size = 8,
         sample_category="detailed_category",
         select_category="",
         test_fraction=0.2,
@@ -51,7 +41,12 @@ def main():
         print(f'\n🔧 [Tumor Type: {ttype}] Setting configuration and initializing...')
         # Clonamos la config base y actualizamos el tumor
         config.update('select_category', ttype)
-        print(config)
+        print_if_main(config)
+
+        bs = BATCH_SIZE_BY_TUMOR.get(ttype, 8)
+        config.update('train_batch_size', bs)
+        config.update('val_batch_size', bs)
+        print_if_main(f"[main_specific_vs_general] 🧪 Using batch size {bs} (train/val) for {ttype}")
 
         # Determine the output directory based on gpu rank or cpu device
         output_dir = setup_output_directory(os.path.join(args.output_base_dir, ttype))
@@ -63,32 +58,45 @@ def main():
         # Starting model training and evaluation
         print_if_main("\n[main_predictor] 🧠 Starting model training and evaluation...")
         train_and_evaluate_model(dm, args, config, output_dir)
-        print('\n')
+        print_if_main('\n')
+
+    # ── sincroniza a todos antes de recolectar/plotear
+    if torch.distributed.is_available() and torch.distributed.is_initialized():
+        torch.distributed.barrier()
+
+    def _is_main_process() -> bool:
+        # Si estamos en DDP, sólo rank global 0
+        if torch.distributed.is_available() and torch.distributed.is_initialized():
+            return torch.distributed.get_rank() == 0
+        # Si no hay grupo inicializado (ejecución 1 GPU / CPU),
+        # usa RANK de torchrun si existe, y si no, asume proceso único.
+        return os.environ.get("RANK", "0") == "0"
 
     # Collect results
-    metric_names = ['spearman_corr', 'pearson_corr', 'mse', 'r2', 'mean_corr_per_gene', 'mean_corr_max_trans_per_gene']
-    subset = ['Liver_Hepatocellular_Carcinoma', 'Kidney_Clear_Cell_Carcinoma', 'Acute_Myeloid_Leukemia']
+    if _is_main_process:
+        metric_names = ['spearman_corr', 'pearson_corr', 'mse', 'r2', 'mean_corr_per_gene', 'mean_corr_max_trans_per_gene']
+        subset = ['Liver_Hepatocellular_Carcinoma', 'Kidney_Clear_Cell_Carcinoma', 'Acute_Myeloid_Leukemia']
 
-    df_metrics = {
-        metric: collect_cross_tumor_metrics(args.output_base_dir, metric, args.all_output_dir)
-        for metric in metric_names
-    }
+        df_metrics = {
+            metric: collect_cross_tumor_metrics(args.output_base_dir, metric, args.all_output_dir)
+            for metric in metric_names
+        }
 
-    for metric_name, df_metric in df_metrics.items():
-        # Plot full matrix
-        plot_metric_confusion_matrix(
-            df_metric, 
-            metric_name=metric_name, 
-            output_path=os.path.join(args.output_base_dir, f"{metric_name}.png")
-        )
-        
-        # Plot subset
-        df_subset = df_metric.loc[[*subset, 'all'], subset]
-        plot_metric_confusion_matrix(
-            df_subset, 
-            metric_name=metric_name, 
-            output_path=os.path.join(args.output_base_dir, f"{metric_name}_txiki.png")
-        )
+        for metric_name, df_metric in df_metrics.items():
+            # Plot full matrix
+            plot_metric_confusion_matrix(
+                df_metric, 
+                metric_name=metric_name, 
+                output_path=os.path.join(args.output_base_dir, f"{metric_name}.png")
+            )
+            
+            # Plot subset
+            df_subset = df_metric.loc[[*subset, 'all'], subset]
+            plot_metric_confusion_matrix(
+                df_subset, 
+                metric_name=metric_name, 
+                output_path=os.path.join(args.output_base_dir, f"{metric_name}_txiki.png")
+            )
     
 def parse_args():
     parser = argparse.ArgumentParser(description='Pipeline for training DeepRBP models on specific tumor types and comparing them against a general model trained on all tumor types.')
@@ -107,8 +115,6 @@ def parse_args():
                              'If save_top_k == 0, no models are saved. '
                              'If save_top_k == -1, all models are saved.')
     parser.add_argument('--verbose', type=int, default=1, help='Verbosity level (0: silent, 1: normal, 2: debug).')
-    parser.add_argument('--train_batch_size', type=int, default=32, help='Batch size for training.')
-    parser.add_argument('--val_batch_size', type=int, default=64, help='Batch size for validation.')
     return parser.parse_args()
 
 if __name__ == "__main__":
@@ -119,8 +125,3 @@ if __name__ == "__main__":
     # Set precision
     torch.set_float32_matmul_precision("high")
     main()
-
-
-
- 
- 

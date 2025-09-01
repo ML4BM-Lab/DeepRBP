@@ -8,8 +8,8 @@ getBM_path: "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/
 gene_col_name: "Gene_ID"
 trans_col_name: "Transcript_ID"
 cuda: True
-train_batch_size: 128
-val_batch_size: 256
+train_batch_size: 64
+val_batch_size: 128
 plot_results: True
 
 

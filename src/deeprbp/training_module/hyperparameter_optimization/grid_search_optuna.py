@@ -55,8 +55,6 @@ def main():
     )
 
     sampler, pruner = get_sampler_and_pruner()
-    print_if_main(f"🔍 Sampler configuration: n_startup_trials=0, seed=None")
-    print_if_main(f"🔍 Pruner configuration: n_startup_trials=200, n_warmup_steps=100, interval_steps=10")
 
     study = optuna.load_study(
         study_name="deeprbp_gridsearch_optuna",
@@ -70,7 +68,7 @@ def main():
     # Instantiate the backup manager
     backup_manager = BackupManager(
         db_path=args.storage_path,
-        backup_dir="/scratch/jsanchoz/DeepRBP/output/results/hyperparameter_optimization_SLURM/optuna_backups_preemption-gpu_job10"
+        backup_dir="/scratch/jsanchoz/DeepRBP/output/results/hyperparameter_optimization_SLURM/optuna_backups"
     )
 
     print_if_main("[grid_search_optuna] 🎯 Executing optimization loop...")
@@ -78,21 +76,36 @@ def main():
     print_if_main("[grid_search_optuna] ✅ Optimization completed.")
 
 def objective(trial, config, dm, args, backup_manager): 
-    # Suggest Optuna: Sample hyperparameters for this Trial. Solo el proceso principal sugiere hiperparámetros
+    # Suggest Optuna: Sample hyperparameters for this Trial.
+    # trial_params = {
+    #     'num_hidden_layers': trial.suggest_int('num_hidden_layers', 0, 4),
+    #     'hidden1_nodes': trial.suggest_categorical('hidden1_nodes', [64, 128, 256, 512, 1024, 2048, 4096]),  
+    #     'uniform_nodes': trial.suggest_categorical('uniform_nodes', [True, False]),
+    #     'node_shrink_factor': trial.suggest_categorical('node_shrink_factor', [2, 4, 8]),
+    #     'activation_func': trial.suggest_categorical('activation_func', ["relu", "tanh", "sigmoid"]),
+    #     'learning_rate': trial.suggest_float('learning_rate', 1e-5, 1e-1, log=True),
+    #     'optimizer_name': trial.suggest_categorical('optimizer_name', ['sgd90', 'asgd', 'adam', 'adagrad', 'adadelta', 'adamW']),
+    #     'batch_size': trial.suggest_categorical('batch_size', [32, 64, 128, 256, 512, 1024, 2048]), 
+    #     'num_epochs': trial.suggest_categorical('num_epochs', [50, 100, 500, 1000, 2000, 3000]),   
+    #     'batch_norm_eps': trial.suggest_categorical('batch_norm_eps', [1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1]), 
+    #     'batch_norm_momentum': trial.suggest_categorical('batch_norm_momentum', [0.1, 0.5, 0.9]) 
+    # } # used for first 80 trials (fase 1 broad)
+
+    # Phase 2 (refined) search space based on your best trials
     trial_params = {
-        'num_hidden_layers': trial.suggest_int('num_hidden_layers', 0, 4),
-        'hidden1_nodes': trial.suggest_categorical('hidden1_nodes', [64, 128, 256, 512, 1024, 2048, 4096]),  
+        'num_hidden_layers': trial.suggest_int('num_hidden_layers', 2, 4),
+        'hidden1_nodes': trial.suggest_categorical('hidden1_nodes', [256, 512, 1024, 2048]),
         'uniform_nodes': trial.suggest_categorical('uniform_nodes', [True, False]),
-        'node_shrink_factor': trial.suggest_categorical('node_shrink_factor', [2, 4, 8]),
-        'activation_func': trial.suggest_categorical('activation_func', ["relu", "tanh", "sigmoid"]),
-        'learning_rate': trial.suggest_loguniform('learning_rate', 1e-5, 1e-1),
-        'optimizer_name': trial.suggest_categorical('optimizer_name', ['sgd90', 'asgd', 'adam', 'adagrad', 'adadelta', 'adamW']),
-        'batch_size': trial.suggest_categorical('batch_size', [32, 64, 128, 256, 512, 1024, 2048]), 
-        'num_epochs': trial.suggest_categorical('num_epochs', [50, 100, 500, 1000, 2000, 3000]),   
-        'batch_norm_eps': trial.suggest_categorical('batch_norm_eps', [1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1]), 
-        'batch_norm_momentum': trial.suggest_categorical('batch_norm_momentum', [0.1, 0.5, 0.9]) 
+        'node_shrink_factor': trial.suggest_categorical('node_shrink_factor', [2, 4, 8]), # Only used when uniform_nodes == False (can be ignored otherwise)
+        'activation_func': trial.suggest_categorical('activation_func', ['tanh', 'relu']),
+        'learning_rate': trial.suggest_categorical('learning_rate', [1e-4, 3e-4, 7e-4, 1e-3, 3e-3, 1e-2, 3e-2]), # Coarse LR grid to reduce near-duplicate trials differing only by LR
+        'optimizer_name': trial.suggest_categorical('optimizer_name', ['adam', 'adamW', 'adagrad']),
+        'batch_size': trial.suggest_categorical('batch_size', [32, 64, 128, 256]),
+        'num_epochs': trial.suggest_categorical('num_epochs', [500, 1000, 2000]),
+        'batch_norm_eps': trial.suggest_categorical('batch_norm_eps', [1e-6, 1e-5, 1e-4]),
+        'batch_norm_momentum': trial.suggest_categorical('batch_norm_momentum', [0.5, 0.9]),
     }
-    
+
     # Update pipeline configuration with suggested hyperparameters
     config.update("num_hidden_layers", trial_params['num_hidden_layers'])
     config.update("hidden1_nodes", trial_params['hidden1_nodes'])
@@ -159,20 +172,16 @@ def objective(trial, config, dm, args, backup_manager):
         # Final validation loss
         return trainer.callback_metrics['validation_loss'].item()
 
+    except optuna.exceptions.TrialPruned:
+        print_if_main("⏹️ Trial was pruned (via callback)")
+        raise  # This makes final state to PRUNED
+
     except Exception as e:
         # Catch any exception raised in the try block
-        print_if_main(f"\n[objective] Training not arrived to the end due to: {e}")
+        print_if_main(f"\n[objective] 💥 Training not arrived to the end due to: {e}")
         return float('inf')  # Return a high value to indicate this trial was unsuccessful
     
     finally:
-        # Check if the trial was pruned
-        print_if_main(f"\n[objective] Checking for pruning conditions...")
-        if trial.should_prune():
-            trial.set_user_attr('pruned', True)
-            print_if_main("⏹️ Trial was pruned!")
-        else:
-            trial.set_user_attr('pruned', False)
-
         # Update trial.params if 'unused' (else nan)
         print_if_main(f"\n[objective] Update trial.params if the corresponding value is 'unused'")
         

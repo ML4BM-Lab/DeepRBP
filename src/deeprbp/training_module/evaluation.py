@@ -252,7 +252,7 @@ def evaluate_and_visualize_metrics_by_category(
                 print_if_main(f"[evaluate_and_visualize_metrics_by_category] 📊 Plotting log2(tpm+1) predictions vs real values scatter plot for category '{category}'.")
                 scatter_real_vs_pred(
                     category=category,
-                    metrics=dict(list(metrics.items())[1:]),
+                    metrics= {k: v for k, v in metrics.items() if k != 'category'}, #dict(list(metrics.items())[1:]),
                     pred=predictions.flatten(),
                     labels=true_values.flatten(),
                     output_dir=os.path.join(output_dir, 'scat_plot_real_vs_pred_value', set_name, category))

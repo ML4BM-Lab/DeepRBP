@@ -1,0 +1,56 @@
+# -*- coding: utf-8 -*-
+
+LIST_TUMOR_TYPES = [
+    'Thyroid_Carcinoma', 'Testicular_Germ_Cell_Tumor', 'Prostate_Adenocarcinoma',
+    'Skin_Cutaneous_Melanoma', 'Sarcoma', 'Mesothelioma',
+    'Uterine_Corpus_Endometrioid_Carcinoma', 'Pheochromocytoma_&_Paraganglioma',
+    'Uterine_Carcinosarcoma', 'Lung_Adenocarcinoma', 'Stomach_Adenocarcinoma',
+    'Uveal_Melanoma', 'Thymoma', 'Lung_Squamous_Cell_Carcinoma',
+    'Rectum_Adenocarcinoma', 'Ovarian_Serous_Cystadenocarcinoma',
+    'Pancreatic_Adenocarcinoma', 'Kidney_Clear_Cell_Carcinoma',
+    'Glioblastoma_Multiforme', 'Head_&_Neck_Squamous_Cell_Carcinoma',
+    'Liver_Hepatocellular_Carcinoma', 'Colon_Adenocarcinoma',
+    'Cervical_&_Endocervical_Cancer', 'Diffuse_Large_B_Cell_Lymphoma',
+    'Breast_Invasive_Carcinoma', 'Esophageal_Carcinoma', 'Kidney_Chromophobe',
+    'Kidney_Papillary_Cell_Carcinoma', 'Cholangiocarcinoma',
+    'Acute_Myeloid_Leukemia', 'Bladder_Urothelial_Carcinoma',
+    'Brain_Lower_Grade_Glioma', 'Adrenocortical_Cancer'
+]
+
+BATCH_SIZE_BY_TUMOR = {
+    'Breast_Invasive_Carcinoma': 64,
+    'Kidney_Clear_Cell_Carcinoma': 32,
+    'Lung_Adenocarcinoma': 32,
+    'Thyroid_Carcinoma': 32,
+    'Head_&_Neck_Squamous_Cell_Carcinoma': 32,
+    'Lung_Squamous_Cell_Carcinoma': 32,
+    'Prostate_Adenocarcinoma': 32,
+    'Brain_Lower_Grade_Glioma': 32,
+    'Skin_Cutaneous_Melanoma': 32,
+    'Stomach_Adenocarcinoma': 32,
+    'Bladder_Urothelial_Carcinoma': 32,
+    'Ovarian_Serous_Cystadenocarcinoma': 32,
+    'Liver_Hepatocellular_Carcinoma': 32,
+    'Colon_Adenocarcinoma': 32,
+    'Kidney_Papillary_Cell_Carcinoma': 32,
+    'Cervical_&_Endocervical_Cancer': 16,
+    'Sarcoma': 16,
+    'Uterine_Corpus_Endometrioid_Carcinoma': 16,
+    'Esophageal_Carcinoma': 16,
+    'Pheochromocytoma_&_Paraganglioma': 16,
+    'Pancreatic_Adenocarcinoma': 16,
+    'Acute_Myeloid_Leukemia': 16,
+    'Glioblastoma_Multiforme': 16,
+    'Testicular_Germ_Cell_Tumor': 8,
+    'Thymoma': 8,
+    'Rectum_Adenocarcinoma': 8,
+    'Kidney_Chromophobe': 8,
+    'Mesothelioma': 8,
+    'Adrenocortical_Cancer': 8,
+    'Uveal_Melanoma': 8,
+    'Uterine_Carcinosarcoma': 8,
+    'Diffuse_Large_B_Cell_Lymphoma': 8,
+    'Cholangiocarcinoma': 8,
+}
+
+__all__ = ["LIST_TUMOR_TYPES", "BATCH_SIZE_BY_TUMOR"]

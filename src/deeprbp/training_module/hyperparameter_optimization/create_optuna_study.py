@@ -6,9 +6,36 @@ from optuna.storages import RDBStorage
 from optuna.samplers import TPESampler
 from optuna.pruners import MedianPruner
 
-def get_sampler_and_pruner():
-    sampler = TPESampler(n_startup_trials=0, seed=None)  # Sin semilla para variabilidad 
-    pruner = MedianPruner(n_startup_trials=200, n_warmup_steps=100, interval_steps=10)
+# def get_sampler_and_pruner(): # used for first 80 trials (fase 1 broad)
+#     sampler = TPESampler(
+#                     n_startup_trials=75, # Exploración inicial
+#                     multivariate=True,
+#                     group=True # por nuestro espacio jerárquico
+#     )
+#     pruner = MedianPruner(
+#         n_startup_trials=25, # Espera 25 trials antes de podar
+#         n_warmup_steps=470, # Espera alrededor de 10 epochs antes de evaluar
+#         interval_steps=47   # Revisa cada 1 epoch promedio
+#     )
+#     print(f"🔍 Sampler configuration: n_startup_trials=75, multivariate=True, group=True")
+#     print(f"🔍 Pruner configuration: n_startup_trials=20, n_warmup_steps=470, interval_steps=47")
+#     return sampler, pruner
+
+def get_sampler_and_pruner(seed: int = 42):
+    sampler = TPESampler(
+        n_startup_trials=10,       # pocas aleatorias antes de TPE “pleno”
+        multivariate=True,
+        group=True,
+        n_ei_candidates=64,
+        seed=seed,
+    )
+    pruner = MedianPruner(
+        n_startup_trials=0,        # permitir podas desde el principio de fase 2
+        n_warmup_steps=3,          # epochs
+        interval_steps=1,
+    )
+    print("🔍 Sampler (phase 2): n_startup_trials=10, multivariate=True, group=True, n_ei_candidates=64")
+    print("🔍 Pruner  (phase 2): n_startup_trials=0, n_warmup_steps=3, interval_steps=1 (epoch-based)")
     return sampler, pruner
 
 def main():
@@ -24,8 +51,6 @@ def main():
     # 👉 Opción 2: PostgreSQL (descomenta si usas PostgreSQL)
     # # storage = RDBStorage(url="postgresql://optuna_user:supersecurepassword@your-db-host:5432/optuna_db")
     sampler, pruner = get_sampler_and_pruner()
-    print(f"🔍 Sampler configuration: n_startup_trials=0, seed=None")
-    print(f"🔍 Pruner configuration: n_startup_trials=200, n_warmup_steps=100, interval_steps=10")
 
     print(f"🧪 Creating the study: 'deeprbp_gridsearch_optuna' at '{args.output_dir}'...")
     optuna.create_study(

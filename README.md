@@ -230,7 +230,7 @@ create-optuna-study --output_dir /scratch/jsanchoz/DeepRBP/output/results/hyperp
 where,
 - **`--output_dir`: Path where the Optuna storage (optuna.db) will be saved.
 
-#### Step 2: Submit the Hyperparameter Optimization Job via SLURM (EXECUTING NOW THIS JOSEBA)
+#### Step 2: Submit the Hyperparameter Optimization Job via SLURM  (el texto de aquí hay q actualizar porque al final he hecho lo que he querido)
 For this step, we do not provide a command-line entry point, as it is intended to be executed exclusively on a high-performance computing (HPC) cluster due to the significant computational resources required.
 
 We perform 1,000 hyperparameter optimization trials using Optuna with a `TPESampler`. According to the Optuna documentation, the recommended number of trials for this sampler typically ranges between 100 and 1,000 to explore the search space effectively. In our setup, we have configured n_startup_trials=40 to allow for thorough initial random exploration before the sampler begins using its Bayesian optimization. This ensures sufficient information is gathered before focusing on specific areas of the search space. 
@@ -249,7 +249,7 @@ Below is a description of the main arguments used in the hyperparameter optimiza
 * `--storage_path`: Full path to the Optuna SQLite database file where all trial information will be stored.
 * `--n_trials`: Number of parameter combinations to try using Optuna. 💡 We run 250 trials per GPU (total 1000 trials), as recommended by Optuna's TPE sampler (100–1000 trials for best results).
 * `--config_path`: Path to the YAML config file defining model architecture and training parameters.
-* `--output_dir`: Directory to save all results, logs, and intermediate files during the optimization.
+* `--output_dir`: Directory to save all results, logs, and intermediate f  iles during the optimization.
 * `--num_workers`: Number of worker threads for data loading. `0` is safe for most environments; increase if your system allows.
 * `--min_delta`: Minimum performance improvement threshold to continue training. If the monitored metric improves less than this value, it may trigger early stopping.
 * `--patience`: Number of epochs to wait without improvement before stopping training.
@@ -269,12 +269,12 @@ The hyperparameter that are going to be optimised are:
 - **`num_epochs`** Number of full passes over the training dataset during training.
  
 
-#### Step 3: Analyze the Hyperparameter Optimization results (NO EJECUTADO)
+#### Step 3: Analyze the Hyperparameter Optimization results  
 Use the following command to analyze the results of your Optuna hyperparameter search and generate summary plots:
 
 ```bash
-analyze-optuna-results --storage_path /scratch/jsanchoz/DeepRBP/output/results/hyperparameter_optimization_SLURM/optuna.db \
-                       --output_dir /scratch/jsanchoz/DeepRBP/output/results/hyperparameter_optimization_SLURM/analyze_results
+analyze-optuna-results --storage_path /scratch/jsanchoz/DeepRBP/final_results/hyperparameter_optimization/phase2_refined/hyperparameter_optimization_SLURM_gpu0_20250819_220917_definitive_edition/optuna_backups/optuna.db \
+                       --output_dir /scratch/jsanchoz/DeepRBP/final_results/hyperparameter_optimization/phase2_refined/analyze_results
 ```
 
 This will:
@@ -282,12 +282,7 @@ This will:
 * Export trial results to a CSV file.
 * Generate and save informative plots (e.g., optimization history, parameter importance, timeline, etc.) in both PNG and PDF formats.
 
-
-
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
-
-
-### Trying alternative Machine Learning benchmark methods  
+### Trying alternative Machine Learning benchmark methods  (done)
 In this section, we benchmark our **DeepRBP predictor**—a deep learning-based model—against a series of traditional machine learning regressors.
 We evaluate the following algorithms using a `MultiOutputRegressor` setup to predict isoform abundances: `svr`, `decision_tree`, `elastic_net`, `ridge`.
 
@@ -326,15 +321,6 @@ To launch the benchmark experiments on your HPC cluster:
 sbatch slurm/run_benchmark_ridge.sh
 ```
 
-
-
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
-
-
-
-
-
-#####
 ## Executing DeepRBP Predictor (using optimized hyperparameters)
 There are three options:
 * Running the Python script 
@@ -356,8 +342,8 @@ getBM_path: "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/
 gene_col_name: "Gene_ID"
 trans_col_name: "Transcript_ID"
 cuda: True
-train_batch_size: 128
-val_batch_size: 256
+train_batch_size: 64
+val_batch_size: 128
 plot_results: True
 ```
 
@@ -367,7 +353,7 @@ Once the `config` file is ready, execute the script as follows, specifying the p
 run-deeprbp-predictor \
   --config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_model_train.yaml" \
   --output_dir "/scratch/jsanchoz/DeepRBP/output/results/run_deeprbp_predictor" \
-  --epochs 10 \
+  --epochs 2000 \
   --num_workers 4 \
   --min_delta 0.001 \
   --patience 30 \
@@ -410,17 +396,19 @@ sbatch run_predictor.sh
 ## (work to do here)
 ---
 
-### Evaluate DeepRBP Predictor 
+### Evaluate DeepRBP Predictor (a día de hoy no he hecho un notebook para esto)
 ### **Option 1: Running the Python Script**  
 # para esto haz un jupyter notebook para que el usuario pueda usar el modelo sobre su propio data si quiere.
  
+
+
 
 ### Tumor-Specific vs General Training Benchmark
 In this section, we evaluate whether training `DeepRBPredictor` on all tumor types combined improves transcript expression prediction performance compared to using a model trained on a single tumor type.
 
 We compare two training strategies:
 
-- *General model*: Trained on all available tumor types using the best architecture selected through Optuna, employing a consistent training-validation split for all tumor types (via run_predictor.sh).
+- *General model*: Trained on all available tumor types using the best architecture selected through Optuna, employing a consistent training-validation split for all tumor types (via `run_predictor.sh`).
 - *Tumor-specific models*: Individually trained models for each tumor type using the same optimized architecture. The training-validation splits are consistent with those used for the general model.
 
 Batch sizes for tumor-specific models are determined by the number of samples available:
@@ -433,7 +421,7 @@ For each tumor type, we evaluate isoform expression prediction accuracy using:
 - The general model trained across all tumors.
 - The tumor-specific model trained only on that tumor type.
 
- This allows us to quantify the generalization capabilities of the model trained on all tumor types versus the specialized training approach.
+This allows us to quantify the generalization capabilities of the model trained on all tumor types versus the specialized training approach.
 
 To run this analysis:
 
@@ -463,7 +451,6 @@ The goal is to assess whether the general model provides sufficient performance 
 
 ### aqui joseba (cuando todo esto esté ejecutado bien puedes borrar lo de aquí)
 #TODO: 
--1)	Entrenar cada tipo tumoral con la arquitectura final y predecir vs entrenar con todo y predecir y hacer la matriz de confusion. que demuestra que es mejor entrenar un modelo con todo que con uno solo (usa para ello un Notebook de jupyter brother!).
 
 -3)	Ángel me ha dicho una idea sobre: DeepLIFT de los RBPs que están el mismo complejo debería estar más correlado que los que no. Correlacion complejo > Correlacion no complejo, para ver si detectamos complejos y familias de rbp que se autoregulan. Lo saco de está página web:
 
