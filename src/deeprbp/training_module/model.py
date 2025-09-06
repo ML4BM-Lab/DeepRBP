@@ -45,7 +45,6 @@ class BaseLightningModule(L.LightningModule):
         self.verbose = verbose
         self.debugging = Logger(verbose=self.verbose)
         self.initialize_metrics()
-
     def initialize_metrics(self):
         """Initializes metrics for training, validation, and testing. 
         This method sets up the following metrics using `MeanMetric` from `torchmetrics`:
@@ -71,7 +70,6 @@ class BaseLightningModule(L.LightningModule):
         self.test_r2 = MeanMetric()
         self.test_corr_spearman_per_gene = MeanMetric()
         self.test_corr_spearman_per_gene_max = MeanMetric()
-    
     def _prepare_batch(self, batch):
         """Prepares the inputs and targets from the batch.
         
@@ -89,7 +87,6 @@ class BaseLightningModule(L.LightningModule):
             self.debugging.log(f"[_prepare_batch] Input feature {i} device: {input_tensor.device}", level=2)
         self.debugging.log(f"[_prepare_batch] Targets device: {targets.device}", level=2)
         return inputs, targets
-    
     def training_step(self, train_batch, batch_idx):  
         """Performs a training step."""
         inputs, labels = self._prepare_batch(train_batch)
@@ -98,14 +95,12 @@ class BaseLightningModule(L.LightningModule):
         loss = self.criterion(labels, outputs)
         self._update_metrics("train", loss, outputs, labels)
         return loss
-   
     def validation_step(self, val_batch, batch_idx):
         inputs, labels = self._prepare_batch(val_batch)
         rbp_expr, gen_expr = inputs
         outputs = self(rbp_expr, gen_expr)  
         loss = self.criterion(labels, outputs)
         self._update_metrics("validation", loss, outputs, labels)
- 
     def test_step(self, test_batch, batch_idx):
         """Performs a test step."""
         inputs, labels = self._prepare_batch(test_batch)
@@ -113,7 +108,6 @@ class BaseLightningModule(L.LightningModule):
         outputs = self(rbp_expr, gen_expr)   
         loss = self.criterion(labels, outputs)
         self._update_metrics("test", loss, outputs, labels)
-   
     def _update_metrics(self, data_type, loss, outputs, labels):
         """Updates the metrics dynamically based on data_type: 'train', 'validation', 'test'."""
         self.debugging.log(f"[_update_metrics] Outputs device: {outputs.device}", level=2)
@@ -139,7 +133,6 @@ class BaseLightningModule(L.LightningModule):
             )
             self.test_corr_spearman_per_gene(results["mean_corr"])
             self.test_corr_spearman_per_gene_max(results["mean_corr_max"])
-  
     def _log_metrics(self, data_type):
         """Logs the metrics for the specified dataset type and returns the computed values."""
         base_metrics = ["loss", "corr_pearson", "corr_spearman", "r2"]
@@ -152,7 +145,6 @@ class BaseLightningModule(L.LightningModule):
         }
         self.log_dict(metrics_dict, on_epoch=True, logger=True)
         return metrics_dict
-   
     def _reset_metrics(self, data_type):
         """Resets metrics for the specified dataset type."""
         base_metrics = ["loss", "corr_pearson", "corr_spearman", "r2"]
@@ -160,7 +152,6 @@ class BaseLightningModule(L.LightningModule):
             base_metrics += ["corr_spearman_per_gene", "corr_spearman_per_gene_max"]
         for metric_name in base_metrics:
             getattr(self, f"{data_type}_{metric_name}").reset()
-   
     def on_validation_epoch_end(self):
         """Called at the end of the validation epoch."""
         # Skip logging and printing during validation sanity check
@@ -186,7 +177,6 @@ class BaseLightningModule(L.LightningModule):
         # Reset metrics for the next epoch
         self._reset_metrics("train")
         self._reset_metrics("validation")
-  
     def on_test_epoch_end(self):
         """Called at the end of the test epoch."""
         device = self.device  # Get the current device
@@ -202,7 +192,6 @@ class BaseLightningModule(L.LightningModule):
                 f"Test Spearman Corr. per Gene: {test_metrics['test_corr_spearman_per_gene']:.4f} | "
                 f"Test Spearman Corr. per Gene (max trans): {test_metrics['test_corr_spearman_per_gene_max']:.4f} | ")
         self._reset_metrics("test")
-  
     def predict_step(self, batch, batch_idx):
         """Performs a prediction step and returns both predictions and targets.
         
@@ -417,39 +406,31 @@ class PredictorModel(BaseLightningModule):
                  gene_names: List[str], trans_names: List[str], getBM: pd.DataFrame,
                  input_features: Optional[str] = None, output_features: Optional[str] = None, 
                  verbose: int = 0):
-        
         super().__init__(gene_names, trans_names, getBM, input_features, output_features, verbose)
         self.save_hyperparameters(ignore=['verbose']) # save all the variables passed to init simply by calling 
         self.input_size = input_size
         self.output_size = output_size
-        
         self.learning_rate = 0.03
-        
         # 3 hidden layers: 1024, 1024 and 1024/8=128 (ReLU in hls)
         self.abundance_estimator = nn.Sequential(
             nn.Linear(input_size, 1024),
             nn.BatchNorm1d(1024, eps=1e-06, momentum=0.5, affine=True, track_running_stats=True),
             nn.ReLU(),
-
             nn.Linear(1024, 1024),
             nn.BatchNorm1d(1024, eps=1e-06, momentum=0.5, affine=True, track_running_stats=True),
             nn.ReLU(),
-
             nn.Linear(1024, 128),
             nn.BatchNorm1d(128, eps=1e-06, momentum=0.5, affine=True, track_running_stats=True),
             nn.ReLU(),
-
             nn.Linear(128, output_size),
             nn.Sigmoid()
         )
-
     def configure_optimizers(self):
         """Configures the optimizer"
         Returns:
             torch.optim.Optimizer: Configured optimizer instance.
         """
         return torch.optim.Adam(self.parameters(), lr=self.learning_rate)
-    
     def forward(self, rbp_expr, gen_expr):
         """Defines the forward pass of the model.
             Args:

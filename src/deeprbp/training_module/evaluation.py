@@ -10,8 +10,9 @@ from typing import Dict
 import torch
 import lightning as L
 
+from .tcga_codes import TCGA_CODE
 from ..util.utils import filter_data_by_sample_ids, log_section_separator, print_if_main
-from .preds2visualization import scatter_real_vs_pred, plot_transcript_to_gene_ratio_distributions
+from .preds2visualization import scatter_real_vs_pred, plot_transcript_to_gene_ratio_distributions, plot_small_multiples_real_vs_pred_grid
 
 from ..data_preparation.prepare_data import DeepRBPExpressionDataset
 
@@ -201,10 +202,13 @@ def evaluate_and_visualize_metrics_by_category(
     metadata_df = test_data['metadata_df'].copy()
     categories = metadata_df[dm.sample_category].unique().tolist()
     results_list = [] # Initialize a list to store results
+    grid_panels = []
+    
     for index, category in enumerate(categories):
         print_if_main('\n')
         log_section_separator(f"Processing Category: {category} ({index + 1}/{len(categories)})")
         print_if_main('\n')
+        
         # Filter samples for the current category
         category_samples = metadata_df.loc[metadata_df[dm.sample_category] == category].index
         test_data_copy = {key: df.copy() for key, df in test_data.items()} # Create a copy of the test data to avoid modifying the original data
@@ -213,40 +217,22 @@ def evaluate_and_visualize_metrics_by_category(
         test_loader = DataLoader(test_subdataset, batch_size=len(test_subdataset)) #adjust_batch_size(test_subdataset, batch_size)
         print_if_main(f"[evaluate_and_visualize_metrics_by_category] 🔮 Generating predictions for category '{category}'...")
         predictions, true_values = generate_predictions(trainer, model, dm.predict_dataloader(mode='predict', custom_loader=test_loader))
-#         results = trainer.predict(model, dataloaders=dm.predict_dataloader(mode='predict', custom_loader=test_loader))
-#         true_values = []
-#         predictions = []
-#         for preds, labels in results:
-#             predictions.append(preds.detach().cpu().numpy())
-#             true_values.append(labels.detach().cpu().numpy())
-#         # Concatenate predictions and true values
-#         predictions = np.concatenate(predictions)
-#         true_values = np.concatenate(true_values)
-#         
+        
         # Calculate metrics
         metrics = calculate_metrics(predictions, true_values, test_subdataset.gene_names, getBM, test_subdataset.trans_names)
         metrics['category'] = category
-#         metrics_general = calculate_general_metrics(true_values.flatten(), predictions.flatten())  
-#         metrics_per_gene = spearmanr_per_gene(test_subdataset.gene_names,
-#                                               getBM ,
-#                                               test_subdataset.trans_names, 
-#                                               predictions, true_values)
-#         # Collect results for the current category
-#         metrics = {
-#             'category': category,
-#             'spearman_corr': metrics_general['spearman_corr'],
-#             'pearson_corr': metrics_general['pearson_corr'],
-#             'mse': metrics_general['mse'],
-#             'r2': metrics_general['r2'],
-#             'mean_corr_per_gene': metrics_per_gene['mean_corr'],
-#             'mean_corr_max_trans_per_gene': metrics_per_gene['mean_corr_max']
-#         }
         print_if_main(f"[evaluate_and_visualize_metrics_by_category] 📈 Metrics for category '{category}': {metrics}\n")
         results_list.append(metrics)
-#         print_if_main(f"[evaluate_and_visualize_metrics_by_category] 📈 Metrics for category '{category}': {metrics}\n")
-#         # Append the metrics dictionary to the results list
-#         results_list.append(metrics)
-        # Optional: Plot results
+        
+        # Fill data for grid plot
+        short = TCGA_CODE.get(category, category)  # usa código si existe
+        grid_panels.append({
+            "category": category,
+            "short": short,
+            "pred": predictions.flatten(),
+            "true": true_values.flatten()
+        })
+        # Optional: Plot results  
         if trainer.global_rank == 0 or not torch.cuda.is_available(): # Do plot only for rank 0 (GPU-0 or CPU))
             if plot_results:
                 print_if_main(f"[evaluate_and_visualize_metrics_by_category] 📊 Plotting log2(tpm+1) predictions vs real values scatter plot for category '{category}'.")
@@ -264,10 +250,55 @@ def evaluate_and_visualize_metrics_by_category(
                     genes_df=test_subset['gene_df'],  
                     category=category,
                     output_dir=os.path.join(output_dir, 'pred_label_expression_ratio_histogram', set_name, category))
+                
     # Save results
     results_df = pd.DataFrame(results_list)
     results_df.to_csv(os.path.join(output_dir, f'{set_name}_tumor_category_results.csv'), index=False)
     print_if_main(f"[evaluate_and_visualize_metrics_by_category] ✅ Results for the {set_name} dataset have been successfully saved to files.")
+
+    # Generate unique figure for scatter plots
+    if (trainer.global_rank == 0 or not torch.cuda.is_available()) and plot_results:
+        print_if_main(f"[evaluate_and_visualize_metrics_by_category] 🧩 Building small-multiples grid for '{set_name}'.")
+        plot_small_multiples_real_vs_pred_grid(
+            panels=grid_panels,
+            set_name=set_name,
+            output_dir=output_dir,
+            order_codes=list(TCGA_CODE.values()),
+            axis_range=(0, 15),          # si quieres rango idéntico en todos
+            cmap="plasma",              # o "magma", "plasma"
+            density_scale="log",         # más contraste en zonas densas
+            share_density_norm=True,     # mismo mapeo de color en todos los paneles
+            show_colorbar=True          # lo puedes activar si quieres comprobar la escala
+        )
+    print_if_main(f"[evaluate_and_visualize_metrics_by_category] ✅ Done for split '{set_name}'.")
+
+#### #### #### #### #### #### #### #### #### #### #### ####  remove this when plot is definitive
+# output_dir = '/scratch/jsanchoz/DeepRBP/output/results/run_deeprbp_predictor'
+# panels = load_panels(os.path.join(output_dir, "test_panels.pkl.gz"))
+
+# for p in panels:
+#     if p.get("category") in (
+#         "Pheochromocytoma_&_Paraganglioma",
+#         "Pheochromocytoma_and_Paraganglioma",
+#     ) or p.get("short") in (
+#         "Pheochromocytoma_&_Paraganglioma",
+#         "Pheochromocytoma_and_Paraganglioma",
+#     ):
+#         p["short"] = "PCPG"
+
+# plot_small_multiples_real_vs_pred_grid(
+#     panels=panels,
+#     set_name="test",
+#     output_dir=output_dir,
+#     order_codes=list(TCGA_CODE.values()),
+#     axis_range=(0, 15),          # si quieres rango idéntico en todos
+#     cmap="plasma",              # o "magma", "plasma"
+#     density_scale="log",         # más contraste en zonas densas
+#     share_density_norm=True,     # mismo mapeo de color en todos los paneles
+#     show_colorbar=True          # lo puedes activar si quieres comprobar la escala
+# )
+
+#### #### #### #### #### #### #### #### #### #### #### #### 
 
 def filter_low_expressed_genes(
     gene_df: pd.DataFrame, 

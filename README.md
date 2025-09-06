@@ -230,14 +230,18 @@ create-optuna-study --output_dir /scratch/jsanchoz/DeepRBP/output/results/hyperp
 where,
 - **`--output_dir`: Path where the Optuna storage (optuna.db) will be saved.
 
-#### Step 2: Submit the Hyperparameter Optimization Job via SLURM  (el texto de aquí hay q actualizar porque al final he hecho lo que he querido)
-For this step, we do not provide a command-line entry point, as it is intended to be executed exclusively on a high-performance computing (HPC) cluster due to the significant computational resources required.
+#### Step 2: Submit the Hyperparameter Optimization Job via SLURM  
+This step is intended to run exclusively on an HPC cluster (via SLURM) due to the computational requirements; we do not provide a command-line entry point.
 
-We perform 1,000 hyperparameter optimization trials using Optuna with a `TPESampler`. According to the Optuna documentation, the recommended number of trials for this sampler typically ranges between 100 and 1,000 to explore the search space effectively. In our setup, we have configured n_startup_trials=40 to allow for thorough initial random exploration before the sampler begins using its Bayesian optimization. This ensures sufficient information is gathered before focusing on specific areas of the search space. 
+**Two-stage optimization.** We split the search into two phases. **Phase 1** explored a broad space with random sampling, deliberately testing extreme configurations (e.g., zero hidden layers, alternative optimizers, large batch sizes) and discarding clearly suboptimal extremes based on validation MSE. **Phase 2** refined the search with Optuna’s `TPESampler`. In total, we ran **280 trials** (80 in Phase 1 and 200 in Phase 2), which falls within Optuna’s recommended range for effective exploration.
 
-To accelerate the optimization process and avoid unnecessary computation on poorly performing configurations, we use an early stopping strategy with a `MedianPruner`. This pruner halts unpromising trials early by comparing their intermediate results to the median of previously completed trials, helping to allocate resources more efficiently during the search. In our configuration, pruning is disabled until at least 50 trials have been completed, reflecting a conservative approach. Within each trial, pruning is further delayed until 30 steps have been reached. After that point, the pruning condition is checked every 10 steps based on the latest available intermediate values. These parameter values follow the commonly used in `Optuna`'s official examples.
+**Hierarchical search space.** The space is conditional: when `num_hidden_layers = 0`—and in some cases when it is 1–2—parameters such as `uniform_nodes`, `node_shrink_factor`, hidden-layer `activation_function`, and `batch_normalization` are inactive. We report all Optuna-suggested values per trial and **explicitly mark unused hyperparameters** given each configuration.
 
-To parallelize the workload, the SLURM job is configured to run with 4 GPUs (NVIDIA A100), where each GPU handles 250 trials. Based on our setup, the job completes in approximately 90 hours.
+**Phase 2 sampler settings.** We enabled `multivariate=True` and `group=True` in the `TPESampler`. Briefly, `multivariate=True` samples parameters jointly to capture inter-parameter dependencies, and `group=True` decomposes the space into conditionally active groups and samples from their joint distribution—well suited to the hierarchical design. The **first 10 trials** in Phase 2 were randomly sampled as a warm-up for the sampler. Additionally, we **switched the learning rate to a categorical grid** in Phase 2 to reduce its search width and focus exploitation on the remaining hyperparameters.
+
+**Early stopping with pruning.** We used Optuna’s `MedianPruner` to accelerate the search and reduce computation on underperforming configurations. Pruning was **disabled until at least 25 trials** had completed. Within each trial, pruning was further delayed until **470 training steps (epochs)** had been reached, after which **checks were performed every 47 steps**. In **Phase 2**, we **reduced this to 3 warm-up steps with checks once per epoch**, enabling evaluation of more configurations in less time, in line with Optuna best practices.
+
+**SLURM execution.** We submit Phase 1 and Phase 2 as separate SLURM array jobs. 
 
 To launch the optimization job, simply run the following command (adjust the SLURM script as needed for your HPC setup):
 ```bash
@@ -282,7 +286,7 @@ This will:
 * Export trial results to a CSV file.
 * Generate and save informative plots (e.g., optimization history, parameter importance, timeline, etc.) in both PNG and PDF formats.
 
-### Trying alternative Machine Learning benchmark methods  (done)
+### Trying alternative Machine Learning benchmark methods  
 In this section, we benchmark our **DeepRBP predictor**—a deep learning-based model—against a series of traditional machine learning regressors.
 We evaluate the following algorithms using a `MultiOutputRegressor` setup to predict isoform abundances: `svr`, `decision_tree`, `elastic_net`, `ridge`.
 

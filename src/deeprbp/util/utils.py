@@ -11,6 +11,9 @@ import torch
 import pytorch_lightning as pl
 import re
 import warnings
+from __future__ import annotations
+import gzip
+import pickle
 
 def print_section_separator(char="═", width=50):
     """
@@ -223,3 +226,35 @@ def find_best_checkpoint(checkpoint_dir: str) -> str:
     # Find the checkpoint file with the minimum val_loss
     best_ckpt_file = min(val_loss_dict, key=val_loss_dict.get)
     return os.path.join(checkpoint_dir, best_ckpt_file)
+
+# These functions are util for saving and loading the scatter plot panel generated in evaluation phase of
+# the deeprbp predictor
+def save_panels(panels: List[Dict], path: str) -> None:
+    """
+    Serialize `panels` (list of dicts with numpy arrays) to a single gzip-compressed pickle.
+
+    Parameters
+    ----------
+    panels : list of dict
+        Each dict is expected to contain at least:
+          - "pred": np.ndarray
+          - "true": np.ndarray
+          - "short": str (TCGA code)
+          - "category": str (verbose tissue), optional
+    path : str
+        Destination file path, e.g. ".../train_panels.pkl.gz"
+    """
+    with gzip.open(path, "wb") as f:
+        pickle.dump(panels, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+def load_panels(path: str) -> List[Dict]:
+    """
+    Load `panels` previously saved with `save_panels`.
+
+    Returns
+    -------
+    List[Dict]
+        Same structure that `plot_small_multiples_real_vs_pred_grid` expects.
+    """
+    with gzip.open(path, "rb") as f:
+        return pickle.load(f)
