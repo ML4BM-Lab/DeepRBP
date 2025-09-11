@@ -35,5 +35,5 @@ python3.9 -m deeprbp.explainability_module.main_explainer \
   --config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_explainer_dl_kout_t_stat.yaml" \
   --model_ckpt_path "/scratch/jsanchoz/DeepRBP/final_results/run_deeprbp_predictor/checkpoint_model/deeprbp-predictor-epoch=124-validation_loss=0.08.ckpt" \
   --scaler_dir "/scratch/jsanchoz/DeepRBP/final_results/run_deeprbp_predictor/data" \
-  --output_dir "/scratch/jsanchoz/DeepRBP/output/results/explainer_dl_kout_t_stat" \
-  --select_category "Liver_Hepatocellular_Carcinoma,Acute_Myeloid_Leukemia,Kidney_Chromophobe"
+  --output_dir "/scratch/jsanchoz/DeepRBP/output/results/explainability/explainer_dl_kout_t_stat" \
+  --select_category "Acute_Myeloid_Leukemia,Kidney_Chromophobe,Liver_Hepatocellular_Carcinoma"

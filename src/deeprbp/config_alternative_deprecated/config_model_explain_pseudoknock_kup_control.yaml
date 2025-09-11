@@ -1,0 +1,26 @@
+# /scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_tcga_model_explain_alternative.yaml
+# this configuration file is developed to try the alternative pseudoknock method for explainability
+
+data_paths:
+  rbp_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Test/test_RBPs_log2p_tpm.csv"
+  isoform_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Test/test_trans_log2p_tpm.csv"
+  gene_expr_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Test/test_gn_tpm.csv"
+  metadata_path: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Test/test_phenotype_metadata.csv"
+
+trained_model_dir: "/scratch/jsanchoz/DeepRBP/output/results/run_deeprbp_predictor/results"
+model_file: "best_model.pt"
+scaler_dir: "/scratch/jsanchoz/DeepRBP/output/results/run_deeprbp_predictor/results"
+explanation_method: "Pseudoknockdown"
+condition1: 'Kup'
+condition2: 'Control'
+gene_collapse_method: "max_absolute_value"
+getBM_path: "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/getBM.csv"
+sample_category: "detailed_category"  # The column in metadata to stratify on
+disease_condition: "sample_type"
+select_category: "Liver_Hepatocellular_Carcinoma"
+select_condition: 
+  - "Primary_Tumor"
+  #- "Solid_Tissue_Normal"
+seed: 42
+
+

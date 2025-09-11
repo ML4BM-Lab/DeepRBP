@@ -1,0 +1,16 @@
+# src/deeprbp/configs/config_model_train.yaml
+
+train_path_files: '/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Train'
+test_path_files: '/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Test'
+sample_category: "detailed_category"  # The column in metadata to stratify on 
+test_fraction: 0.2
+getBM_path: "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/getBM.csv"
+gene_col_name: "Gene_ID"
+trans_col_name: "Transcript_ID"
+cuda: True
+train_batch_size: 128
+val_batch_size: 256
+plot_results: True
+
+
+

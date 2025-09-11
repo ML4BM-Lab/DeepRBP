@@ -25,12 +25,48 @@ def data_preparation(config, args, select_category):
                 args.output_dir
     )
     
-    data = prep_data.load_data(
-                path=config.get('test_path_files'), 
-                select_category=select_category,
-                disease_condition=config.get('disease_condition'),
-                select_condition=config.get('select_condition')
+    def _load(path, cat, dis_cond, sel_cond):
+        return prep_data.load_data(
+            path=path,
+            select_category=cat,
+            disease_condition=dis_cond,
+            select_condition=sel_cond
+        )
+
+    # 1) First try with filter coming from yaml
+    data = _load(
+        path=config.get('test_path_files'),
+        cat=select_category,
+        dis_cond=config.get('disease_condition'),
+        sel_cond=config.get('select_condition')
     )
+
+    # 2) Fallback automático si no hay muestras
+    #    (caso AML u otros “blood-derived” que no encajan con Primary_Tumor/Solid_Tissue_Normal)
+    def _n_samples(d):
+        return 0 if d is None or 'rbp_df' not in d or d['rbp_df'] is None else d['rbp_df'].shape[0]
+
+    if _n_samples(data) == 0:
+        print_if_main(
+            f"[data_preparation] ⚠️ No samples found for category '{select_category}' "
+            f"after applying disease_condition/select_condition "
+            f"({config.get('disease_condition')}, {config.get('select_condition')}). "
+            "Retrying without condition filters..."
+        )
+        data = _load(
+            path=config.get('test_path_files'),
+            cat=select_category,
+            dis_cond=None,          # <<< desactiva el filtro por columna
+            sel_cond=None           # <<< desactiva el filtro por valores
+        )
+    
+    # 3) Si aun así no hay muestras, corta con mensaje claro
+    if _n_samples(data) == 0:
+        raise ValueError(
+            f"No samples available for category '{select_category}' "
+            "even without disease/condition filters. Check metadata and sample_category."
+        )
+
     prep_data.load_scaler(args.scaler_dir)
     data_scaled = prep_data.scale_data(data)
     dataset = prep_data.create_tensor_dataset(data_scaled)
