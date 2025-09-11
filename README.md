@@ -132,7 +132,7 @@ Alternatively, you can submit this command on an HPC system with Slurm:
 sbatch slurm/preprocess_data.sh
 ```
 
-## Model Training from Scratch (Optional)
+## Model Training from Scratch  
 ### Selecting Tumor Samples and Stratifying Processed Data into Training and Testing Sets
 To ensure that different tumor types are equally represented in both the training and testing sets, we will perform a stratified split. This method maintains the proportion of each class in the splits, providing a more reliable evaluation of the model's generalization capabilities.
 
@@ -479,7 +479,7 @@ descarga de aquí : https://mips.helmholtz-muenchen.de/corum/?query=(fcg_id=1)
 
 ---
 
-# Explainability Module  (actualizar data paths que ahora solo hay que dar el parent dir y que el model ahora es un checkpoint directamente)
+# Explainability Module
 This module uses the already trained DeepRBP Predictor to compute TxRBP (transcript-by-RBP) and GxRBP (gene-by-RBP) scores using DeepLIFT (Shrikumar, Greenside, and Kundaje, 2017) [Learning important features through propagating activation differences, International Conference on Machine Learning, PMLR, pages 3145–3153].
 
 With DeepLIFT, the contribution of each RBP-Transcript pair is determined for every sample in the input data, resulting in a three-dimensional score matrix with the following dimensions:
@@ -499,7 +499,7 @@ This module aims to provide insights into how RBPs regulate gene expression. Bel
 
 ---
 
-## Data Access  
+## Data Access (EJECUTA ESTO OTRA VEZ POR SI ACASO)
 The necessary raw data for running this module is available through the provided Zenodo link (#TODO: AFTER YOU GET THE COMMUNITY PERMISSION UPLOAD THE LINK: https://zenodo.org/uploads/15337302) 
 
 . Below is a description of the files:  
@@ -567,8 +567,14 @@ To execute the explainability pipeline on our model trained with DeepLIFT, you h
 * Running with Docker
 
 ---
+
 ### **Option 1: Running the Scripts**  
-To execute DeepRBP Explainer with a specific tumor type on the **TCGA** test dataset, you need to use the config file used for training the predictor model and a `config_model_explain.yaml` (config_model_explain_deeplift_knock_t_stat.yaml) configuration file for the explainability:
+To execute DeepRBP Explainer with a specific tumor type on the **TCGA** test dataset, you need: An explainability config (e.g., config_model_explain_deeplift_knock_t_stat.yaml)
+
+New (recommended): pass --select_category from the command line for one or multiple tumor types.
+If --select_category is provided, it overrides any select_category in the YAML.
+If it’s not provided, the explainer falls back to select_category in the YAML (if present).
+
 
 #### **Example Configuration File (`config_model_explain_deeplift_knock_t_stat.yaml`)**
 
@@ -576,7 +582,7 @@ To execute DeepRBP Explainer with a specific tumor type on the **TCGA** test dat
 test_path_files: '/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Test'
 sample_category: "detailed_category"  # The column in metadata to stratify on
 disease_condition: "sample_type" # The column in metadata to stratify on
-select_category: "Liver_Hepatocellular_Carcinoma"
+# select_category: "Liver_Hepatocellular_Carcinoma"  # (optional if you pass it via CLI)
 select_condition: 
   - "Primary_Tumor"
   #- "Solid_Tissue_Normal"
@@ -589,10 +595,9 @@ gene_col_name: "Gene_ID"
 trans_col_name: "Transcript_ID"
 ```
 where,
-- **`scaler_dir`**: Directory where the scaler is saved (in a joblib format) along with the sigma value.
 - **`sample_category`**: Column name in metada that refers to samples' tumor type to help filtering samples.
 - **`disease_condition`**: The column in the metadata to stratify on.
-- **`select_category`**: The specific tumor type(s) you want to select.
+- **`select_category`**: (optional in YAML): tumor type(s) to select. If you pass --select_category via CLI, this YAML key is ignored.
 - **`select_condition`**: Conditions for filtering the samples, such as "Primary_Tumor" or potentially including "Solid_Tissue_Normal".
 by tumor type. You could select only primary tumors or also include normal samples. You could calculate scores for 
 normal samples and then run for tumor samples in a new execution to study the differences.
@@ -600,25 +605,36 @@ normal samples and then run for tumor samples in a new execution to study the di
 - **`reference_data`**: Required only by DeepLIFT to perform calculations.
 - **`batch_reduction_method`**: Specifies how we collapse the dimension of the samples once we have calculated the scores for each sample. An alternative option could be `sum_scores`.
 - **`gene_collapse_method`**: Set to `"max_absolute_value"`, which is the method used to collapse the TxRBP scores matrix to GxRBP. This method takes the highest absolute value score among the transcripts of a gene and retains its sign.
+- **`scaler_dir`**: Directory where the scaler is saved (in a joblib format) along with the sigma value.
 
-```bash  
+##### **Run examples**
+*A) Single tumor type (from CLI)*
+```bash
 run-deeprbp-explainer \
-  --config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_model_explain_deeplift_knock_t_stat.yaml" \
-  --model_ckpt_path "/scratch/jsanchoz/DeepRBP/output/results/run_deeprbp_predictor/checkpoint_model/deeprbp-predictor-epoch=31-val_loss=0.11.ckpt" \
-  --scaler_dir "/scratch/jsanchoz/DeepRBP/output/results/run_deeprbp_predictor/data" \
-  --output_dir "/scratch/jsanchoz/DeepRBP/output/results/explainability_deeplift_knock_t_stat_EXAMPLE"
+  --config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_explainer_dl_kout_t_stat.yaml" \
+  --model_ckpt_path "/scratch/jsanchoz/DeepRBP/final_results/run_deeprbp_predictor/checkpoint_model/deeprbp-predictor-epoch=124-validation_loss=0.08.ckpt" \
+  --scaler_dir "/scratch/jsanchoz/DeepRBP/final_results/run_deeprbp_predictor/data" \
+  --output_dir "/scratch/jsanchoz/DeepRBP/output/results/explainer_dl_kout_t_stat_EXAMPLE" \
+  --select_category "Liver_Hepatocellular_Carcinoma"
 ```
 
-<!-- run-deeprbp-explainer \
-  --config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/config_alternative/config_model_explain_pseudoknock_control_kout.yaml" \
-  --model_ckpt_path "/scratch/jsanchoz/DeepRBP/output/results/run_deeprbp_predictor/checkpoint_model/deeprbp-predictor-epoch=31-val_loss=0.11.ckpt" \
-  --scaler_dir "/scratch/jsanchoz/DeepRBP/output/results/run_deeprbp_predictor/data" \
-  --output_dir "/scratch/jsanchoz/DeepRBP/output/results/explainability_knockeo_EXAMPLE" -->
-   
+*B)Multiple tumor types (comma-separated list)*
+```bash
+run-deeprbp-explainer \
+  --config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_explainer_dl_kout_t_stat.yaml" \
+  --model_ckpt_path "/scratch/jsanchoz/DeepRBP/final_results/run_deeprbp_predictor/checkpoint_model/deeprbp-predictor-epoch=124-validation_loss=0.08.ckpt" \
+  --scaler_dir "/scratch/jsanchoz/DeepRBP/final_results/run_deeprbp_predictor/data" \
+  --output_dir "/scratch/jsanchoz/DeepRBP/output/results/explainer_dl_kout_t_stat_MULTI" \
+  --select_category "Liver_Hepatocellular_Carcinoma,Acute_Myeloid_Leukemia,Kidney_Chromophobe"
+```
+
+Output layout (per category)
+<output_dir>/<select_category>/df_scores_TxRBP.csv
+<output_dir>/<select_category>/df_scores_GxRBP.csv
+<output_dir>/<select_category>/result_table.csv
 
 
-
-
+Tip: You can leave select_category commented out in the YAML (recommended), and drive categories entirely from CLI for reproducible multi-run sweeps. If you keep it in the YAML, the CLI flag still takes precedence.
 
 ### **Option 2: Submit a Job in a HPC**   
 ```bash

@@ -1,5 +1,6 @@
 # src/deeprbp/util/utils.py
 
+from __future__ import annotations
 import pandas as pd
 import torch
 from typing import List, Dict
@@ -11,7 +12,6 @@ import torch
 import pytorch_lightning as pl
 import re
 import warnings
-from __future__ import annotations
 import gzip
 import pickle
 

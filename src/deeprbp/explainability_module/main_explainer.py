@@ -1,6 +1,7 @@
 # src/deeprbp/explainability_module/main_explainer.py
 
 import os
+import re
 import argparse
 import pandas as pd
 
@@ -9,9 +10,11 @@ from ..data_loading.config_loader import ConfigParser
 from ..training_module.model import PredictorModel
 from ..data_preparation.prepare_data import PrepareData
  
-from .utils_explainer import *
+from .utils_explainer import (initialize_explainer_handler, filter_scores_for_low_expressed_transcripts, 
+                              filter_scores_for_low_expressed_genes, collapse_transcript_scores_to_genes, 
+                              _sanitize, _parse_categories)
 
-def data_preparation(config, args):
+def data_preparation(config, args, select_category):
     getBM = pd.read_csv(config.get('getBM_path'))
     
     prep_data = PrepareData(
@@ -24,7 +27,7 @@ def data_preparation(config, args):
     
     data = prep_data.load_data(
                 path=config.get('test_path_files'), 
-                select_category=config.get('select_category'),
+                select_category=select_category,
                 disease_condition=config.get('disease_condition'),
                 select_condition=config.get('select_condition')
     )
@@ -36,29 +39,42 @@ def data_preparation(config, args):
 def main():
     args = parse_args()
 
-    # Load configuration and auxiliary file
+    # Load configuration  
     print_if_main('\n[main_explainer] 🚀 Loading configuration...')
     config = ConfigParser(args.config_path) 
     print_if_main('\n[main_explainer] ──────────────────────────────────────')
     
-    # Data preparation
-    print_if_main('\n[main_explainer] 🚀 Preparing data...')
-    dataset, getBM = data_preparation(config, args)
-    print_if_main('\n[main_explainer] ──────────────────────────────────────')
+    # Decide categories (CLI overrides YAML)
+    categories = _parse_categories(args.select_category)  # NEW
 
-    # Load trained model
+    if not categories:
+        cfg_cat = config.get('select_category')
+        if isinstance(cfg_cat, (list, tuple)):
+            categories = [str(x) for x in cfg_cat if str(x).strip()]
+        elif isinstance(cfg_cat, str) and cfg_cat.strip():
+            categories = [cfg_cat.strip()]
+    if not categories:
+        raise ValueError("No categories provided. Use --select_category or define select_category in the config.")
+
+    # Load trained model once
     print_if_main(f"\n[main_explainer] 🚀 Loading trained model. Using checkpoint: {args.model_ckpt_path}")
     model = PredictorModel.load_from_checkpoint(args.model_ckpt_path)
     print_if_main('\n[main_explainer] ──────────────────────────────────────')
 
-    # Running explainability pipeline
-    print_if_main(f"\n[main_explainer] 🚀 Running explainability pipeline...")
-    results = run_explainability_pipeline(config, dataset, model, getBM)
-    print_if_main('\n[main_explainer] ──────────────────────────────────────')
+    # Loop over categories
+    for cat in categories:
+        print_if_main(f"\n[main_explainer] 🚀 Preparing data... (category: {cat})")
+        dataset, getBM = data_preparation(config, args, select_category=cat)
+        print_if_main('\n[main_explainer] ──────────────────────────────────────')
 
-    # Save results as CSV files
-    save_results(args.output_dir, results['df_scores_TxRBP'], results['df_scores_GxRBP'], results['result_table']) 
-    
+        print_if_main(f"\n[main_explainer] 🚀 Running explainability pipeline... (category: {cat})")
+        results = run_explainability_pipeline(config, dataset, model, getBM)
+        print_if_main('\n[main_explainer] ──────────────────────────────────────')
+
+        # Save results into a subfolder per category
+        out_dir_cat = os.path.join(args.output_dir, _sanitize(cat))  # NEW
+        save_results(out_dir_cat, results['df_scores_TxRBP'], results['df_scores_GxRBP'], results['result_table'])
+
 def run_explainability_pipeline(config, dataset, model, getBM):
     print_if_main("\n [run_explainability_pipeline] 🚀 Starting the explanation process...")
     # Initialize explainer
@@ -111,6 +127,9 @@ def parse_args():
     parser.add_argument('--model_ckpt_path', type=str, required=True, help='Path to a trained DeepRBP predictor model checkpoint file')
     parser.add_argument('--scaler_dir', type=str, required=True, help='Directory where the trained scaler and sigma is located')
     parser.add_argument('--output_dir', type=str, required=True, help='Directory where the results will be saved.')  
+    parser.add_argument('--select_category', action='append',
+        help='Category or categories to select (repeat flag or comma-separated). Overrides the config if provided.'
+    )
     return parser.parse_args()
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 # src/deeprbp/explainability_module/utils_explainer.py
 
 import pandas as pd
+import re
 from collections import namedtuple
 from typing import List, Optional
 
@@ -202,3 +203,26 @@ def get_gene_info(gene_ids_or_names: List[str], getBM: pd.DataFrame, return_type
         return gene_ids
     else:
         raise ValueError("Invalid return_type. Use 'names' or 'ids'.")
+    
+def _sanitize(name: str) -> str:  # NEW
+    """Filesystem-friendly folder name."""
+    name = name.strip().replace(" ", "_")
+    return re.sub(r"[^a-zA-Z0-9._-]", "_", name)
+
+def _parse_categories(arg_list):  # NEW
+    """
+    Accept repeatable --select_category flags and/or comma-separated lists.
+    Returns a list[str].
+    """
+    if not arg_list:
+        return []
+    out = []
+    for item in arg_list:
+        out.extend([s.strip() for s in str(item).split(",") if s.strip()])
+    # drop dups preserving order
+    seen = set()
+    uniq = []
+    for x in out:
+        if x not in seen:
+            uniq.append(x); seen.add(x)
+    return uniq
