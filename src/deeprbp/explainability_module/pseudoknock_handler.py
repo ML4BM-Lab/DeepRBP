@@ -35,6 +35,7 @@ class PseudoKnockHandler:
         self.config_explain = config_explain
         self.dataset = dataset
         self.model = model
+        self.model.eval() #new # BN en eval para atribuciones estables
         self.logger.log("✅ PseudoKnockHandler initialized successfully.", level=1)
     
     def modify_rbp_expression(self, condition, col):
@@ -170,6 +171,39 @@ class PseudoKnockHandler:
         self.logger.log("✅ Attribution scores computation completed for all RBPs.", level=1)
         return df_scores_TxRBP
     
+    # def _compute_attribution_scores_for_rbp(self, index_col):
+    #     """
+    #     Computes transcript (T) attribution scores for a specific RBP.
+
+    #     Parameters:
+    #     index_col: Index of the RBP in the dataset.
+
+    #     Returns:
+    #     pd.Series: A Series containing t-statistics for each transcript.
+    #     """
+    #     # Get the modified expression tensors for each condition
+    #     tensor_condition1, tensor_condition2 = (
+    #         self.modify_rbp_expression(self.dataset, self.config_explain.get(condition), index_col)
+    #         for condition in ('condition1', 'condition2')
+    #     )
+    #     # Check if tensors are equal
+    #     if np.allclose(tensor_condition1, tensor_condition2, atol=1e-6):
+    #         self.logger.log(f"Tensors for {self.dataset.rbp_names[index_col]} are equal, skipping calculations.", level=1)
+    #         return pd.Series(0, index=self.dataset.trans_names)  # Return zeros if tensors are equal
+    #     # Generate predictions
+    #     with torch.no_grad():
+    #         pred_condition1, pred_condition2 = (
+    #             self.model(tensor, self.dataset.features['gene_df']).detach().numpy() 
+    #             for tensor in (tensor_condition1, tensor_condition2)
+    #         )
+    #     # Calculate the log2-Fold-Change (FC)
+    #     data_log2FC = self.calculate_log2fold_change(pred_condition1, pred_condition2)
+    #     # Perform t-test and get results
+    #     result_ttest = self.perform_ttest_on_transcripts(data_log2FC)
+    #     print(result_ttest)
+    #     # Create a temporary Series from the t-test results
+    #     return pd.Series(result_ttest.set_index('Transcript_ID')['t_stat'])
+    
     def _compute_attribution_scores_for_rbp(self, index_col):
         """
         Computes transcript (T) attribution scores for a specific RBP.
@@ -182,17 +216,18 @@ class PseudoKnockHandler:
         """
         # Get the modified expression tensors for each condition
         tensor_condition1, tensor_condition2 = (
-            self.modify_rbp_expression(self.dataset, self.config_explain.get(condition), index_col)
+            self.modify_rbp_expression(self.config_explain.get(condition), index_col)
             for condition in ('condition1', 'condition2')
         )
         # Check if tensors are equal
-        if np.allclose(tensor_condition1, tensor_condition2, atol=1e-6):
+        if torch.allclose(tensor_condition1, tensor_condition2, atol=1e-6):
             self.logger.log(f"Tensors for {self.dataset.rbp_names[index_col]} are equal, skipping calculations.", level=1)
             return pd.Series(0, index=self.dataset.trans_names)  # Return zeros if tensors are equal
+        
         # Generate predictions
         with torch.no_grad():
             pred_condition1, pred_condition2 = (
-                self.model(tensor, self.dataset.features['gene_df']).detach().numpy() 
+                self.model(tensor, self.dataset.features['gene_df']).detach().cpu().numpy()
                 for tensor in (tensor_condition1, tensor_condition2)
             )
         # Calculate the log2-Fold-Change (FC)
@@ -202,7 +237,7 @@ class PseudoKnockHandler:
         print(result_ttest)
         # Create a temporary Series from the t-test results
         return pd.Series(result_ttest.set_index('Transcript_ID')['t_stat'])
-    
+
     def calculate_scores_transcript_level(self):
         """
         Calculate attribution scores at the transcript level using the PseudoKnockHandler method.
@@ -215,10 +250,3 @@ class PseudoKnockHandler:
         df_scores_TxRBP = self.compute_attribution_scores()
         self.logger.log("✅ Attribution scores for transcripts computed successfully.", level=1)
         return df_scores_TxRBP
-        
-       
-
-
-
-
-

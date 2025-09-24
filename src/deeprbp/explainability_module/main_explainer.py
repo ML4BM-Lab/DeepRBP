@@ -41,7 +41,6 @@ def data_preparation(config, args, select_category):
         sel_cond=config.get('select_condition')
     )
 
-    # 2) Fallback automático si no hay muestras
     #    (caso AML u otros “blood-derived” que no encajan con Primary_Tumor/Solid_Tissue_Normal)
     def _n_samples(d):
         return 0 if d is None or 'rbp_df' not in d or d['rbp_df'] is None else d['rbp_df'].shape[0]
@@ -60,7 +59,6 @@ def data_preparation(config, args, select_category):
             sel_cond=None           # <<< desactiva el filtro por valores
         )
     
-    # 3) Si aun así no hay muestras, corta con mensaje claro
     if _n_samples(data) == 0:
         raise ValueError(
             f"No samples available for category '{select_category}' "
@@ -104,58 +102,71 @@ def main():
         print_if_main('\n[main_explainer] ──────────────────────────────────────')
 
         print_if_main(f"\n[main_explainer] 🚀 Running explainability pipeline... (category: {cat})")
-        results = run_explainability_pipeline(config, dataset, model, getBM)
+        results = run_explainability_pipeline(config, dataset, model, getBM, analyze_hidden_layer=args.analyze_hidden_layer)
         print_if_main('\n[main_explainer] ──────────────────────────────────────')
 
         # Save results into a subfolder per category
-        out_dir_cat = os.path.join(args.output_dir, _sanitize(cat))  # NEW
-        save_results(out_dir_cat, results['df_scores_TxRBP'], results['df_scores_GxRBP'], results['result_table'])
+        out_dir_cat = os.path.join(args.output_dir, _sanitize(cat))   
+        save_results(
+            out_dir_cat, 
+            results['df_scores_TxRBP'], 
+            results['df_scores_GxRBP'], 
+            results['result_table'],
+            results['df_scores_HLxRBP']
+        )
 
-def run_explainability_pipeline(config, dataset, model, getBM):
+def run_explainability_pipeline(config, dataset, model, getBM, analyze_hidden_layer=False):
     print_if_main("\n [run_explainability_pipeline] 🚀 Starting the explanation process...")
-    # Initialize explainer
+    # 1) Initialize explainer
     print_if_main("\n[run_explainability_pipeline] Initializing explainer handler...")
     explainer_handler = initialize_explainer_handler(config, dataset, model)
+    explain_method = config.get('explanation_method')
+    print_if_main(f"[run_explainability_pipeline] ▶️ Explainer method: {explain_method}")
     print_if_main("\n[run_explainability_pipeline] ──────────────────────────────────────")
-
-    # Calculate scores at transcript level
+    # 2) Calculate scores at transcript level (output)
     print_if_main("\n[run_explainability_pipeline] Calculating scores at the transcript level...")
     df_scores_TxRBP = explainer_handler.calculate_scores_transcript_level()
     print_if_main(f"\n[run_explainability_pipeline] ── Calculated transcript-level scores: {df_scores_TxRBP.shape[0]} transcripts.") # si no es el 0 es el 1
-    
-    # Filter scores for low-expressed transcripts
+    # 3) Filter output scores for low-expressed transcripts & low-expressed genes
     print_if_main("\n[run_explainability_pipeline] Filtering scores for low-expressed transcripts...")
     df_scores_TxRBP = filter_scores_for_low_expressed_transcripts(df_scores_TxRBP, dataset)   
     print_if_main("\n[run_explainability_pipeline] ──────────────────────────────────────")
-
-    # Filter scores for low-expressed genes
     print_if_main("\n[run_explainability_pipeline] Filtering scores for low-expressed genes...")
     df_scores_TxRBP = filter_scores_for_low_expressed_genes(df_scores_TxRBP, dataset) 
     print_if_main("\n[run_explainability_pipeline] ──────────────────────────────────────")
-
-    # Collapse scores to genes (RBP x G)
+    # 4) Collapse output scores to genes (RBP x G)
     print_if_main("\n[run_explainability_pipeline] Collapsing scores from transcript level to gene level...")
     results = collapse_transcript_scores_to_genes(df_scores_TxRBP, getBM, config.get('gene_collapse_method'), dataset)  
     print_if_main("\n[run_explainability_pipeline] ── Collapsed scores to gene level successfully.")
-    
+    # 5) (Opcional) Last hidden layer explanation
+    df_scores_HLxRBP = None
+    if analyze_hidden_layer:
+        if explain_method != "DeepLIFT":
+            raise ValueError(
+                "[run_explainability_pipeline] Hidden-layer attributions are only supported with DeepLIFT. "
+                f"Current explainer is '{explain_method}'. Set explanation_method: 'DeepLIFT' or disable --analyze_hidden_layer."
+            )
+        print_if_main("\n[run_explainability_pipeline] 🔬 Calculating scores at the last hidden layer...")
+        df_scores_HLxRBP = explainer_handler.calculate_scores_hidden_layer()
+        print_if_main("\n[run_explainability_pipeline] ✅ Hidden layer scores computed.")
     print_if_main("\n[run_explainability_pipeline] ✅ Explanation process completed successfully.")
     return {
         'df_scores_TxRBP': df_scores_TxRBP,
         'df_scores_GxRBP': results.df_scores_GxRBP,
-        'result_table': results.result_table
-    }
+        'result_table': results.result_table,
+        'df_scores_HLxRBP': df_scores_HLxRBP,    
+    } 
 
-def save_results(path_save_results, df_scores_TxRBP, df_scores_GxRBP, result_table):
+def save_results(path_save_results, df_scores_TxRBP, df_scores_GxRBP, result_table, df_scores_HLxRBP=None):
     """Save the results as CSV files."""
-    try:
-        print_if_main("💾 Saving results...")
-        os.makedirs(path_save_results, exist_ok=True)
-        df_scores_TxRBP.to_csv(os.path.join(path_save_results, 'df_scores_TxRBP.csv'), index=True)
-        df_scores_GxRBP.to_csv(os.path.join(path_save_results, 'df_scores_GxRBP.csv'), index=True)
-        result_table.to_csv(os.path.join(path_save_results, 'result_table.csv'), index=True)
-        print_if_main("✅ Results saved successfully.")
-    except Exception as e:
-        raise RuntimeError(f"❌ Error saving results: {e}")
+    print_if_main("💾 Saving results...")
+    os.makedirs(path_save_results, exist_ok=True)
+    df_scores_TxRBP.to_csv(os.path.join(path_save_results, 'df_scores_TxRBP.csv'), index=True)
+    df_scores_GxRBP.to_csv(os.path.join(path_save_results, 'df_scores_GxRBP.csv'), index=True)
+    result_table.to_csv(os.path.join(path_save_results, 'result_table.csv'), index=True)
+    if df_scores_HLxRBP is not None:
+        df_scores_HLxRBP.to_csv(os.path.join(path_save_results, 'df_scores_HLxRBP.csv'), index=True)
+    print_if_main("✅ Results saved successfully.")
 
 def parse_args():   
     parser = argparse.ArgumentParser(description='Run the DeepRBP explainer to calculate transcript x RBP and genes x RBP explainability scores.')
@@ -166,6 +177,7 @@ def parse_args():
     parser.add_argument('--select_category', action='append',
         help='Category or categories to select (repeat flag or comma-separated). Overrides the config if provided.'
     )
+    parser.add_argument('--analyze_hidden_layer', action='store_true', help='Also compute attribution scores for the last hidden layer (HL x RBP).')
     return parser.parse_args()
 
 if __name__ == "__main__":

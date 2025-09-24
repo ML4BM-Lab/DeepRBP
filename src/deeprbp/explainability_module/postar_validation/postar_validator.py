@@ -8,7 +8,7 @@ import pandas as pd
 from sklearn.metrics import roc_curve, roc_auc_score
 
 from ...util.logger import Logger
-from ...training_module.preds2visualization import plot_distributions_and_roc_with_thresholds
+from .plot_utils import plot_distributions_and_roc_with_thresholds
 
 class PostarValidator:
     """
@@ -37,7 +37,6 @@ class PostarValidator:
         self.df_count_rbps_per_gen = pd.DataFrame()
         self.df_count_genes_per_rbp = pd.DataFrame()
         self.updated_results_summary = pd.DataFrame()
-  
     def load_postar_data(self):
         """Load the POSTAR data from the specified file."""
         postar_path = os.path.join(self.postar_matrix_dir, self.postar_file)
@@ -55,7 +54,6 @@ class PostarValidator:
         except Exception as e:
             self.logger.error(f"Failed to load POSTAR data: {e}")
             raise e  # Re-raise the exception for further handling if necessary
-    
     def load_explainability_scores(self):
         """Load the explainability scores and results table from the specified directory."""
         try:
@@ -75,7 +73,6 @@ class PostarValidator:
         except Exception as e:
             self.logger.error(f"Failed to load explainability scores: {e}")
             raise e  # Re-raise the exception for further handling if necessary
-   
     def _count_classes(self, data: pd.DataFrame, axis: int) -> pd.DataFrame:
         """
         Count the occurrences of each class (0, 1, NaN) in the given DataFrame along the specified axis.
@@ -94,7 +91,6 @@ class PostarValidator:
         class_counts['Class NaN'] = data.apply(lambda x: x.isna().sum(), axis=axis)
         self.logger.log("Class counting completed. ✅")
         return class_counts
- 
     def _count_and_sort_postar_matrix(self, matched_postar_data):
         """
         Analyze the aligned POSTAR matrix to count the number of RBPs per gene and the number of genes per RBP,
@@ -115,7 +111,6 @@ class PostarValidator:
         self.df_count_genes_per_rbp['RBPs'] = self.df_count_genes_per_rbp.index
         self.df_count_genes_per_rbp = self.df_count_genes_per_rbp.reset_index(drop=True).sort_values(by='Class 1', ascending=False).reset_index(drop=True)
         self.logger.log("Count and sort completed. ✅")
-     
     def _match_scores_and_postar_data(self, postar_data: pd.DataFrame, scores_data: pd.DataFrame):
         """Match explainability scores with POSTAR data.
 
@@ -151,7 +146,6 @@ class PostarValidator:
             self.logger.log(f"Genes that did not match: {', '.join(self.genes_not_match)}. They will be eliminated in _integrate_postar_into_summary internal method", level=1)
         self.logger.log("Scores matched successfully. ")
         return matched_postar_data, matched_scores_data
-  
     def _integrate_postar_into_summary(self, matched_postar_data, results_summary):
         """
         Complete the results summary with POSTAR information.
@@ -180,7 +174,6 @@ class PostarValidator:
             self.logger.log(f"Removed {initial_count - final_count} entries from results summary that did not match with POSTAR data.", level=1)
         self.logger.log("Results successfully combined with POSTAR data. ✅")
         return updated_results_summary
- 
     def process_postar_and_scores(self, postar_data: pd.DataFrame, scores_data: pd.DataFrame, results_summary: pd.DataFrame):
         """
         Match the POSTAR data with explainability scores, count and sort the POSTAR matrix,
@@ -201,7 +194,6 @@ class PostarValidator:
         # Integrate POSTAR into the summary
         updated_results_summary = self._integrate_postar_into_summary(matched_postar_data, results_summary)
         return updated_results_summary
- 
     def calculate_rbp_thresholds(self, updated_results_summary: pd.DataFrame) -> pd.DataFrame:
         """
         Calculate optimal RBP thresholds from the combined results DataFrame.
@@ -219,40 +211,40 @@ class PostarValidator:
         self.updated_results_summary = updated_results_summary
         # Filter combined results to retain rows with valid Postar_Score values (0 or 1)
         combined_results_filtered = self.updated_results_summary.copy()[self.updated_results_summary['Postar_Score'].isin([0, 1])]
-        
         # Calculate absolute scores
         self.logger.log('Using ABSOLUTE scores for calculating the threshold scores. 📊')
         combined_results_filtered.loc[:, 'Score'] = combined_results_filtered['Score'].abs()   
-        
         # Lists to store thresholds and AUCs
         list_thresholds = []
         list_aucs = []
         list_unique_rbps = combined_results_filtered['RBP_ID'].unique().tolist()
-        threshold_figures_path = os.path.join(self.path_save_results, 'Threshold_figures')
+        threshold_figures_path = os.path.join(self.path_save_results, 'threshold_figures')
         os.makedirs(threshold_figures_path, exist_ok=True)
-   
         for rbp_id in tqdm(list_unique_rbps, desc="Calculating Optimal Thresholds"):
             df_current_rbp = combined_results_filtered[combined_results_filtered['RBP_ID'] == rbp_id]
-            
+            rbp_display_name = (df_current_rbp['RBP_name'].dropna().astype(str).mode().iat[0]
+                        if 'RBP_name' in df_current_rbp.columns and not df_current_rbp['RBP_name'].dropna().empty
+                        else rbp_id)
             # Calculate threshold
             fpr, tpr, thresholds = roc_curve(df_current_rbp['Postar_Score'], df_current_rbp['Score'])
             optimal_idx = np.argmax(tpr - fpr)
             optimal_threshold = thresholds[optimal_idx]
-            list_thresholds.append({'RBP_ID': rbp_id, 'Optimal_Score_Threshold': optimal_threshold})
-            
+            list_thresholds.append({'RBP_ID': rbp_id, 'RBP_name': rbp_display_name, 'Optimal_Score_Threshold': optimal_threshold})
             # Calculate AUC
             auc_score = roc_auc_score(df_current_rbp['Postar_Score'], df_current_rbp['Score'])
             list_aucs.append({'RBP_ID': rbp_id, 'AUC': auc_score})
-            if df_current_rbp['Postar_Score'].nunique() == 2:  # # Check if there are both 0s and 1s in df_current_rbp before plotting
+            if df_current_rbp['Postar_Score'].nunique() == 2:  # Check if there are both 0s and 1s in df_current_rbp before plotting
                 plot_distributions_and_roc_with_thresholds(
-                    df_current_rbp, 
-                    rbp_id, 
-                    optimal_threshold, 
-                    fpr, 
-                    tpr, 
-                    optimal_idx, 
-                    auc_score,
-                    path_save=threshold_figures_path
+                    df_current_rbp=df_current_rbp, 
+                    rbp_id=rbp_id, 
+                    optimal_threshold=optimal_threshold, 
+                    fpr=fpr, 
+                    tpr=tpr, 
+                    optimal_idx=optimal_idx, 
+                    auc_score=auc_score,
+                    path_save=threshold_figures_path, 
+                    #left_panel="hist", # << recomendado para evitar “colas negativas”
+                    rbp_display_name=rbp_display_name  # << nombre bonito en el título y archivo
                 )
             else:
                 self.logger.log(f"Skipping plot for RBP: {rbp_id} as it does not contain both classes. ⚠️")
@@ -261,7 +253,6 @@ class PostarValidator:
         self.logger.log("Optimal thresholds calculated successfully. ✅", level=1)
         self.logger.log(f"Mean AUC results: {self.auc_df.AUC.mean()}", level=1)
         return self.optimal_thresholds_df, self.auc_df
-
     def save_results(self) -> None:
         """
         Save the optimal thresholds and results summary DataFrames to CSV files.

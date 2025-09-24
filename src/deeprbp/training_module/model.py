@@ -45,6 +45,7 @@ class BaseLightningModule(L.LightningModule):
         self.verbose = verbose
         self.debugging = Logger(verbose=self.verbose)
         self.initialize_metrics()
+        
     def initialize_metrics(self):
         """Initializes metrics for training, validation, and testing. 
         This method sets up the following metrics using `MeanMetric` from `torchmetrics`:
@@ -406,11 +407,13 @@ class PredictorModel(BaseLightningModule):
                  gene_names: List[str], trans_names: List[str], getBM: pd.DataFrame,
                  input_features: Optional[str] = None, output_features: Optional[str] = None, 
                  verbose: int = 0):
+
         super().__init__(gene_names, trans_names, getBM, input_features, output_features, verbose)
         self.save_hyperparameters(ignore=['verbose']) # save all the variables passed to init simply by calling 
         self.input_size = input_size
         self.output_size = output_size
         self.learning_rate = 0.03
+        
         # 3 hidden layers: 1024, 1024 and 1024/8=128 (ReLU in hls)
         self.abundance_estimator = nn.Sequential(
             nn.Linear(input_size, 1024),
@@ -425,12 +428,14 @@ class PredictorModel(BaseLightningModule):
             nn.Linear(128, output_size),
             nn.Sigmoid()
         )
+
     def configure_optimizers(self):
         """Configures the optimizer"
         Returns:
             torch.optim.Optimizer: Configured optimizer instance.
         """
         return torch.optim.Adam(self.parameters(), lr=self.learning_rate)
+    
     def forward(self, rbp_expr, gen_expr):
         """Defines the forward pass of the model.
             Args:

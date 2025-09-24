@@ -45,9 +45,11 @@ class DeepLiftHandler:
         self.logger = Logger(verbose=verbose)
         self.config_explain = config_explain
         self.dataset = dataset
-        self.deeplift_explainer = DeepLift(model)
+        self.model = model
+        self.model.eval()  # BN en eval para atribuciones estables NEW
+        self.deeplift_explainer = DeepLift(self.model) 
         self.logger.log("✅ DeepLiftHandler initialized successfully.", level=1)
-    ###
+        #
     def prepare_rbp_reference_tensor(self):
         """
         Prepare reference RBP tensor based on the configuration.
@@ -61,11 +63,13 @@ class DeepLiftHandler:
             reference_rbp_tensor = torch.tensor(np.median(self.dataset.features['scaled_rbp_df'], axis=0), dtype=torch.float32)
             reference_rbp_tensor = torch.reshape(reference_rbp_tensor, (1, reference_rbp_tensor.size(0)))
             self.logger.log("[prepare_rbp_tensors] Median reference tensor created.")
+        #
         elif reference_type == 'knockout_reference':
             self.logger.log("[prepare_rbp_tensors] Using knockout (zeroed) RBP expression as reference.")
             reference_rbp_tensor = torch.zeros(1, self.dataset.features['scaled_rbp_df'].shape[1], dtype=torch.float32)
             self.logger.log("[prepare_rbp_tensors] knockout reference tensor created.")
-        elif reference_type == 'half_reference':
+        #
+        elif reference_type == 'half_reference': # esta no me acaba de convencer, no habria que hacer la mitad de la expresión actual??
             self.logger.log("[prepare_rbp_tensors] Using half-zeroed RBP expression as reference.")
             reference_rbp_tensor = torch.ones(1, self.dataset.features['scaled_rbp_df'].shape[1], dtype=torch.float32) * 0.5
             self.logger.log("[prepare_rbp_tensors] Half-zeroed reference tensor created.")
@@ -73,7 +77,7 @@ class DeepLiftHandler:
             self.logger.error(f"[prepare_rbp_tensors] Unknown reference type: '{reference_type}'", ValueError)
             raise ValueError(f"Unknown reference type: {reference_type}")
         return reference_rbp_tensor
-    ###
+  #
     def compute_attribution_scores(self, reference_rbp_tensor):
         """
         Compute attribution scores batch-wise for RBP x S x T.
@@ -92,7 +96,7 @@ class DeepLiftHandler:
             )
             list_batch_scores.append(scores_batch)
         return list_batch_scores
-    ###
+   #
     def _compute_attribution_scores_for_batch(self, target_node, scaled_rbp_inputs, reference_rbp_inputs, gene_expression_inputs):
         """
         Compute attribution scores for a batch of input data using the DeepLift explainer.
@@ -116,7 +120,7 @@ class DeepLiftHandler:
             additional_forward_args=gene_expression_inputs,
         )
         return scores
-    ###
+  #
     def reduce_batch_dimension(self, list_batch_scores):
         """
         Reduce the batch dimension of DeepLIFT scores to generate final TxRBP scores using a specified method.
@@ -137,6 +141,7 @@ class DeepLiftHandler:
             self.logger.error(f"[reduce_batch_dimension] Unknown batch reduction method: '{batch_reduction_type}'", ValueError)
             raise ValueError(f"Invalid batch reduction method: {batch_reduction_type}")
         batch_scores_np = [tensor.detach().numpy() for tensor in list_batch_scores]
+        #
         if batch_reduction_type == 't-statistic':
             self.logger.log("[reduce_batch_dimension] Calculating t-statistic.")
             scores_stack = np.stack(batch_scores_np, axis=0)
@@ -153,6 +158,7 @@ class DeepLiftHandler:
                     rbp = self.dataset.rbp_names[idx[1]]
                     self.logger.log(f"[reduce_batch_dimension] Zero std at Transcript: {trans}, RBP: {rbp}.")
             self.logger.log("[reduce_batch_dimension] T-statistic reduction completed.")
+        #
         elif batch_reduction_type == 'sum_scores':
             self.logger.log("[reduce_batch_dimension] Calculating sum of scores.")
             scores_stack = np.stack(batch_scores_np, axis=0)
@@ -160,7 +166,7 @@ class DeepLiftHandler:
             self.logger.log("[reduce_batch_dimension] Sum reduction completed.")
         df_deeplift_TxRBP = pd.DataFrame(result_scores, index=self.dataset.trans_names, columns=self.dataset.rbp_names)
         return df_deeplift_TxRBP
-    ###
+ #
     def calculate_scores_transcript_level(self):
         """
         Calculate attribution scores at the transcript level using the DeepLIFT method.
@@ -181,4 +187,33 @@ class DeepLiftHandler:
         df_scores_TxRBP = self.reduce_batch_dimension(list_batch_scores) 
         self.logger.log("✅ Batch dimension reduction complete. Scores aggregated.", level=1)
         return df_scores_TxRBP
-
+    #
+    def calculate_scores_hidden_layer(self): # new
+        """
+        Attributions from RBPs -> neurons of the last hidden layer (after the 128-unit ReLU).
+        Uses LayerDeepLift on self.model.abundance_estimator[8] (the final ReLU).
+        """
+        # Target layer (final ReLU of the 128 block)
+        layer_module = self.model.abundance_estimator[8]
+        # Hidden dimension (output of the preceding Linear layer)
+        hidden_dim = self.model.abundance_estimator[6].out_features  # 128
+        #
+        reference_tensor = self.prepare_rbp_reference_tensor()
+        rbp_inputs = self.dataset.features['scaled_rbp_df']
+        gene_inputs = self.dataset.features['gene_df'] # not used here, but kept for a consistent signature
+        #
+        layer_explainer = LayerDeepLift(self.model, layer_module)
+        list_batch_scores = []
+        for neuron_idx in tqdm(range(hidden_dim), desc="Calculating HL scores", unit="neuron"):
+            scores = layer_explainer.attribute(
+                inputs=rbp_inputs,
+                baselines=reference_tensor,
+                target=neuron_idx,
+                additional_forward_args=gene_inputs
+            )
+            list_batch_scores.append(scores)
+        #
+        # Reuse the same batch reduction; index = H0..H{hidden_dim-1}
+        df = self.reduce_batch_dimension(list_batch_scores)
+        df.index = [f"H{n}" for n in range(hidden_dim)]
+        return df

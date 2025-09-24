@@ -467,16 +467,6 @@ descarga de aquí : https://mips.helmholtz-muenchen.de/corum/?query=(fcg_id=1)
 
 
 
-
-
-
-
-
-
-
-
-
-
 ---
 
 # Explainability Module
@@ -499,7 +489,7 @@ This module aims to provide insights into how RBPs regulate gene expression. Bel
 
 ---
 
-## Data Access (EJECUTA ESTO OTRA VEZ POR SI ACASO)
+## Data Access  
 The necessary raw data for running this module is available through the provided Zenodo link (#TODO: AFTER YOU GET THE COMMUNITY PERMISSION UPLOAD THE LINK: https://zenodo.org/uploads/15337302) 
 
 . Below is a description of the files:  
@@ -557,24 +547,30 @@ Rscript /scratch/jsanchoz/DeepRBP/src/deeprbp/data_preprocessing/create_gene_rbp
     --events_regions_file Events_Regions_gc23_400nt.RData \
     --events_gencode_file EventsFound_gencode23.txt \
     --selected_tissue_cell_line HEK293 \
-    --getBM_file getBM.csv -->
+    --getBM_file getBM.csv  
 ```
 
 ## Run Executing DeepRBP Explainer
-To execute the explainability pipeline on our model trained with DeepLIFT, you have the following options:
+To execute the explainability pipeline on our trained model, you have the following options:
 * Running the Python script 
 * Submitting a job to an HPC queue
 * Running with Docker
+
+You can optionally compute attributions to the last hidden layer (HL×RBP) using `--analyze_hidden_layer`.
+This is supported only when `explanation_method: "DeepLIFT"`. If enabled with another method (e.g., `Pseudoknockdown`), the run will raise a clear error.
 
 ---
 
 ### **Option 1: Running the Scripts**  
 To execute DeepRBP Explainer with a specific tumor type on the **TCGA** test dataset, you need: An explainability config (e.g., config_model_explain_deeplift_knock_t_stat.yaml)
 
-New (recommended): pass --select_category from the command line for one or multiple tumor types.
-If --select_category is provided, it overrides any select_category in the YAML.
-If it’s not provided, the explainer falls back to select_category in the YAML (if present).
+**Recommended**: pass `--select_category` from the command line for one or multiple tumor types.
+- If `--select_category` is provided, it overrides any `select_category` in the YAML.
+- If it’s not provided, the explainer falls back to select_category in the YAML (if present).
+- If neither is provided, the run will raise an error asking for categories.
 
+In addition, if after applying `disease_condition/select_condition` there are no samples, the pipeline automatically retries without those filters. 
+If there are still no samples, it raises a clear error.
 
 #### **Example Configuration File (`config_model_explain_deeplift_knock_t_stat.yaml`)**
 
@@ -608,7 +604,7 @@ normal samples and then run for tumor samples in a new execution to study the di
 - **`scaler_dir`**: Directory where the scaler is saved (in a joblib format) along with the sigma value.
 
 ##### **Run examples**
-*A) Single tumor type (from CLI)*
+*A: Single tumor type (from CLI)*
 ```bash
 run-deeprbp-explainer \
   --config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_explainer_dl_kout_t_stat.yaml" \
@@ -618,7 +614,7 @@ run-deeprbp-explainer \
   --select_category "Liver_Hepatocellular_Carcinoma"
 ```
 
-*B)Multiple tumor types (comma-separated list)*
+*B: Multiple tumor types (comma-separated list)*
 ```bash
 run-deeprbp-explainer \
   --config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_explainer_dl_kout_t_stat.yaml" \
@@ -628,25 +624,44 @@ run-deeprbp-explainer \
   --select_category "Liver_Hepatocellular_Carcinoma,Acute_Myeloid_Leukemia,Kidney_Chromophobe"
 ```
 
+*C: Enable last hidden layer attributions (DeepLIFT only)*
+
+```bash
+run-deeprbp-explainer \
+  --config_path "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_explainer_dl_kout_t_stat.yaml" \
+  --model_ckpt_path "/scratch/jsanchoz/DeepRBP/final_results/run_deeprbp_predictor/checkpoint_model/deeprbp-predictor-epoch=124-validation_loss=0.08.ckpt" \
+  --scaler_dir "/scratch/jsanchoz/DeepRBP/final_results/run_deeprbp_predictor/data" \
+  --output_dir "/scratch/jsanchoz/DeepRBP/output/results/explainer_dl_kout_t_stat_HL" \
+  --select_category "Liver_Hepatocellular_Carcinoma" \
+  --analyze_hidden_layer
+```
 Output layout (per category)
 <output_dir>/<select_category>/df_scores_TxRBP.csv
 <output_dir>/<select_category>/df_scores_GxRBP.csv
 <output_dir>/<select_category>/result_table.csv
-
+<output_dir>/<select_category>/df_scores_HLxRBP.csv   # only when `--analyze_hidden_layer`
 
 Tip: You can leave select_category commented out in the YAML (recommended), and drive categories entirely from CLI for reproducible multi-run sweeps. If you keep it in the YAML, the CLI flag still takes precedence.
 
 ### **Option 2: Submit a Job in a HPC**   
+We provide a SLURM script that can toggle hidden-layer analysis via an environment variable.
 ```bash
 cd slurm
+# Without hidden layer (default):
 sbatch run_explainer.sh
+
+# With hidden layer:
+ANALYZE_HL=true sbatch run_explainer.sh
 ```
+The script builds the command and adds `--analyze_hidden_layer` only when `ANALYZE_HL=true`. Remember: hidden-layer attributions require explanation_method: "DeepLIFT".
+
 
 ### Option 3: Running with Docker
 ## (work to do here)
 --- -->
 
 As a result, you will receive three CSV files containing the scores of the RBPs at the transcript level (size: number of transcripts x RBPs) and at the gene level (size: number of genes x RBPs). Additionally, there will be a results table for each RBP-Gene (transcript) interaction with the following fields: RBP ID (attached RBP), RBP name, Gene ID (selected Gene), Gene name, Transcript ID (selected transcript of that Gene), Transcript name, Transcript biotype, Score, and the number of transcripts per gene (indicating how many transcripts the gene has).
+
 
 ## Evaluation of Explainability Scores Using POSTAR
 For evaluating explainability scores against POSTAR experimental data, the `run-postar-validator`command facilitates this process by integrating explainability scores with POSTAR data, allowing for validation and analysis of the results.
@@ -660,6 +675,45 @@ run-postar-validator \
   --scores_result_dir "/scratch/jsanchoz/DeepRBP/output/results/explainability_deeplift_knock_t_stat/results" \
   --output_dir "/scratch/jsanchoz/DeepRBP/output/results/explainability_deeplift_knock_t_stat/results"
 ```
+
+# Liver
+OUT="/scratch/jsanchoz/DeepRBP/output/results/explainability/explainer_dl_kout_t_stat/Liver_Hepatocellular_Carcinoma/run_postar_validator"
+mkdir -p "$OUT"
+LOG="$OUT/run_postar_validator_$(date +%Y%m%d_%H%M%S).out"
+
+run-postar-validator \
+  --postar_matrix_dir "/scratch/jsanchoz/DeepRBP/data/explainability_module/postar3/processed" \
+  --postar_file "human_liver_GxRBP.csv" \
+  --scores_result_dir "/scratch/jsanchoz/DeepRBP/output/results/explainability/explainer_dl_kout_t_stat/Liver_Hepatocellular_Carcinoma" \
+  --output_dir "$OUT" \
+  >"$LOG" 2>&1
+
+# kidney
+OUT="/scratch/jsanchoz/DeepRBP/output/results/explainability/explainer_dl_kout_t_stat/Kidney_Chromophobe/run_postar_validator"
+mkdir -p "$OUT"
+LOG="$OUT/run_postar_validator_$(date +%Y%m%d_%H%M%S).out"
+
+set -o pipefail
+run-postar-validator \
+  --postar_matrix_dir "/scratch/jsanchoz/DeepRBP/data/explainability_module/postar3/processed" \
+  --postar_file "human_kidney_GxRBP.csv" \
+  --scores_result_dir "/scratch/jsanchoz/DeepRBP/output/results/explainability/explainer_dl_kout_t_stat/Kidney_Chromophobe" \
+  --output_dir "$OUT" \
+  |& tee -a "$LOG"
+
+# aml
+OUT="/scratch/jsanchoz/DeepRBP/output/results/explainability/explainer_dl_kout_t_stat/Acute_Myeloid_Leukemia/run_postar_validator"
+mkdir -p "$OUT"
+LOG="$OUT/run_postar_validator_$(date +%Y%m%d_%H%M%S).out"
+
+set -o pipefail
+run-postar-validator \
+  --postar_matrix_dir "/scratch/jsanchoz/DeepRBP/data/explainability_module/postar3/processed" \
+  --postar_file "human_aml_GxRBP.csv" \
+  --scores_result_dir "/scratch/jsanchoz/DeepRBP/output/results/explainability/explainer_dl_kout_t_stat/Acute_Myeloid_Leukemia" \
+  --output_dir "$OUT" \
+  |& tee -a "$LOG"
+
 
 ### Command-Line Arguments
 The following command-line arguments are required to execute the script:
@@ -693,6 +747,52 @@ Rscript /scratch/jsanchoz/DeepRBP/src/deeprbp/explainability_module/postar_valid
   --index_end 4 \
   --max_iterations 7
 ```
+
+# Liver
+Rscript /scratch/jsanchoz/DeepRBP/src/deeprbp/explainability_module/postar_validation/run_postar_plot_generation.R \
+  --input_path "/scratch/jsanchoz/DeepRBP/output/results/explainability/explainer_dl_kout_t_stat/Liver_Hepatocellular_Carcinoma/run_postar_validator/postar_validation" \
+  --results_filename "result_table_completed.csv" \
+  --count_genes_per_rbp_file "count_genes_per_rbp.csv" \
+  --count_rbps_per_gen_file "count_rbps_per_gen.csv" \
+  --getBM_path "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps" \
+  --getBM_filename "getBM.csv" \
+  --output_path "/scratch/jsanchoz/DeepRBP/output/results/explainability/explainer_dl_kout_t_stat/Liver_Hepatocellular_Carcinoma/run_postar_validator/postar_validation" \
+  --output_filename "plot_score_results.pdf" \
+  --save_plot TRUE \
+  --index_start 1 \
+  --index_end 4 \
+  --max_iterations 7
+
+# kidney
+Rscript /scratch/jsanchoz/DeepRBP/src/deeprbp/explainability_module/postar_validation/run_postar_plot_generation.R \
+  --input_path "/scratch/jsanchoz/DeepRBP/output/results/explainability/explainer_dl_kout_t_stat/Liver_Hepatocellular_Carcinoma/run_postar_validator/postar_validation" \
+  --results_filename "result_table_completed.csv" \
+  --count_genes_per_rbp_file "count_genes_per_rbp.csv" \
+  --count_rbps_per_gen_file "count_rbps_per_gen.csv" \
+  --getBM_path "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps" \
+  --getBM_filename "getBM.csv" \
+  --output_path "/scratch/jsanchoz/DeepRBP/output/results/explainability/explainer_dl_kout_t_stat/Liver_Hepatocellular_Carcinoma/run_postar_validator/postar_validation" \
+  --output_filename "plot_score_results.pdf" \
+  --save_plot TRUE \
+  --index_start 1 \
+  --index_end 4 \
+  --max_iterations 7
+
+# aml
+Rscript /scratch/jsanchoz/DeepRBP/src/deeprbp/explainability_module/postar_validation/run_postar_plot_generation.R \
+  --input_path "/scratch/jsanchoz/DeepRBP/output/results/explainability/explainer_dl_kout_t_stat/Liver_Hepatocellular_Carcinoma/run_postar_validator/postar_validation" \
+  --results_filename "result_table_completed.csv" \
+  --count_genes_per_rbp_file "count_genes_per_rbp.csv" \
+  --count_rbps_per_gen_file "count_rbps_per_gen.csv" \
+  --getBM_path "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps" \
+  --getBM_filename "getBM.csv" \
+  --output_path "/scratch/jsanchoz/DeepRBP/output/results/explainability/explainer_dl_kout_t_stat/Liver_Hepatocellular_Carcinoma/run_postar_validator/postar_validation" \
+  --output_filename "plot_score_results.pdf" \
+  --save_plot TRUE \
+  --index_start 1 \
+  --index_end 4 \
+  --max_iterations 7
+  
 
 This command generates box plots illustrating the distribution of scores across different RNA Binding Proteins (RBPs) and genes, utilizing POSTAR labels for classification. Additionally, the plot displays the results of conducting a Wilcoxon test across RBPs or genes between the groups 0 and 1 of POSTAR, allowing you to assess whether the difference in medians is statistically significant. You can see the results obtained in the Wilcoxon test in `stat_test_rbps.csv`and `stat_test_genes.csv`.
 
@@ -734,7 +834,6 @@ The parameters, in order, are as follows:
 In this section we perform a exploratory analysis of RBP explainability scores through the lens of protein complexes to investigate whether RBPs that form part of the same protein complex (e.g., CORUM) exhibit higher correlation in their explainability score patterns across genes compared to unrelated RBPs.
 
 A correlation matrix of shape n_RBPs × n_RBPs is computed from the DeepRBP score matrix (n_RBPs × n_genes), measuring similarity between RBP profiles. Then we:
-
 - reorder the correlation matrix to group complex RBPs together.
 - generate a minimal pheatmap-style heatmap, focusing on the upper triangle to simplify large complexes.
 - perform a Wilcoxon rank-sum test to compare within-complex vs outside-complex correlation values.
@@ -747,6 +846,7 @@ To run this module:
 ```bash
 sh /scratch/jsanchoz/DeepRBP/slurm/run_corum_complex_analysis.sh
 ```
+
 ### NMF-based Complex Detection Analysis
 In this section, we apply Non-negative Matrix Factorization (NMF) to discover latent protein complexes from gene × RBP explainability score matrices. Starting from the number of known CORUM complexes, we vary the number of components (complexes) and evaluate reconstruction error to find a meaningful decomposition.
 
@@ -760,7 +860,6 @@ To run:
 ```bash
 sh /scratch/jsanchoz/DeepRBP/slurm/run_nmf_complex_analysis.sh
 ```
-
 
 ## Evaluation of Explainability Scores Using real RBP knockdown data
 This section describes how to validate explainability scores using real RNA-binding protein (RBP) knockdown RNA-seq data.
