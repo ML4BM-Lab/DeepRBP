@@ -6,21 +6,6 @@ from optuna.storages import RDBStorage
 from optuna.samplers import TPESampler
 from optuna.pruners import MedianPruner
 
-# def get_sampler_and_pruner(): # used for first 80 trials (fase 1 broad)
-#     sampler = TPESampler(
-#                     n_startup_trials=75, # Exploración inicial
-#                     multivariate=True,
-#                     group=True # por nuestro espacio jerárquico
-#     )
-#     pruner = MedianPruner(
-#         n_startup_trials=25, # Espera 25 trials antes de podar
-#         n_warmup_steps=470, # Espera alrededor de 10 epochs antes de evaluar
-#         interval_steps=47   # Revisa cada 1 epoch promedio
-#     )
-#     print(f"🔍 Sampler configuration: n_startup_trials=75, multivariate=True, group=True")
-#     print(f"🔍 Pruner configuration: n_startup_trials=20, n_warmup_steps=470, interval_steps=47")
-#     return sampler, pruner
-
 def get_sampler_and_pruner(seed: int = 42):
     sampler = TPESampler(
         n_startup_trials=10,       # pocas aleatorias antes de TPE “pleno”

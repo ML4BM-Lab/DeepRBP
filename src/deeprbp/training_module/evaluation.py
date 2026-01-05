@@ -203,12 +203,12 @@ def evaluate_and_visualize_metrics_by_category(
     categories = metadata_df[dm.sample_category].unique().tolist()
     results_list = [] # Initialize a list to store results
     grid_panels = []
-    
+
     for index, category in enumerate(categories):
         print_if_main('\n')
         log_section_separator(f"Processing Category: {category} ({index + 1}/{len(categories)})")
         print_if_main('\n')
-        
+
         # Filter samples for the current category
         category_samples = metadata_df.loc[metadata_df[dm.sample_category] == category].index
         test_data_copy = {key: df.copy() for key, df in test_data.items()} # Create a copy of the test data to avoid modifying the original data
@@ -217,13 +217,13 @@ def evaluate_and_visualize_metrics_by_category(
         test_loader = DataLoader(test_subdataset, batch_size=len(test_subdataset)) #adjust_batch_size(test_subdataset, batch_size)
         print_if_main(f"[evaluate_and_visualize_metrics_by_category] 🔮 Generating predictions for category '{category}'...")
         predictions, true_values = generate_predictions(trainer, model, dm.predict_dataloader(mode='predict', custom_loader=test_loader))
-        
+
         # Calculate metrics
         metrics = calculate_metrics(predictions, true_values, test_subdataset.gene_names, getBM, test_subdataset.trans_names)
         metrics['category'] = category
         print_if_main(f"[evaluate_and_visualize_metrics_by_category] 📈 Metrics for category '{category}': {metrics}\n")
         results_list.append(metrics)
-        
+
         # Fill data for grid plot
         short = TCGA_CODE.get(category, category)  # usa código si existe
         grid_panels.append({
@@ -249,8 +249,8 @@ def evaluate_and_visualize_metrics_by_category(
                     labels_df=test_subset['isoform_df'],
                     genes_df=test_subset['gene_df'],  
                     category=category,
-                    output_dir=os.path.join(output_dir, 'pred_label_expression_ratio_histogram', set_name, category))
-                
+                    output_dir=os.path.join(output_dir, 'pred_label_expression_ratio_histogram', set_name, category))     
+
     # Save results
     results_df = pd.DataFrame(results_list)
     results_df.to_csv(os.path.join(output_dir, f'{set_name}_tumor_category_results.csv'), index=False)
@@ -272,30 +272,32 @@ def evaluate_and_visualize_metrics_by_category(
         )
     print_if_main(f"[evaluate_and_visualize_metrics_by_category] ✅ Done for split '{set_name}'.")
 
-#### #### #### #### #### #### #### #### #### #### #### ####  remove this when plot is definitive
+
+#### #### #### #### #### #### #### #### #### #### #### ####  remove this when plot is definitive  
 # output_dir = '/scratch/jsanchoz/DeepRBP/output/results/run_deeprbp_predictor'
 # panels = load_panels(os.path.join(output_dir, "test_panels.pkl.gz"))
 
 # for p in panels:
 #     if p.get("category") in (
-#         "Pheochromocytoma_&_Paraganglioma",
-#         "Pheochromocytoma_and_Paraganglioma",
-#     ) or p.get("short") in (
-#         "Pheochromocytoma_&_Paraganglioma",
-#         "Pheochromocytoma_and_Paraganglioma",
-#     ):
+#        "Pheochromocytoma_&_Paraganglioma",
+#          "Pheochromocytoma_and_Paraganglioma",
+#      ) or p.get("short") in (
+#          "Pheochromocytoma_&_Paraganglioma",
+#          "Pheochromocytoma_and_Paraganglioma",
+#      ):
 #         p["short"] = "PCPG"
 
 # plot_small_multiples_real_vs_pred_grid(
-#     panels=panels,
-#     set_name="test",
-#     output_dir=output_dir,
-#     order_codes=list(TCGA_CODE.values()),
-#     axis_range=(0, 15),          # si quieres rango idéntico en todos
-#     cmap="plasma",              # o "magma", "plasma"
-#     density_scale="log",         # más contraste en zonas densas
-#     share_density_norm=True,     # mismo mapeo de color en todos los paneles
-#     show_colorbar=True          # lo puedes activar si quieres comprobar la escala
+#      panels=panels,
+#      set_name="test",
+#      output_dir=output_dir,
+#      order_codes=list(TCGA_CODE.values()),
+#      axis_range=(0, 15),          # si quieres rango idéntico en todos
+#      cmap="plasma",              # o "magma", "plasma"
+#      density_scale="log",         # más contraste en zonas densas
+#      share_density_norm=True,     # mismo mapeo de color en todos los paneles
+#      show_colorbar=True,          # lo puedes activar si quieres comprobar la escala
+#      font_scale=1.40
 # )
 
 #### #### #### #### #### #### #### #### #### #### #### #### 

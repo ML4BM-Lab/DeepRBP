@@ -48,6 +48,7 @@ class PrepareData:
         self.scaler = None
         self.logger.log("✅ Initialization done", level=1)
         print_section_separator()
+
     def load_data(self, path: str,
                   select_category: str = None, 
                   disease_condition: str = None, 
@@ -86,6 +87,7 @@ class PrepareData:
         self.logger.log("✅ Data import completed", level=self.verbose)
         print_section_separator()
         return data
+
     def split_data(self, data: Dict[str, pd.DataFrame], test_fraction: float, 
                    test_name: str = 'validation') -> Tuple[Dict[str, pd.DataFrame], Dict[str, pd.DataFrame]]:
         """Splits data into training and validation (or test) sets.
@@ -102,9 +104,10 @@ class PrepareData:
             # Split the data into training and validation sets
             train_data, valid_data = prep_data.split_data(data, sample_category='detailed_category', test_fraction=0.2)
         """
-        self.logger.log("\n✂️ Splitting data into train and validation (or test) sets...", level=self.verbose)
+        self.logger.log("\n Splitting data into train and validation (or test) sets...", level=self.verbose)
         splitter = DataSplitter(data, self.sample_category)
         return splitter.split_data_sets(test_fraction, test_name)
+
     def save_split_data(self, train_data: pd.DataFrame, valid_data: pd.DataFrame):
         """Saves the training and validation data to specified paths.
         Args:
@@ -121,6 +124,7 @@ class PrepareData:
         if self.path_save_data is None:
             self.logger.error("❌ Output directory is not set. Cannot save data.")
             raise ValueError("Output directory is not defined. Set output_dir during initialization.")
+
         # Define paths and filenames for saving data
         data_to_save = [
             (train_data, os.path.join(self.path_save_data, 'Train'), { # new he quitado aqui los nombres de train y val en los ficheros que está guardando para que sea consistente
@@ -142,6 +146,7 @@ class PrepareData:
             self.logger.log(f"[*] Data saved successfully.\n", level=self.verbose) 
         self.logger.log("✅ Data saving completed", level=self.verbose)
         print_section_separator()
+
     def fit_scaler(self, train_data: dict[pd.DataFrame]):
         """Fits the scaler to the training data.
         Args:
@@ -163,6 +168,7 @@ class PrepareData:
         self.scaler.save(self.path_save_data)
         self.logger.log(f"✅ Scaler has been saved in {self.path_save_data}.", level=self.verbose)
         print_section_separator()
+
     # Alternative method: if you already have an scaler you can load it
     def load_scaler(self, folder_path: str):
         """Load an already trained scaler from the specified directory and assign it to self.scaler.
@@ -184,6 +190,7 @@ class PrepareData:
         except Exception as e:
             self.logger.error(f"❌ [Scaler:load_scaler] An unexpected error occurred: {e}", level=self.verbose)
         print_section_separator()
+
     def scale_data(self, data: dict[pd.DataFrame]):
         """Transforms the provided dict[pd.DataFrame] in the RBP expression dataframe using the fitted scaler.
 
@@ -209,6 +216,7 @@ class PrepareData:
         scaled_data['scaled_rbp_df'] = self.scaler.transform(data['rbp_df'])  # Scale the RBP data
         print('\n')
         return scaled_data
+
     def scale_train_val_data(self, train_data: dict[pd.DataFrame], val_data: dict[pd.DataFrame]) -> tuple:
         """Scales both training and validation datasets using the fitted scaler.
 
@@ -231,6 +239,7 @@ class PrepareData:
         self.logger.log("✅ Train and Val data scaling completed.", level=self.verbose)
         print_section_separator()
         return scaled_train_data, scaled_val_data
+
     def create_tensor_dataset(self, data: dict[pd.DataFrame]) -> DeepRBPExpressionDataset:
         """Creates a DeepRBPExpressionDataset instance from a provided dictionary of DataFrames.
 
@@ -253,6 +262,7 @@ class PrepareData:
         )
         self.logger.log("✅ Tensor dataset created.", level=self.verbose)
         return dataset
+        
     def create_data_loader(self, dataset: DeepRBPExpressionDataset, batch_size: int, shuffle: bool = False, drop_last: bool = False, 
                            num_workers: int = 0) -> DataLoader:
         """Creates a DataLoader instance for the provided dataset.
@@ -277,4 +287,3 @@ class PrepareData:
         )
         self.logger.log("✅ Data loader created.", level=self.verbose)
         return loader
-

@@ -6,8 +6,11 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from matplotlib import transforms
 import re
+from matplotlib import transforms
 from typing import Optional, Tuple, List, Dict, Any
 from matplotlib.ticker import FixedLocator
+from matplotlib import ticker as mticker
+from matplotlib.patches import Patch
 
 from .utils_complex import _infer_tumor_from_output_dir
 
@@ -51,16 +54,6 @@ def plot_correlation_boxplot(flat_complex, flat_outside, complex_idx=None, outpu
     sns.set_theme(style="white", rc={"axes.grid": False})
     fig, ax = plt.subplots(figsize=(7.2, 5.2), dpi=300)
 
-    # # Boxplot without outliers (whis 5–95) and emphasized medians
-    # sns.boxplot(
-    #     x="Group", y="Correlation", data=data, ax=ax, width=0.55,
-    #     showfliers=False, whis=(5, 95), palette=palette, saturation=1,
-    #     medianprops={"linewidth": 2.2, "color": "black"},
-    #     boxprops={"linewidth": 1.4}, whiskerprops={"linewidth": 1.4}, capprops={"linewidth": 1.4},
-    # )
-    # ax.set_xticklabels(labels, fontsize=11)
-
-    # ✅ FIX: añade hue="Group" (y quitamos cualquier legend kw)
     ax = sns.boxplot(
         x="Group", y="Correlation", hue="Group", data=data, ax=ax,
         width=0.55, showfliers=False, whis=(5, 95), palette=palette, dodge=False,
@@ -71,7 +64,6 @@ def plot_correlation_boxplot(flat_complex, flat_outside, complex_idx=None, outpu
     if ax.get_legend() is not None:
         ax.get_legend().remove()
 
-    # ✅ FIX: fija los ticks antes de poner etiquetas
     ax.xaxis.set_major_locator(FixedLocator([0, 1]))
     ax.set_xticks([0, 1])
     ax.set_xticklabels(labels, fontsize=11)
@@ -115,119 +107,154 @@ def plot_correlation_boxplot(flat_complex, flat_outside, complex_idx=None, outpu
         fig.savefig(os.path.join(output_dir, fname), dpi=300, bbox_inches="tight")
         plt.close(fig)
 
-def plot_overview_boxplots_cached(
+def plot_overview_boxplots(
     df_long: pd.DataFrame,
     per_pair_info: List[Dict[str, Any]],
     output_dir: Optional[str] = None,
     filename: str = "correlation_boxplot_overview.png",
     x_by: str = "Complex",
-    stouffer: Optional[Tuple[float, float]] = None,   # (z_st, p_st)
-    fisher: Optional[Tuple[float, float]] = None,     # (chi_f, p_f)
-    p_yfrac: float = 0.88,                            # altura (fracción eje Y) para las barras/p
-    w_per_cat: float = 1.00,
-    box_width: float = 0.30,
-    xtick_rotation: int = 0
-) -> None:
+    # Robust by default; set both to None to plot the full range
+    y_lower_q: Optional[float] = 5.0,
+    y_upper_q: Optional[float] = 99.5,
+    inner_sep: Optional[float] = None,       # None => auto from box_width
+    box_width: float = 0.22,
+    colors: Tuple[str, str] = ("#4C72B0", "#DD8452"),
+    violin: bool = False,
+    violin_alpha: float = 0.18,
+    star_pad_frac: float = 0.012,            # vertical pad above the max (fraction of span)
+    bracket_height_frac: float = 0.008,      # bracket height (fraction of span)
+):
+    import os, re
+    import numpy as np
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Patch
+    from matplotlib import ticker as mticker
+
+    # ---- Order and data ----
     order = [d["key"] for d in per_pair_info] if x_by == "Complex" else [d["name"] for d in per_pair_info]
-    n_cat = max(1, len(order))
-    fig_w = max(7.0, 1.2 + w_per_cat * n_cat)
+    x_col = "Complex" if x_by == "Complex" else "Name"
+    n_cat = len(order)
 
-    # ↓↓↓ Tipografías más pequeñas en todo el plot
+    complex_vals, outside_vals = [], []
+    for cat in order:
+        vc = df_long[(df_long[x_col] == cat) & (df_long["Group"] == "Complex")]["Correlation"].dropna().to_numpy()
+        vo = df_long[(df_long[x_col] == cat) & (df_long["Group"] == "Outside")]["Correlation"].dropna().to_numpy()
+        complex_vals.append(vc)
+        outside_vals.append(vo)
+
+    if inner_sep is None:
+        inner_sep = box_width * 0.60
+    centers = np.arange(n_cat, dtype=float)
+    pos_complex = centers - inner_sep
+    pos_outside = centers + inner_sep
+
+    # ---- Y limits (percentiles lado a lado; full-range sólo donde sea None) ----
+    y_all = df_long["Correlation"].to_numpy(float)
+
+    def _q_or_extreme(arr, q, extreme_fn):
+        return float(extreme_fn(arr)) if q is None else float(np.nanpercentile(arr, q))
+
+    y_lo = _q_or_extreme(y_all, y_lower_q, np.nanmin)   # usa percentil si y_lower_q != None
+    y_hi = _q_or_extreme(y_all, y_upper_q, np.nanmax)   # usa percentil si y_upper_q != None
+
+    # Evita rango degenerado
+    if not np.isfinite(y_lo): y_lo = -1.0
+    if not np.isfinite(y_hi): y_hi = 1.0
+    if y_hi <= y_lo:
+        y_hi = y_lo + 1e-3
+
+    span = y_hi - y_lo
+
+    # ---- Figure ----
+    fig_w = max(6.0, 0.9 + 0.9 * n_cat)
     with plt.rc_context({
-        "font.size": 9, "axes.titlesize": 11, "axes.labelsize": 10,
-        "xtick.labelsize": 9, "ytick.labelsize": 9, "legend.fontsize": 9
+        "font.size": 9, "axes.titlesize": 18, "axes.labelsize": 11,
+        "xtick.labelsize": 11, "ytick.labelsize": 11, "legend.fontsize": 10
     }):
-        sns.set_theme(style="white", rc={"axes.grid": False})
-        fig, ax = plt.subplots(figsize=(fig_w, 5.0), dpi=300)
+        fig, ax = plt.subplots(figsize=(fig_w, 4.8), dpi=300)
 
-        palette = ["#0072B2", "#E69F00"]  # Okabe–Ito
-        x_col = "Complex" if x_by == "Complex" else "Name"
-        sns.boxplot(
-            data=df_long, x=x_col, y="Correlation", hue="Group", order=order,
-            width=box_width, dodge=True, showfliers=False, whis=(5, 95),
-            palette=palette,
-            medianprops={"linewidth": 1.6, "color": "black"},
-            boxprops={"linewidth": 1.1}, whiskerprops={"linewidth": 1.1}, capprops={"linewidth": 1.1},
-            ax=ax
+        col_c, col_o = colors
+
+        # Optional violins (drawn first)
+        if violin:
+            vwidth = box_width * 1.6
+            vp1 = ax.violinplot(complex_vals, positions=pos_complex, widths=vwidth, showextrema=False)
+            for b in vp1['bodies']:
+                b.set_facecolor(col_c); b.set_edgecolor('none'); b.set_alpha(violin_alpha)
+            vp2 = ax.violinplot(outside_vals, positions=pos_outside, widths=vwidth, showextrema=False)
+            for b in vp2['bodies']:
+                b.set_facecolor(col_o); b.set_edgecolor('none'); b.set_alpha(violin_alpha)
+
+        # Boxplots on top
+        bp1 = ax.boxplot(
+            complex_vals, positions=pos_complex, widths=box_width,
+            whis=(5, 95), showfliers=False, patch_artist=True, manage_ticks=False
+        )
+        bp2 = ax.boxplot(
+            outside_vals, positions=pos_outside, widths=box_width,
+            whis=(5, 95), showfliers=False, patch_artist=True, manage_ticks=False
         )
 
-        # Leyenda arriba, más compacta
-        h, l = ax.get_legend_handles_labels()
-        if ax.get_legend() is not None:
-            ax.get_legend().remove()
-        leg = ax.legend(h, l, title="", loc="lower center",
-                        bbox_to_anchor=(0.5, 1.10), ncol=2, frameon=True, prop={"size": 9})
-        leg.get_frame().set_alpha(0.96)
-        leg.get_frame().set_facecolor("white")
-        leg.get_frame().set_edgecolor("#999999")
-        leg.get_frame().set_linewidth(0.8)
+        def _style(bp, face):
+            for box in bp["boxes"]:
+                box.set_facecolor(face); box.set_alpha(0.92)
+                box.set_edgecolor("black"); box.set_linewidth(1.0)
+            for med in bp["medians"]:
+                med.set_color("black"); med.set_linewidth(1.8)
+            for w in bp["whiskers"]:
+                w.set_linewidth(1.0)
+            for cap in bp["caps"]:
+                cap.set_linewidth(1.0)
+        _style(bp1, col_c); _style(bp2, col_o)
 
-        # Título (TCGA si se puede inferir)
-        if output_dir:
-            tcga, long_name = _infer_tumor_from_output_dir(output_dir)
-            fig.suptitle(f"{tcga} — {long_name.replace('_',' ')}", fontsize=14, weight="bold", y=0.98)
-        else:
-            fig.suptitle("TCGA overview", fontsize=14, weight="bold", y=0.98)
-
-        # Subtítulo
-        subtitle = []
-        if stouffer is not None:
-            z_st, p_st = stouffer
-            subtitle.append(f"Stouffer: Z = {z_st:.2f}, p = {p_st:.2e}")
-        if fisher is not None:
-            chi_f, p_f = fisher
-            subtitle.append(f"Fisher: χ² = {chi_f:.2f}, p = {p_f:.2e}")
-        if subtitle:
-            ax.set_title("   |   ".join(subtitle), fontsize=9.5, pad=6)
-
-        ax.set_xlabel("Complexes", labelpad=6, fontsize=10)
-        ax.set_ylabel(r"Pearson correlation ($r$)", fontsize=10)
-        sns.despine(ax=ax)
-
-        # X labels sin “Spliceosome, ” ni “ complex”
+        # X ticks
+        ax.set_xticks(centers)
         def _short(lbl: str) -> str:
             return re.sub(r'^\s*Spliceosome,\s*', '', lbl).replace(" complex", "")
-        
-        # ax.set_xticklabels([_short(t.get_text()) for t in ax.get_xticklabels()],
-        #                    rotation=xtick_rotation, ha="center")
+        ax.set_xticklabels([_short(c) for c in order])
 
-        # ✅ FIX: usa las posiciones esperadas (0..len(order)-1)
-        tick_locs = np.arange(len(order))
-        ax.xaxis.set_major_locator(FixedLocator(tick_locs))
-        ax.set_xticks(tick_locs)
-        ax.set_xticklabels([_short(lbl) for lbl in order], rotation=xtick_rotation, ha="center")
+        # Legend (top center, compact)
+        patches = [
+            Patch(facecolor=col_c, edgecolor="black", label="Complex"),
+            Patch(facecolor=col_o, edgecolor="black", label="Non-complex"),
+        ]
+        leg = ax.legend(handles=patches, loc="lower center",
+                        bbox_to_anchor=(0.5, 1.06), ncol=2, frameon=True)
+        leg.get_frame().set_alpha(0.96)
+        leg.get_frame().set_linewidth(0.8)
 
-        # Límites Y robustos
-        y = df_long["Correlation"].to_numpy(float)
-        q1, q99 = np.nanpercentile(y, [1, 99])
-        span    = max(q99 - q1, 1e-3)
-        ax.set_ylim(q1 - 0.02 * span, q99 + 0.06 * span)
+        # Title: TCGA short (if we can infer it)
+        if output_dir:
+            tcga, _ = _infer_tumor_from_output_dir(output_dir)
+            fig.suptitle(tcga, weight="bold", y=0.98)
+        else:
+            fig.suptitle("TCGA", weight="bold", y=0.98)
 
-        # Barras + ⭐ y p en dos líneas
-        sep = (box_width / 2.0) * 1.05
-        left_off, right_off = -sep, +sep
-        h_axes = 0.014
-        trans_line = transforms.blended_transform_factory(ax.transData, ax.transAxes)
-        tick_lookup = {lab: i for i, lab in enumerate(order)}
+        ax.set_xlabel("Spliceosome Complexes")
+        ax.set_ylabel(r"Pearson correlation ($r$)")
 
-        for d in per_pair_info:
-            cat = d["key"] if x_by == "Complex" else d["name"]
-            if cat not in tick_lookup:
-                continue
-            i = tick_lookup[cat]
-            p = float(d["pval"])
-            x0, x1 = i + left_off, i + right_off
+        # Final Y-lims with small padding to ensure stars/brackets fit
+        ax.set_ylim(y_lo, y_hi + 0.08 * span)
+        ax.yaxis.set_major_locator(mticker.MaxNLocator(nbins=5, prune="both"))
+        ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%.2f"))
 
-            # bracket
-            ax.plot([x0, x0, x1, x1],
-                    [p_yfrac - h_axes, p_yfrac, p_yfrac, p_yfrac - h_axes],
-                    transform=trans_line, color="black", lw=1.0, clip_on=False)
-            # ⭐ arriba
-            ax.text((x0 + x1) / 2, p_yfrac + h_axes * 1.15, _p_to_stars(p),
-                    transform=trans_line, ha="center", va="bottom", fontsize=10)
-            # (p=...) debajo de la estrella (pero aún encima del bracket)
-            ax.text((x0 + x1) / 2, p_yfrac + h_axes * 0.10, f"(p={p:.1e})",
-                    transform=trans_line, ha="center", va="bottom", fontsize=7.5)
+        # Tight horizontal margins
+        ax.margins(x=0.02)
+        ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
+
+        # Stars above the highest observed point per complex
+        pad = star_pad_frac * span
+        bh  = bracket_height_frac * span
+        for i, info in enumerate(per_pair_info):
+            p = float(info["pval"])
+            max_val = float(np.nanmax(np.r_[complex_vals[i], outside_vals[i]]))
+            y_base = max_val + pad
+            x0, x1 = pos_complex[i], pos_outside[i]
+            ax.plot([x0, x0, x1, x1], [y_base, y_base + bh, y_base + bh, y_base],
+                    color="black", lw=1.0, clip_on=False)
+            ax.text((x0 + x1) / 2, y_base + bh * 0.95, _p_to_stars(p),
+                    ha="center", va="bottom", fontsize=12, fontweight="bold")
 
         plt.tight_layout()
         if output_dir:
@@ -236,40 +263,3 @@ def plot_overview_boxplots_cached(
             plt.close(fig)
         else:
             plt.show()
-
-
-# def plot_upper_triangle_corr_matrix(corr_matrix, complex_idx=None, output_dir=None, subset_size=100): # muy mejorable
-#     """
-#     Plot a simple heatmap showing only the upper triangle (including diagonal) of a subset
-#     of a large correlation matrix, without labels or clustering.
-
-#     Parameters:
-#     - corr_matrix: pd.DataFrame, square correlation matrix.
-#     - complex_idx: str or int or None (default None)
-#         Identifier of the protein complex to show in the plot title.
-#     - output_dir: str or None, path to save the figure (if None, no save)
-#     - subset_size: int, number of genes to keep for plotting (default 100)
-#     """
-#     # Subset matrix
-#     corr_small = corr_matrix.iloc[:subset_size, :subset_size].copy()
-#     # Create mask for lower triangle
-#     mask = np.tril(np.ones_like(corr_small, dtype=bool), k=-1)
-#     plt.figure(figsize=(8,8))
-#     sns.set_theme(style="white")
-#     ax = sns.heatmap(
-#         corr_small,
-#         mask=mask,
-#         cmap="RdYlBu_r",
-#         square=True,
-#         cbar_kws={"label": "Correlation"},
-#         xticklabels=False,
-#         yticklabels=False,
-#         linewidths=0,
-#         vmin=0, vmax=1
-#     )
-#     plt.title("Upper Triangle Correlation Heatmap (subset)", fontsize=14, fontweight='bold')
-#     if output_dir:
-#         os.makedirs(output_dir, exist_ok=True)
-#         path = os.path.join(output_dir, f"upper_triangle_heatmap_{complex_idx}.png")
-#         plt.savefig(path, dpi=300, bbox_inches='tight')
-#         plt.close()

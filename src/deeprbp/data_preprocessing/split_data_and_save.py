@@ -19,6 +19,7 @@ def run_split_data_and_save(config_parser, output_dir: str):
     data_importer = DataImporter(config_parser.get('path_files'))
     data = data_importer.load()
     print("Data loaded successfully")
+
     # Filter data by selecting the samples based on the provided configuration
     print("Filter data by selecting the samples based on the provided configuration ...")
     sel_sample_ids = select_sample_ids_by_type(
@@ -26,14 +27,21 @@ def run_split_data_and_save(config_parser, output_dir: str):
             sample_category_col=config_parser.get('sample_category'),
             sample_types=config_parser.get('select_samples')
         )
+
     # Filter the data by the selected samples
     data = filter_data_by_sample_ids(data, sel_sample_ids)
     print('Data filtered successfully')
+    
     # Split the data into training and test sets
     print("Splitting data into training and test sets...")
-    splitter = DataSplitter(data, config_parser.get('sample_category'))
+    splitter = DataSplitter(
+        data, 
+        config_parser.get('sample_category'),
+        seed=config_parser.get("seed"),
+    )
     train_data, test_data = splitter.split_data_sets(config_parser.get('test_fraction'))
     print("Data splitted successfully.")
+    
     # Save the training and test datasets to the specified output directory
     print(f"Saving training data to: {os.path.join(output_dir, 'Train')}")
     save_data(train_data, 

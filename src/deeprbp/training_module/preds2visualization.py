@@ -85,11 +85,10 @@ def plot_small_multiples_real_vs_pred_grid(
     xlabel: Optional[str] = "Predicted log2(TPM + 1)",
     ylabel: Optional[str] = "Observed log2(TPM + 1)",
     axis_range: Optional[tuple[float, float]] = None,  # (lo, hi) común
-    # --- NUEVO: control de densidad/colores ---
     cmap: str = "inferno",
     density_scale: str = "log",      # "log" o "linear"
     share_density_norm: bool = True, # misma normalización en todos los paneles
-):
+    font_scale: float = 1.12):
     """
     Small-multiples Observed vs. Predicted log2(TPM+1) por tejido.
 
@@ -99,6 +98,13 @@ def plot_small_multiples_real_vs_pred_grid(
       intenso donde hay mayor densidad de puntos).
     • Etiquetas globales de ejes; títulos por panel con el código TCGA.
     """
+    # --- tamaños base escalados ---
+    fs_title     = 9  * font_scale
+    fs_ticks     = 6  * font_scale
+    fs_axislabel = 11 * font_scale
+    fs_suptitle  = 12 * font_scale
+    fs_cbar_lab  = 8  * font_scale
+    fs_cbar_tick = 6  * font_scale
     panels = list(panels)
     if not panels:
         return
@@ -154,6 +160,7 @@ def plot_small_multiples_real_vs_pred_grid(
                     linewidths=0,
                     cmap=cmap,
                     norm=norm,                # <- misma escala de color
+                    zorder=2, # joseba si esto no queda bien quitalo
                 )
                 # rasteriza la colección para PDFs/SVG más ligeros
                 last_hb.set_rasterized(True)
@@ -170,16 +177,16 @@ def plot_small_multiples_real_vs_pred_grid(
             ax.xaxis.set_major_formatter(int_formatter)
             ax.yaxis.set_major_formatter(int_formatter)
             # título corto
-            ax.set_title(p.get("short", p.get("category", "")), fontsize=9, pad=2)
+            ax.set_title(p.get("short", p.get("category", "")), fontsize=fs_title, pad=2)
             # oculta etiquetas interiores
             if (i // ncols) < (nrows - 1):
                 ax.set_xticklabels([])
             else:
-                ax.tick_params(axis="x", labelsize=6, length=2)
+                ax.tick_params(axis="x", labelsize=fs_ticks, length=2)
             if (i % ncols) != 0:
                 ax.set_yticklabels([])
             else:
-                ax.tick_params(axis="y", labelsize=6, length=2)
+                ax.tick_params(axis="y", labelsize=fs_ticks, length=2)
             # spines ligeros
             for spine in ax.spines.values():
                 spine.set_linewidth(0.6)
@@ -188,16 +195,16 @@ def plot_small_multiples_real_vs_pred_grid(
             ax.axis("off")
     # Etiquetas globales
     if xlabel:
-        fig.supxlabel(xlabel, fontsize=11)
+        fig.supxlabel(xlabel, fontsize=fs_axislabel)
     if ylabel:
-        fig.supylabel(ylabel, fontsize=11)
+        fig.supylabel(ylabel, fontsize=fs_axislabel)
     # Colorbar opcional (comparte la misma norm)
     if show_colorbar and use_hexbin and last_hb is not None:
         cbar = fig.colorbar(last_hb, ax=axes.tolist(), shrink=0.65, pad=0.01)
-        cbar.ax.tick_params(labelsize=6)
-        cbar.set_label("Point density", fontsize=8)
+        cbar.ax.tick_params(labelsize=fs_cbar_tick)
+        cbar.set_label("Point density", fontsize=fs_cbar_lab)
     if show_title:
-        fig.suptitle(f"Observed vs Predicted — {set_name.upper()} (all tissues)", fontsize=12, y=0.996)
+        fig.suptitle(f"Observed vs Predicted — {set_name.upper()} (all tissues)", fontsize=fs_suptitle, y=0.996)
     fig.savefig(out_path, dpi=300, facecolor="white")
     plt.close(fig)
     print(f"[grid] Saved: {out_path}")

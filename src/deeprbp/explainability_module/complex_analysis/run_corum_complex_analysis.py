@@ -1,11 +1,11 @@
-
+import os
 import pandas as pd
 import numpy as np
 import argparse
 from scipy.stats import mannwhitneyu, combine_pvalues
 
 from .utils_complex import split_to_list, map_gene_names_to_ids, build_expanded_corr, extract_block_contrasts
-from .plots_complex import plot_correlation_boxplot, plot_overview_boxplots_cached
+from .plots_complex import plot_correlation_boxplot, plot_overview_boxplots
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -140,15 +140,24 @@ def main():
 
     if rows:
         df_long = pd.DataFrame(rows)
+
+        suffix = "_withF" if args.include_non_family else ""
+        df_long_csv = os.path.join(args.output_dir, f"correlation_overview_long{suffix}.csv")
+        per_pair_csv = os.path.join(args.output_dir, f"per_pair_info{suffix}.csv")
+
+        df_long.to_csv(df_long_csv, index=False)
+        pd.DataFrame(per_pair_info).to_csv(per_pair_csv, index=False)
+
         fname = "correlation_boxplot_overview_withF.png" if args.include_non_family else "correlation_boxplot_overview.png"
-        plot_overview_boxplots_cached(
+        plot_overview_boxplots(
             df_long,
             per_pair_info,
             output_dir=args.output_dir,
             filename=fname,
-            x_by="Name",                   
-            stouffer=stouffer_tuple,
-            fisher=fisher_tuple
+            violin=True,
+            y_lower_q=1.0, y_upper_q=None,
+            star_pad_frac=0.0006, #0.012,
+            x_by="Name"
         )
 
 if __name__ == "__main__":

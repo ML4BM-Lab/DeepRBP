@@ -28,4 +28,3 @@ class BackupManager:
 
     def update_backup_time(self):
         self.last_backup_time = time.time()
-

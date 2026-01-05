@@ -1,0 +1,20 @@
+# src/deeprbp/configs/config_tcga_model_explain.yaml
+
+test_path_files: '/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Test'
+sample_category: "detailed_category"  # The column in metadata to stratify on
+disease_condition: "sample_type" # The column in metadata to stratify on
+select_condition: 
+  - "Primary_Tumor"
+  #- "Solid_Tissue_Normal"
+explanation_method: "DeepLIFT"
+reference_data: "knockout_reference"
+# ⬇️ NUEVO: dónde apuntar las atribuciones del nivel “salida”
+# "final"  => salida final del modelo (post-sigmoid, con el log2((x*gene)+1) en tu forward)
+# "logit"  => logits pre-sigmoid (capa Linear(128->T)) con NeuronDeepLift
+target_mode: "final"
+batch_reduction_method: "t-statistic"
+gene_collapse_method: "max_absolute_value"
+getBM_path: "/scratch/jsanchoz/DeepRBP/data/training_module/selected_genes_rbps/getBM.csv"
+gene_col_name: "Gene_ID"
+trans_col_name: "Transcript_ID"
+save_per_sample_scores: False 

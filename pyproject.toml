@@ -1,0 +1,74 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "deeprbp"
+version = "1.0.0"
+description = "Deep learning model for inferring RBP-Gene regulations"
+readme = "README.md"
+requires-python = ">=3.9,<3.12"
+authors = [{ name = "Joseba Sancho Zamora" }]
+
+dependencies = [
+    "numpy<2",
+    "scipy<1.14",
+    "h5py",
+    "matplotlib",
+    "pandas",
+    "scanpy",
+    "scikit-learn",
+    "seaborn",
+    "statsmodels",
+    "tornado",
+    "tqdm",
+    "plotly",
+    "openpyxl",
+    "captum",
+    "optuna",
+    "joblib",
+    "pydeseq2",
+    "sanbomics",
+    "colorama",
+    "torchinfo",
+    "psutil",
+    "lightning",
+    "optuna-integration[pytorch_lightning]",
+    "tabulate",
+    "xgboost",
+    "lightgbm",
+]
+
+[project.optional-dependencies]
+gpu = [
+    "torch>=2.0",
+    "torchvision>=0.15",
+    "GPUtil"
+]
+dev = [
+    "notebook",
+    "ipykernel"
+]
+
+[project.urls]
+Homepage = "https://github.com/ML4BM-Lab/DeepRBP"
+
+[project.scripts]
+preprocess-data = "deeprbp.data_preprocessing.preprocess_data:main"
+split-and-save = "deeprbp.data_preprocessing.split_data_and_save:main"
+create-optuna-study = "deeprbp.training_module.hyperparameter_optimization.create_optuna_study:main"
+analyze-optuna-results = "deeprbp.training_module.hyperparameter_optimization.analyze_results_optuna:main"
+run-deeprbp-predictor = "deeprbp.training_module.main_predictor:main"
+run-deeprbp-evaluator = "deeprbp.training_module.evaluate_predictor:main"
+run-deeprbp-explainer = "deeprbp.explainability_module.main_explainer:main"
+run-postar-validator = "deeprbp.explainability_module.postar_validation.postar_validator:main"
+preprocess-realkd-data = "deeprbp.explainability_module.real_knockdowns.preprocess_data.preprocess_realkd_data:main"
+run-deeprbp-realkd = "deeprbp.explainability_module.real_knockdowns.main_real_knockdowns:main"
+run-deeprbp-regulation-changes-cancer = "deeprbp.explainability_module.tcga_normal_vs_tumor.main_tcga_compare:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]

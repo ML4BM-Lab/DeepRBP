@@ -1,0 +1,14 @@
+# src/deeprbp/configs/config_model_eval.yaml
+test_path_files: "/scratch/jsanchoz/DeepRBP/data/training_module/splitted_datasets/Test"
+getBM_path: "/scratch/jsanchoz/DeepRBP/data/annotation/getBM_gencode_v23.csv"
+gene_col_name: "Gene_ID"
+trans_col_name: "Transcript_ID"
+#sample_category: "detailed_category" 
+cuda: True
+val_batch_size: 256
+plot_results: True
+seed: 42
+
+# ✅ IMPORTANT (recommended default for pretrained bundle)
+scaler_mode: "tcga"
+scaler_dir: "/scratch/jsanchoz/DeepRBP/pretrained_model"  # contains scaler.joblib (and lives next to model.ckpt)

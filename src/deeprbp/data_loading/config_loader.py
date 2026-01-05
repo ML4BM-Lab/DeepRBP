@@ -58,3 +58,5 @@ class ConfigParser:
         - str: A formatted string of the configuration data.
         """
         return yaml.dump(self.config_data, default_flow_style=False)
+
+        

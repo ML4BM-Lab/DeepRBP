@@ -11,12 +11,12 @@ library(readr)
 library(GenomicRanges)
 library(optparse)
 
-create_gxrbp <- function(input_path, output_path, output_file_name, postar_file, events_regions_file, events_gencode_file, selected_tissue_cell_line, getBM_file) {
+create_gxrbp <- function(input_path, output_path, output_file_name, postar_file, events_regions_file, events_gencode_file, selected_tissue_cell_line, getBM_path) {
   # Construct file paths based on input arguments
   path_events <- file.path(input_path, events_gencode_file)
   path_regions <- file.path(input_path, events_regions_file)
   path_postar <- file.path(input_path, postar_file)
-  path_getbm <- file.path(input_path, getBM_file)
+  path_getbm <- getBM_path
   
   # Load the EventsFound file and add EventID column
   EventsFound <- read.delim(file = path_events, stringsAsFactors = FALSE)
@@ -155,7 +155,7 @@ option_list <- list(
   make_option(c("--events_regions_file"), type = "character", help = "File specifying the genomic regions of the events."),
   make_option(c("--events_gencode_file"), type = "character", help = "File with metadata on events, including IDs and positions."),
   make_option(c("--selected_tissue_cell_line"), type = "character", help = "Specifies the cell lines from POSTAR experiments to include in the matrix (comma-separated)."),
-  make_option(c("--getBM_file"), type = "character", help = "Name of the getBM file with info to relate gene_name with gene_ids.")
+  make_option(c("--getBM_path"), type = "character", help = "Path to getBM CSV file mapping Gene_name to Gene_ID.")
 )
 
 # Parse command-line arguments
@@ -170,7 +170,7 @@ postar_file <- opt$postar_file
 events_regions_file <- opt$events_regions_file
 events_gencode_file <- opt$events_gencode_file
 selected_tissue_cell_line <- unlist(strsplit(opt$selected_tissue_cell_line, ","))
-getBM_file <- opt$getBM_file
+getBM_path <- opt$getBM_path
 
 # Call the function with the parsed arguments
-create_gxrbp(input_path, output_path, output_file_name, postar_file, events_regions_file, events_gencode_file, selected_tissue_cell_line, getBM_file)
+create_gxrbp(input_path, output_path, output_file_name, postar_file, events_regions_file, events_gencode_file, selected_tissue_cell_line, getBM_path)

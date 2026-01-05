@@ -1,4 +1,3 @@
-
 # src/deeprbp/explainability_module/real_knockdowns/main_real_knockdowns.py
 
 import argparse
@@ -24,6 +23,13 @@ def parse_args():
     parser.add_argument('--output_dir', type=str, required=True, help='Designates the directory where the output results, ' \
           'including evaluation metrics and explainability scores, will be saved.'
     )
+    parser.add_argument('--evaluate_predictions', type=str, default="True", choices=["True", "False"], help=('Whether to run prediction evaluation (test + evaluate_and_visualize). '
+            'Use "True" or "False". Default: "True".')
+    )
+    parser.add_argument("--scaler_mode", type=str, default="tcga", choices=["tcga", "fit_new"],
+        help="Choose which scaler to use: 'tcga' = load pretrained TCGA scaler (default), "
+            "'fit_new' = fit a new scaler using real knockdown data."
+    )
     return parser.parse_args()
 
 def main():
@@ -36,8 +42,9 @@ def main():
 
     # Crear DataModules
     print("\n[main_real_knockdowns] 🔧 Creating DataModules for control and knockdown conditions...")
-    dm_control = build_datamodule(config_base, "control", args.processed_data_dir, args.output_dir)
-    dm_knockdown = build_datamodule(config_base, "knockdown", args.processed_data_dir, args.output_dir)
+    print(f"\n[main_real_knockdowns] 🔧 scaler_mode = {args.scaler_mode}")
+    dm_control = build_datamodule(config_base, "control", args.processed_data_dir, args.output_dir, args.scaler_mode)
+    dm_knockdown = build_datamodule(config_base, "knockdown", args.processed_data_dir, args.output_dir, args.scaler_mode)
     print('\n[main_real_knockdowns] ──────────────────────────────────────')
 
     # Crear Trainers usando el mismo output_dir que el datamodule
@@ -63,47 +70,63 @@ def main():
     model = PredictorModel.load_from_checkpoint(dm_control.config.get('model_checkpoint_path'))
     print('\n[main_real_knockdowns] ──────────────────────────────────────')
         
-    # Evaluate on CONTROL
-    print("\n[main_real_knockdowns] 🧪 Testing model on CONTROL data...")
-    trainer_control.test(model, dm_control)
-    print('\n[main_real_knockdowns] ──────────────────────────────────────')
+    evaluate_predictions = (args.evaluate_predictions == "True")
+    print(f"\n[main_real_knockdowns] ⚙ evaluate_predictions = {evaluate_predictions}\n")
+    
+    if evaluate_predictions:
+        # Evaluate on CONTROL
+        print("\n[main_real_knockdowns] 🧪 Testing model on CONTROL data...")
+        trainer_control.test(model, dm_control)
+        print('\n[main_real_knockdowns] ──────────────────────────────────────')
 
-    # Evaluate on KNOCKDOWN
-    print("\n[main_real_knockdowns] 🧪 Testing model on KNOCKDOWN data...")
-    trainer_knockdown.test(model, dm_knockdown)
-    print('\n[main_real_knockdowns] ──────────────────────────────────────')
+        # Evaluate on KNOCKDOWN
+        print("\n[main_real_knockdowns] 🧪 Testing model on KNOCKDOWN data...")
+        trainer_knockdown.test(model, dm_knockdown)
+        print('\n[main_real_knockdowns] ──────────────────────────────────────')
 
-    # Evaluate model performance in detail (here all samples is just one category)
-    print("\n[main_real_knockdowns] 📊 Evaluate model performance in detail ...")
-    datasets = [
-        {
-            "name": "control",
-            "dm": dm_control,
-            "trainer": trainer_control
-        },
-        {
-            "name": "knockdown",
-            "dm": dm_knockdown,
-            "trainer": trainer_knockdown
-        }
-    ]
+        # Evaluate model performance in detail (here all samples is just one category)
+        print("\n[main_real_knockdowns] 📊 Evaluate model performance in detail ...")
+        datasets = [
+            {
+                "name": "control",
+                "dm": dm_control,
+                "trainer": trainer_control
+            },
+            {
+                "name": "knockdown",
+                "dm": dm_knockdown,
+                "trainer": trainer_knockdown
+            }
+        ]
 
-    for entry in datasets:
-        print(f"\n[main_real_knockdowns] 📈 Evaluating on the {entry['name'].upper()} set...")
-        evaluate_and_visualize(
-            trainer=entry["trainer"],
-            model=model,
-            dm=entry["dm"],
-            output_dir=entry["dm"].output_dir,   
-            set_name=entry["name"]
-        )
-    print('\n[main_real_knockdowns] ──────────────────────────────────────')
+        for entry in datasets:
+            print(f"\n[main_real_knockdowns] 📈 Evaluating on the {entry['name'].upper()} set...")
+            evaluate_and_visualize(
+                trainer=entry["trainer"],
+                model=model,
+                dm=entry["dm"],
+                output_dir=entry["dm"].output_dir,   
+                set_name=entry["name"]
+            )
+        print('\n[main_real_knockdowns] ──────────────────────────────────────')
+
+    else:
+        print("\n[main_real_knockdowns] ⏭ Skipping prediction evaluation (evaluate_predictions == False).")
+        print('\n[main_real_knockdowns] ──────────────────────────────────────')
 
     # Calculate explainability scores using control data
     results = run_explainability_pipeline(config_base, dataset_control, model, dm_control.getBM)
 
     # Save results as CSV files
-    save_results(dm_control.output_dir, results['df_scores_TxRBP'], results['df_scores_GxRBP'], results['result_table']) 
+    save_results(
+        dm_control.output_dir,
+        results['df_scores_TxRBP'],
+        results['df_scores_GxRBP'],
+        results['result_table'],
+        results['df_scores_HLxRBP'],    
+        results['df_per_sample']       
+    )
+
     
 if __name__ == "__main__":
     main()

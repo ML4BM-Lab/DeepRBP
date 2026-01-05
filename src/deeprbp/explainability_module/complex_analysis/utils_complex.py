@@ -5,6 +5,8 @@ import numpy as np
 from typing import Iterable, Dict, List, Sequence, Tuple
 from collections import Counter
 from pathlib import PurePath
+from string import ascii_uppercase
+
 from ...training_module.tcga_codes import get_tcga_code, TCGA_CODE
 
 def split_to_list(cell):
@@ -186,81 +188,51 @@ def _infer_tumor_from_output_dir(output_dir: str) -> tuple[str, str]:
     tcga = get_tcga_code(long_name)                   # p.ej., 'LAML'
     return tcga, long_name
 
+def build_design_matrix_with_F(emb_df: pd.DataFrame, df_corum: pd.DataFrame,
+                               col='subunits_gene_id', family_labels=None) -> pd.DataFrame:
+    """
+    Build a design matrix (RBP × Families) with an extra 'F' (others) column.
 
-
-
-# # probably old functions no more needed.
-# def analyze_single_complex(corum_data, complex_idx, corr_scores, output_dir=None):
-#     """
-#     Analyze correlation patterns within a single protein complex compared to RBPs outside the complex.
-
-#     Parameters:
-#     - corum_data: pd.DataFrame
-#         DataFrame containing CORUM complexes info with a 'subunits_gene_id' column listing RBPs.
-#     - complex_idx: int or label
-#         Index identifying the complex to analyze in corum_data.
-#     - corr_scores: pd.DataFrame
-#         Correlation matrix (genes x RBPs) of explainability scores.
-#     - output_dir: str or None
-#             Directory path where to save generated plots (heatmap, boxplot). If None, plots are not saved.
-
-#     Returns:
-#     - stat: float
-#         Mann-Whitney U test statistic comparing correlations inside vs outside the complex.
-#     - pval: float
-#         P-value from the Mann-Whitney U test (alternative='greater').
-#     """
-#     # Get the RBPs contained in the selected complex
-#     complex_rbps = corum_data.loc[complex_idx, 'subunits_gene_id']
-#     complex_rbps = [rbp for rbp in complex_rbps if rbp in corr_scores.columns]
-#     print(f"Number of RBPs in complex: {len(complex_rbps)}")
-#     # RBPs outside complex
-#     all_rbps = set(corr_scores.columns)
-#     outside_rbps = list(all_rbps - set(complex_rbps))
-#     # Reorder rows and columns in correlation matrix: complex RBPs first (top-left)
-#     corr_scores_ordered = corr_scores.loc[complex_rbps + outside_rbps, complex_rbps + outside_rbps]
-#     # Pheatmap of the reordered correlation matrix
-#     if output_dir is not None:
-#         plot_upper_triangle_corr_matrix(corr_scores_ordered, complex_idx, output_dir)
-#     # Submatrices: complex vs complex and outside vs outside
-#     complex_corrs = corr_scores_ordered.loc[complex_rbps, complex_rbps]
-#     outside_corrs = corr_scores_ordered.loc[outside_rbps, outside_rbps]
-#     # Flatten upper triangles (excluding diagonal)
-#     flat_complex = get_upper_triangle_flattened(complex_corrs)
-#     flat_outside = get_upper_triangle_flattened(outside_corrs)
-#     # Mann-Whitney U test
-#     stat, pval = mannwhitneyu(flat_complex, flat_outside, alternative='greater')
-#     print(f"Mann-Whitney U test statistic: {stat:.4f}, p-value: {pval:.4e}")
-#     if pval < 0.05:
-#         print("💥 Correlations within the complex are significantly higher.")
-#     else:
-#         print("🫠 No sufficient evidence that correlations within the complex are higher.")
-#     # Boxplot
-#     if output_dir is not None:
-#         plot_correlation_boxplot(flat_complex, flat_outside, complex_idx, output_dir)
-#     return stat, pval
-# def get_upper_triangle_flattened(corr_df):
-#     mask = np.triu(np.ones(corr_df.shape), k=1).astype(bool)
-#     return corr_df.where(mask).stack().values  # flatten sin NaNs
-# # ver intersecciones entre complejos
-# def check_complex_intersections(df):
-#     """
-#     Check for gene overlaps between complexes in the dataframe.
-    
-#     For each pair of complexes, prints whether they share genes and which ones.
-    
-#     Parameters:
-#     -----------
-#     df : pandas.DataFrame
-#         DataFrame containing a column 'subunits_gene_id' with lists of gene IDs per complex.
-#     """
-#     for i in range(len(df)):
-#         set_i = set(df.loc[i, 'subunits_gene_id'])
-#         for j in range(i+1, len(df)):
-#             set_j = set(df.loc[j, 'subunits_gene_id'])
-#             intersec = set_i.intersection(set_j)
-#             if intersec:
-#                 print(f"Complex {i} and Complex {j} share {len(intersec)} gene(s): {intersec}")
-#             else:
-#                 print(f"Complex {i} and Complex {j} share no genes.")
-
+    emb_df: DataFrame (X×R) with columns = ENSG IDs of RBPs
+    df_corum[col]: column with list-like gene IDs per family (list/tuple/ndarray)
+    family_labels: optional list of names for families; defaults to A,B,C,...
+    Returns: DataFrame (R × (F+1)) with columns = [families..., 'F'] and {0,1}
+    """
+    # 1) Family labels
+    fam_ids = list(df_corum.index)
+    F = len(fam_ids)
+    if family_labels is None:
+        base = list(ascii_uppercase)
+        family_labels = [base[i] if i < len(base) else f"Family_{i}" for i in range(F)]
+    assert len(family_labels) == F, "family_labels must match number of families (rows in df_corum)."
+    # 2) Normalize to lists (inline, no extra helper)
+    series_lists = []
+    for x in df_corum[col].tolist():
+        if x is None:
+            series_lists.append([])
+        elif isinstance(x, list):
+            series_lists.append(x)
+        elif isinstance(x, tuple):
+            series_lists.append(list(x))
+        elif isinstance(x, np.ndarray):
+            series_lists.append(x.tolist())
+        else:
+            # treat any other scalar/string as single-element membership
+            series_lists.append([x])
+    # 3) Map ENSG -> set of family indices
+    gene2fams = {}
+    for fam_idx, genes in zip(fam_ids, series_lists):
+        for g in genes:
+            g = str(g).strip()
+            if g:
+                gene2fams.setdefault(g, set()).add(fam_idx)
+    # 4) Base matrix without 'F'
+    rbps = emb_df.columns.astype(str)
+    design = pd.DataFrame(0, index=rbps, columns=family_labels, dtype=np.int8)
+    famid_to_label = {fid: family_labels[i] for i, fid in enumerate(fam_ids)}
+    for g in rbps:
+        for fid in gene2fams.get(g, ()):
+            design.at[g, famid_to_label[fid]] = 1
+    # 5) Add 'F' (others): 1 if RBP not assigned to any family
+    design['F'] = (design.sum(axis=1) == 0).astype(np.int8)
+    return design

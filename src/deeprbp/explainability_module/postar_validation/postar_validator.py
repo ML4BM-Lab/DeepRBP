@@ -5,6 +5,7 @@ import os
 from tqdm import tqdm
 import numpy as np
 import pandas as pd
+from typing import Optional
 from sklearn.metrics import roc_curve, roc_auc_score
 
 from ...util.logger import Logger
@@ -26,7 +27,7 @@ class PostarValidator:
         postar_data (DataFrame): DataFrame containing the POSTAR data loaded from the specified file.
         output_dir (str): Directory path where validation results will be saved. 
     """
-    def __init__(self, postar_matrix_dir: str, postar_file: str, scores_result_dir: str, output_dir: str, verbose=1):
+    def __init__(self, postar_matrix_dir: str, postar_file: str, scores_result_dir: str, output_dir: str, verbose=1, pvalues_csv: Optional[str] = None):
         self.postar_matrix_dir = postar_matrix_dir
         self.postar_file = postar_file
         self.scores_result_dir = scores_result_dir
@@ -37,6 +38,9 @@ class PostarValidator:
         self.df_count_rbps_per_gen = pd.DataFrame()
         self.df_count_genes_per_rbp = pd.DataFrame()
         self.updated_results_summary = pd.DataFrame()
+        self.pvalues_csv = pvalues_csv
+        self._pval_map = None   # dict: RBP_ID -> string ya formateada
+
     def load_postar_data(self):
         """Load the POSTAR data from the specified file."""
         postar_path = os.path.join(self.postar_matrix_dir, self.postar_file)
@@ -54,6 +58,7 @@ class PostarValidator:
         except Exception as e:
             self.logger.error(f"Failed to load POSTAR data: {e}")
             raise e  # Re-raise the exception for further handling if necessary
+
     def load_explainability_scores(self):
         """Load the explainability scores and results table from the specified directory."""
         try:
@@ -73,6 +78,7 @@ class PostarValidator:
         except Exception as e:
             self.logger.error(f"Failed to load explainability scores: {e}")
             raise e  # Re-raise the exception for further handling if necessary
+
     def _count_classes(self, data: pd.DataFrame, axis: int) -> pd.DataFrame:
         """
         Count the occurrences of each class (0, 1, NaN) in the given DataFrame along the specified axis.
@@ -91,6 +97,7 @@ class PostarValidator:
         class_counts['Class NaN'] = data.apply(lambda x: x.isna().sum(), axis=axis)
         self.logger.log("Class counting completed. ✅")
         return class_counts
+
     def _count_and_sort_postar_matrix(self, matched_postar_data):
         """
         Analyze the aligned POSTAR matrix to count the number of RBPs per gene and the number of genes per RBP,
@@ -111,6 +118,7 @@ class PostarValidator:
         self.df_count_genes_per_rbp['RBPs'] = self.df_count_genes_per_rbp.index
         self.df_count_genes_per_rbp = self.df_count_genes_per_rbp.reset_index(drop=True).sort_values(by='Class 1', ascending=False).reset_index(drop=True)
         self.logger.log("Count and sort completed. ✅")
+
     def _match_scores_and_postar_data(self, postar_data: pd.DataFrame, scores_data: pd.DataFrame):
         """Match explainability scores with POSTAR data.
 
@@ -146,6 +154,7 @@ class PostarValidator:
             self.logger.log(f"Genes that did not match: {', '.join(self.genes_not_match)}. They will be eliminated in _integrate_postar_into_summary internal method", level=1)
         self.logger.log("Scores matched successfully. ")
         return matched_postar_data, matched_scores_data
+
     def _integrate_postar_into_summary(self, matched_postar_data, results_summary):
         """
         Complete the results summary with POSTAR information.
@@ -174,6 +183,7 @@ class PostarValidator:
             self.logger.log(f"Removed {initial_count - final_count} entries from results summary that did not match with POSTAR data.", level=1)
         self.logger.log("Results successfully combined with POSTAR data. ✅")
         return updated_results_summary
+
     def process_postar_and_scores(self, postar_data: pd.DataFrame, scores_data: pd.DataFrame, results_summary: pd.DataFrame):
         """
         Match the POSTAR data with explainability scores, count and sort the POSTAR matrix,
@@ -194,6 +204,44 @@ class PostarValidator:
         # Integrate POSTAR into the summary
         updated_results_summary = self._integrate_postar_into_summary(matched_postar_data, results_summary)
         return updated_results_summary
+
+    def _load_pvalues_map(self):
+        """Carga p-values por RBP si se proporciona CSV. Devuelve dict RBP_ID -> texto."""
+        if not self.pvalues_csv or not os.path.exists(self.pvalues_csv):
+            return {}
+        dfp = pd.read_csv(self.pvalues_csv)
+        cols = [c for c in dfp.columns]
+        key = 'p_adj' if 'p_adj' in cols else ('p_value' if 'p_value' in cols else ('p' if 'p' in cols else None))
+        if key is None or 'RBP_ID' not in cols:
+            self.logger.log(f"[p-values] CSV provided but required columns not found. "
+                            f"Need 'RBP_ID' and one of ['p_adj','p_value','p']. Ignoring.", level=1)
+            return {}
+        # formatea p en notación científica corta y añade estrellas si quieres
+        def _fmt(p):
+            if pd.isna(p):
+                return None
+            try:
+                p = float(p)
+            except Exception:
+                return None
+            if p == 0:
+                txt = "p<1e-300"
+            elif p < 1e-3:
+                txt = f"p={p:.1e}"
+            else:
+                txt = f"p={p:.3f}"
+           
+            stars = ("ns" if p >= 0.05 else ("*" if p >= 1e-2 else ("**" if p >= 1e-3 else ("***" if p >= 1e-4 else "****"))))
+            return f"{'p_adj' if key=='p_adj' else 'p'}: {txt}{(' ' + stars) if stars else ''}"
+
+        mp = {}
+        for _, r in dfp.iterrows():
+            txt = _fmt(r.get(key))
+            if txt:
+                mp[str(r['RBP_ID'])] = txt
+        self.logger.log(f"[p-values] Loaded p-values for {len(mp)} RBPs.", level=1)
+        return mp
+
     def calculate_rbp_thresholds(self, updated_results_summary: pd.DataFrame) -> pd.DataFrame:
         """
         Calculate optimal RBP thresholds from the combined results DataFrame.
@@ -214,26 +262,37 @@ class PostarValidator:
         # Calculate absolute scores
         self.logger.log('Using ABSOLUTE scores for calculating the threshold scores. 📊')
         combined_results_filtered.loc[:, 'Score'] = combined_results_filtered['Score'].abs()   
+        
         # Lists to store thresholds and AUCs
         list_thresholds = []
         list_aucs = []
         list_unique_rbps = combined_results_filtered['RBP_ID'].unique().tolist()
         threshold_figures_path = os.path.join(self.path_save_results, 'threshold_figures')
         os.makedirs(threshold_figures_path, exist_ok=True)
+        
+        # Carga p-values si hay
+        if self._pval_map is None:
+            self._pval_map = self._load_pvalues_map()
+
         for rbp_id in tqdm(list_unique_rbps, desc="Calculating Optimal Thresholds"):
             df_current_rbp = combined_results_filtered[combined_results_filtered['RBP_ID'] == rbp_id]
             rbp_display_name = (df_current_rbp['RBP_name'].dropna().astype(str).mode().iat[0]
                         if 'RBP_name' in df_current_rbp.columns and not df_current_rbp['RBP_name'].dropna().empty
                         else rbp_id)
+            
             # Calculate threshold
             fpr, tpr, thresholds = roc_curve(df_current_rbp['Postar_Score'], df_current_rbp['Score'])
             optimal_idx = np.argmax(tpr - fpr)
             optimal_threshold = thresholds[optimal_idx]
             list_thresholds.append({'RBP_ID': rbp_id, 'RBP_name': rbp_display_name, 'Optimal_Score_Threshold': optimal_threshold})
+            
             # Calculate AUC
             auc_score = roc_auc_score(df_current_rbp['Postar_Score'], df_current_rbp['Score'])
             list_aucs.append({'RBP_ID': rbp_id, 'AUC': auc_score})
+            
             if df_current_rbp['Postar_Score'].nunique() == 2:  # Check if there are both 0s and 1s in df_current_rbp before plotting
+                
+                stats_label = self._pval_map.get(str(rbp_id), None) # texto estadístico opcional para la leyenda
                 plot_distributions_and_roc_with_thresholds(
                     df_current_rbp=df_current_rbp, 
                     rbp_id=rbp_id, 
@@ -243,16 +302,19 @@ class PostarValidator:
                     optimal_idx=optimal_idx, 
                     auc_score=auc_score,
                     path_save=threshold_figures_path, 
-                    #left_panel="hist", # << recomendado para evitar “colas negativas”
-                    rbp_display_name=rbp_display_name  # << nombre bonito en el título y archivo
+                    rbp_display_name=rbp_display_name,  # << nombre bonito en el título y archivo
+                    stats_label=stats_label
                 )
+
             else:
                 self.logger.log(f"Skipping plot for RBP: {rbp_id} as it does not contain both classes. ⚠️")
+
         self.optimal_thresholds_df = pd.DataFrame(list_thresholds)
         self.auc_df = pd.DataFrame(list_aucs)
         self.logger.log("Optimal thresholds calculated successfully. ✅", level=1)
         self.logger.log(f"Mean AUC results: {self.auc_df.AUC.mean()}", level=1)
         return self.optimal_thresholds_df, self.auc_df
+
     def save_results(self) -> None:
         """
         Save the optimal thresholds and results summary DataFrames to CSV files.
@@ -288,6 +350,7 @@ def parse_args():
     parser.add_argument("--scores_result_dir", type=str, required=True, help="Directory path for the scores matrices and results table.")
     parser.add_argument("--output_dir", type=str, required=True, help="Directory path where validation results will be saved.")
     parser.add_argument("--verbose", type=int, default=1, help="Verbosity level for logging messages (default is 1).")
+    parser.add_argument("--pvalues_csv", type=str, default=None, help="Optional CSV with per-RBP p-values (columns: RBP_ID + p_adj|p_value|p).")
     return parser.parse_args()
 
 def main():
@@ -297,7 +360,8 @@ def main():
         postar_file=args.postar_file,
         scores_result_dir=args.scores_result_dir,
         output_dir=args.output_dir,
-        verbose=args.verbose
+        verbose=args.verbose,
+        pvalues_csv=args.pvalues_csv
     )   
     # Load POSTAR data
     postar_data = postar_validator.load_postar_data()

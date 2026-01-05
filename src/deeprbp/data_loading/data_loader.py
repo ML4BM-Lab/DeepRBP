@@ -38,7 +38,7 @@ class DataImporter:
         self.disease_condition = disease_condition
         self.select_condition = select_condition
         self.sample_fraction = sample_fraction
-    ###
+ 
     def _generate_data_patterns(self) -> Dict[str, str]:
         """Generates the file paths based on the base path provided."""
         return {
@@ -47,7 +47,7 @@ class DataImporter:
             'gene_expr_path': os.path.join(self.base_path, f"gn_tpm.csv"),
             'metadata_path': os.path.join(self.base_path, f"phenotype_metadata.csv")
         }
-    ###
+ 
     def filter_data_by_category(self, data: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
         self.logger.log(f"\n[*] Filtering samples by category '{self.select_category}'...", level=1)
         selected_sample_ids = data['metadata_df'][
@@ -56,6 +56,7 @@ class DataImporter:
         data = filter_data_by_sample_ids(data, selected_sample_ids)
         self.logger.log("✅ Data filtered by category successfully.", level=1)
         return data
+
     def filter_data_by_condition(self, data: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
         self.logger.log(f"\n[*] Filtering samples by disease condition(s): {self.select_condition}...", level=1)
         selected_sample_ids = data['metadata_df'][
@@ -64,7 +65,7 @@ class DataImporter:
         data = filter_data_by_sample_ids(data, selected_sample_ids)
         self.logger.log("✅ Data filtered by disease condition successfully.", level=1)
         return data
-    ###
+    
     def reduce_dataset_size(self, data: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
         """Filters a portion of the samples to optimize time and computational resources.
         
@@ -79,7 +80,7 @@ class DataImporter:
         data_subset = DataSplitter.split_data_class(data, self.sample_category, self.sample_fraction, self.logger.verbose)
         self.logger.log("[*] Samples filtered successfully.\n", level=self.logger.verbose)
         return data_subset
-    ###
+    
     def load(self) -> Dict[str, pd.DataFrame]:
         """Load data dictionary from the specified paths and store it in the object.
             If sample_category and select_category are provided with metadata_path, the data will be filtered accordingly.
@@ -113,8 +114,9 @@ class DataImporter:
             self.logger.error(f"❌ Error loading files: {e}", level=1)
             raise
     
+
 class DataSplitter:
-    def __init__(self, data: Dict[str, pd.DataFrame], sample_category: str = "detailed_category", verbose: int = 1):
+    def __init__(self, data: Dict[str, pd.DataFrame], sample_category: str = "detailed_category", seed: int = 42, verbose: int = 1):
         """
         Initialize the DataSplitter class for splitting datasets into training, validation/test sets.
 
@@ -136,8 +138,10 @@ class DataSplitter:
         self.verbose = verbose
         self.logger = Logger(self.verbose)
         self.data = data
+        self.seed = seed
         self.sample_ids_index = self.data['metadata_df'].index # Index of sample IDs
         self.sample_category_labels = self.data['metadata_df'][sample_category] # Series of sample categories
+
     def split_data(self, test_size: float) -> Tuple[list, list]:
         """Perform a stratified train-test split based on the detailed_category in metadata.
         Parameters:
@@ -148,8 +152,14 @@ class DataSplitter:
         """
         self.logger.log(f'📊 [split_data] Performing a stratified data split with fraction division equal to {test_size}...')
         # Perform the stratified split based on patient IDs (still strings at this point) and sample category
-        train_id, test_id = sk_train_test_split(self.sample_ids_index, test_size=test_size, stratify=self.sample_category_labels, random_state=42)
+        train_id, test_id = sk_train_test_split(
+            self.sample_ids_index, 
+            test_size=test_size, 
+            stratify=self.sample_category_labels, 
+            random_state=self.seed
+        )
         return train_id, test_id
+
     @classmethod
     def split_data_class(cls, data: Dict[str, pd.DataFrame], sample_category: str, 
                          test_size: float, verbose: int) -> Dict[str, pd.DataFrame]:
@@ -169,6 +179,7 @@ class DataSplitter:
         _, subset_idx2 = instance.split_data(test_size)
         data_subset = filter_data_by_sample_ids(data, subset_idx2)
         return data_subset
+
     def add_sample_set_label(self, set_name: str, samples: list):
         """Add a column to the metadata DataFrame indicating whether samples belong to the training, validation or test set.
 
@@ -181,7 +192,7 @@ class DataSplitter:
             self.data['metadata_df']['set_type'] = 'unknown'
         self.data['metadata_df'].loc[self.sample_ids_index.isin(sample_set), 'set_type'] = set_name
         self.logger.log(f"🏷️  Added sample set label '{set_name}' for {len(samples)} samples.")
-        #print_section_separator()
+    
     def split_data_sets(self, test_fraction, test_name='testing') -> Tuple[Dict[str, pd.DataFrame], Dict[str, pd.DataFrame]]:
         """
         This function handles the splitting of data into training and testing (or 'validation') sets based on the 
@@ -204,11 +215,14 @@ class DataSplitter:
             log_message = "📝 Writing set_type in metadata after train/val split"
         # Perform the data splitting
         self.train_id, self.test_id = self.split_data(test_size=test_fraction)
+        
         # Log the corresponding message in a single line
         self.logger.log(log_message)
+        
         # Add labels to the sample sets
         self.add_sample_set_label(set_name='training', samples=self.train_id)
         self.add_sample_set_label(set_name=test_name, samples=self.test_id)
+        
         # Filter the data by sample IDs
         train_data = filter_data_by_sample_ids(self.data, self.train_id)
         test_data = filter_data_by_sample_ids(self.data, self.test_id)
@@ -216,6 +230,7 @@ class DataSplitter:
         print_section_separator()
         return train_data, test_data
     
+
 class Scaler:
     def __init__(self, existing_scaler=None, existing_sigma=None):
         """
@@ -231,6 +246,7 @@ class Scaler:
         self.sigma = existing_sigma
         if self.scaler is not None and self.sigma is not None:
             self.logger.log("✅ [Scaler] Existing scaler and sigma loaded. Ready for transformation.")
+
     def fit(self, train_set):
         """
         Fit a StandardScaler to the training dataset and compute the standard deviation (sigma) for clipping.
@@ -246,6 +262,7 @@ class Scaler:
         self.scaler.fit(train_set)
         self.sigma = np.std(self.scaler.transform(train_set).flatten().astype(np.float64))
         self.logger.log(f"✅ [Scaler:fit] Sigma computed: {self.sigma:.4f}\n")
+
     def transform(self, transform_set):
         """
         Normalize and clip the data using the fitted scaler and computed sigma.
@@ -276,6 +293,7 @@ class Scaler:
         scaled_set += 2 * self.sigma
         scaled_set /= 4 * self.sigma
         return scaled_set.astype(np.float64)
+
     def save(self, folder_path):
         """
         Save the fitted scaler and the computed sigma to the specified directory.
@@ -300,6 +318,7 @@ class Scaler:
             self.logger.log(f"✅ [Scaler:save] Sigma saved to: {sigma_file}")
         else:
             self.logger.error("❌ [Scaler:save] No sigma available to save.", ValueError)
+
     @classmethod
     def load(cls, folder_path):
         """
@@ -330,3 +349,4 @@ class Scaler:
     
     # You can load the scaler later from disk if needed
     # scaler = Scaler.load(folder_path=f"{scaler_path}/scaler")
+
