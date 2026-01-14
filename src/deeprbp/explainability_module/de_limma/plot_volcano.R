@@ -1,6 +1,5 @@
 
 # src/deeprbp/explainability_module/real_knockdowns/de_limma/plot_volcano.R
-
 #' plot_volcano
 #'
 #' Generate a publication-ready volcano plot for transcript-level differential
@@ -74,12 +73,18 @@ plot_volcano <- function(
     library(stringr); library(rlang); library(tibble); library(grid)
   })
   
+  # ------------------------------------------------------------
+  # 1) Feature identifier handling (robust default)
+  # ------------------------------------------------------------
   if (is.null(id_col) || !(id_col %in% names(df))) {
-    df <- tibble::rownames_to_column(df, var = "Transcript_ID")
-    id_col <- "Transcript_ID"
+    df <- tibble::rownames_to_column(df, var = "Feature_ID")
+    id_col <- "Feature_ID"
   }
   df[[id_col]] <- sub("\\..*", "", as.character(df[[id_col]]))
-  
+
+  # Default label: always Feature_ID (safe fallback)
+  label_column <- id_col
+
   # 2) Elegir columna de p-valor según tipo
   p_cut_type <- match.arg(p_cut_type)
   p_col_sig  <- if (p_cut_type == "fdr") "adj.P.Val" else "P.Value"
@@ -89,55 +94,46 @@ plot_volcano <- function(
   df$p_for_sig <- df[[p_col_sig]]
   df$log10P  <- -log10(df$P.Value)
   
-  #df <- df %>%
-  #  mutate(
-  #    log10FDR   = -log10(adj.P.Val),
-  #    significant = (adj.P.Val < fdr_thresh) & (abs(logFC) > logfc_thresh)
-  #  )
   # 3) Significancia
   df <- df %>%
     mutate(
       significant = (p_for_sig < p_cut_value) & (abs(logFC) > logfc_thresh)
     )
   
-  #df <- df %>%
-  #  mutate(
-  #    p_for_sig = ifelse(
-  #      p_cut_type == "fdr",
-  #      adj.P.Val,
-  #      P.Value
-  #    ),
-  #    log10P    = -log10(p_for_sig),
-  #    significant = (p_for_sig < p_cut_value) & (abs(logFC) > logfc_thresh)
-  #  )
-  
   # 4) Anotación opcional
-  label_column <- id_col
-  
+
   if (!is.null(getBM)) {
-    
-    if (id_col == "Gene_ID" && all(c("Gene_ID","Gene_name") %in% names(getBM))) {
-      # Caso gene-level: usar Gene_name
+    # -------------------------
+    # Gene-level (incluye RBPs)
+    # -------------------------
+    if (
+      id_col == "Feature_ID" &&
+        all(c("Gene_ID", "Gene_name") %in% colnames(getBM))
+    ) {
+
       gene_annot <- getBM %>%
-        dplyr::select(Gene_ID, Gene_name) %>%
-        dplyr::distinct()
-      
+        dplyr::select(Gene_ID, Gene_name) %>% dplyr::distinct()
+
       df <- df %>%
-        dplyr::left_join(gene_annot, by = "Gene_ID")
-      
-      if ("Gene_name" %in% names(df)) {
+        dplyr::left_join(gene_annot,
+          by = c("Feature_ID" = "Gene_ID")
+        )
+
+      if ("Gene_name" %in% colnames(df)) {
         label_column <- "Gene_name"
       }
-      
-    } else if ("Transcript_ID" %in% names(getBM)) {
-      # Caso transcript-level (como antes)
+
+    # -------------------------
+    # Transcript-level
+    # -------------------------
+    } else if (
+      all(c("Transcript_ID", "Transcript_name") %in% colnames(getBM))
+    ) {
+
       getBM$Transcript_ID <- sub("\\..*", "", as.character(getBM$Transcript_ID))
-      df <- df %>%
-        dplyr::left_join(
-          getBM,
-          by = dplyr::join_by( !!sym(id_col) == Transcript_ID )
-        )
-      if ("Transcript_name" %in% names(df)) {
+      df <- df %>% dplyr::left_join(getBM, by = c("Feature_ID" = "Transcript_ID"))
+
+      if ("Transcript_name" %in% colnames(df)) {
         label_column <- "Transcript_name"
       }
     }
@@ -147,8 +143,6 @@ plot_volcano <- function(
     filter(significant) %>%
     arrange(p_for_sig) %>%
     slice_head(n = top_n)
-  
-  #df_lab <- df %>% filter(significant) %>% arrange(adj.P.Val) %>% slice_head(n = top_n)
   
   # 5) Subtítulo
   subtitle_exp <- if (!is.null(path_dataset)) {

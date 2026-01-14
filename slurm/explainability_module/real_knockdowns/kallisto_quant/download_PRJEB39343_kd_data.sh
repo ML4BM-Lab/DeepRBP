@@ -14,14 +14,23 @@ set -e  # Exit on error
 source /scicomp/builds/Rocky/8.7/Common/software/Miniforge3/24.11.3-2/etc/profile.d/conda.sh
 conda activate kallisto_env
 
-# Define base raw data directory
-RAW_DIR="/scratch/jsanchoz/DeepRBP/data/explainability_module/real_kds"
+echo "🔎 Kallisto version:"
+kallisto version
+
+# -------------------------
+# Paths
+# -------------------------
+PROJECT_DATA="/scratch/jsanchoz/DeepRBP/data"
+
+# Shared annotation
+ANNOTATION_DIR="${PROJECT_DATA}/annotation"
+TRANSCRIPTOME="${ANNOTATION_DIR}/gencode.v23.transcripts.fa.gz"
+KALLISTO_INDEX="${ANNOTATION_DIR}/gencode.v23.transcripts.idx"
+
+# Dataset-specific paths
+RAW_DIR="${PROJECT_DATA}/explainability_module/real_kds"
 OUTPUT_DIR="${RAW_DIR}/PRJEB39343"
 FASTQ_DIR="${OUTPUT_DIR}/raw"
-
-# Transcriptome and Kallisto index (same as before)
-TRANSCRIPTOME="${RAW_DIR}/gencode.v23.transcripts.fa.gz"
-KALLISTO_INDEX="${RAW_DIR}/gencode.v23.transcripts.idx"
 
 THREADS=2
 BOOTSTRAPS=100

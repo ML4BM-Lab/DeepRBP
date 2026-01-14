@@ -1,3 +1,4 @@
+
 # src/deeprbp/explainability_module/real_knockdowns/plot_results/generate_realkd_plot.R
 
 # 🧹 Clear environment
@@ -35,56 +36,6 @@ cat("📄 Loading prepare score df for ploting \n")
 script_dir <- dirname(normalizePath(sys.frame(1)$ofile))
 source(file.path(script_dir, "prepare_score_df_for_plotting.R"))
 
-#generate_score_plot <- function(df_melted,
-#                                stat.test,
-#                                rbp,
-#                                experiment,
-#                                tipo = c("transcripts", "genes"),
-#                                transform = c("log10", "none")) {
-#  tipo <- match.arg(tipo)
-#  transform <- match.arg(transform)
-  
-  # Leyenda según tipo
-#  legend_title <- if (tipo == "genes") "Genes with\nDE transcript(s)" else "DE transcripts"
-  
-  # Etiqueta de Y según transformación
-#  y_lab <- if (transform == "log10") {
-#    latex2exp::TeX(r'(Scores in $log_{10}(x+1)$ scale)')
-#  } else {
-#    "Scores"
-#  }
-  
-  # y.position: un poco por encima del máximo observado en 'Scores'
-#  max_score <- max(df_melted$Scores, na.rm = TRUE)
-#  bump      <- if (is.finite(max_score) && max_score != 0) 0.10 * abs(max_score) else 0.1
-#  stat.test$y.position <- max_score + bump
-  
-  # Plot
-#  p <- ggpubr::ggboxplot(
-#    df_melted,
-#    x = "DE_Status", y = "Scores", fill = "DE_Status",
-#    add = "jitter", add.params = list(shape = 21, alpha = 0.5, color = NULL)
-#  ) +
-#    ylab(y_lab) +
-#    xlab(rbp) +
-#    ggtitle(experiment) +
-#    ggpubr::stat_pvalue_manual(stat.test, label = "p.adj.signif") +
-#    scale_y_continuous(expand = expansion(mult = c(0.05, 0.15))) +
-#    scale_fill_manual(
-#      values = c("#d95f02", "#7570b3"),
-#      breaks = c("DE", "non-DE"),
-#      name = legend_title
-#    ) +
-#    theme(
-#      legend.position = "right",
-#      axis.ticks.x = element_blank(),
-#      axis.text.x  = element_blank(),
-#      plot.title   = element_text(hjust = 0.5)
-#    )
-#  return(p)
-#}
-
-# new
 generate_score_plot <- function(df_melted,
                                 stat.test,
                                 rbp,

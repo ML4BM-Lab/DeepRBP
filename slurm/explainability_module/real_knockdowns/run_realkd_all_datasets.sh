@@ -71,44 +71,33 @@ run_realkd_dataset () {
   echo "Exit code: ${PIPESTATUS[0]}" | tee -a "${LOG}"
 }
 
-############################
-# BUCLE POR MODOS DE SCALER
-############################
+echo
+echo "########################################"
+echo ">>> Running all datasets with scaler_mode=${SCALER_MODE}"
+echo "    Output root: ${RESULTS_BASE}"
+echo "########################################"
+echo
 
-for SCALER_MODE in tcga fit_new; do
-  if [[ "${SCALER_MODE}" == "tcga" ]]; then
-    OUT_ROOT="${RESULTS_BASE}/using_tcga_scaler/dl_kout_t_stat"
-  else
-    OUT_ROOT="${RESULTS_BASE}/refited_scaler/dl_kout_t_stat"
-  fi
+# 1) PRJEB39343 (MBNL1 KD)
+run_realkd_dataset \
+  "${SCALER_MODE}" \
+  "${RESULTS_BASE}" \
+  "PRJEB39343" \
+  "${BASE_PROC}/PRJEB39343/processed_MBNL1"
 
-  echo
-  echo "########################################"
-  echo ">>> Running all datasets with scaler_mode=${SCALER_MODE}"
-  echo "    Output root: ${OUT_ROOT}"
-  echo "########################################"
-  echo
+# 2) GSE75491 (RBM47 KD)
+run_realkd_dataset \
+  "${SCALER_MODE}" \
+  "${RESULTS_BASE}" \
+  "GSE75491" \
+  "${BASE_PROC}/GSE75491/processed"
 
-  # 1) PRJEB39343 (MBNL1 KD)
-  run_realkd_dataset \
-    "${SCALER_MODE}" \
-    "${OUT_ROOT}" \
-    "PRJEB39343" \
-    "${BASE_PROC}/PRJEB39343/processed_MBNL1"
-
-  # 2) GSE75491 (RBM47 KD)
-  run_realkd_dataset \
-    "${SCALER_MODE}" \
-    "${OUT_ROOT}" \
-    "GSE75491" \
-    "${BASE_PROC}/GSE75491/processed"
-
-  # 3) GSE136366 (TDP-43 KO)
-  run_realkd_dataset \
-    "${SCALER_MODE}" \
-    "${OUT_ROOT}" \
-    "GSE136366" \
-    "${BASE_PROC}/GSE136366/processed"
+# 3) GSE136366 (TDP-43 KO)
+run_realkd_dataset \
+  "${SCALER_MODE}" \
+  "${RESULTS_BASE}" \
+  "GSE136366" \
+  "${BASE_PROC}/GSE136366/processed"
 
 done
 

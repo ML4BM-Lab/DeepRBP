@@ -51,7 +51,7 @@ def clean_abundance_dataframe(df_abundance):
     df_abundance['Gene_ID'] = df_abundance['Gene_ID'].str.split('.').str[0]
     return df_abundance
 
-def load_expression_from_abundance(path, sample_id): # antiguo: create_vec_exp_matrix_from_abundance(path, id_sample)
+def load_expression_from_abundance(path, sample_id, load_counts: bool = False): 
     """
     Load transcript- and gene-level expression vectors (TPM) from a sample's Kallisto abundance file.
 
@@ -66,9 +66,11 @@ def load_expression_from_abundance(path, sample_id): # antiguo: create_vec_exp_m
     # Read the abundance.tsv file
     df_abundance = pd.read_csv(f'{path}/{sample_id}/abundance.tsv', sep='\t')
     print(f'[{load_expression_from_abundance.__name__}] ✔️ Loaded abundance.tsv for sample {sample_id}')
+    
     # Clean and parse the raw abundance data to extract transcript/gene-level metadata and structure the DataFrame
     df_abundance = clean_abundance_dataframe(df_abundance)
     print(f'[{load_expression_from_abundance.__name__}] ✔️ Cleaned and structured abundance data for sample {sample_id}')
+    
     # Create transcript-level TPM dataframe
     df_trans_tpm = pd.DataFrame(
          df_abundance['tpm'].values,
@@ -76,6 +78,7 @@ def load_expression_from_abundance(path, sample_id): # antiguo: create_vec_exp_m
          columns=[sample_id]
     ).reset_index().rename(columns={'index': 'sample'})
     print(f'[{load_expression_from_abundance.__name__}] ✔️ Created transcript-level TPM DataFrame for sample {sample_id}')
+    
     # Create gene-level TPM dataframe
     tpm_sum_by_gene = df_abundance.groupby('Gene_ID')['tpm'].sum().reset_index()
     df_genes_tpm = pd.DataFrame(
@@ -84,4 +87,29 @@ def load_expression_from_abundance(path, sample_id): # antiguo: create_vec_exp_m
          columns=[sample_id]
     ).reset_index().rename(columns={'index': 'sample'})
     print(f'[{load_expression_from_abundance.__name__}] ✔️ Created gene-level TPM DataFrame for sample {sample_id}\n')
-    return df_trans_tpm, df_genes_tpm
+    
+    if load_counts:
+        # transcript-level counts
+        df_trans_counts = pd.DataFrame(
+            df_abundance["est_counts"].values,
+            index=df_abundance["Transcript_ID"].values,
+            columns=[sample_id]
+        ).reset_index().rename(columns={"index": "sample"})
+
+        # gene-level counts
+        counts_sum_by_gene = (
+            df_abundance.groupby("Gene_ID")["est_counts"]
+            .sum()
+            .reset_index()
+        )
+
+        df_genes_counts = pd.DataFrame(
+            counts_sum_by_gene["est_counts"].values,
+            index=counts_sum_by_gene["Gene_ID"].values,
+            columns=[sample_id]
+        ).reset_index().rename(columns={"index": "sample"})
+
+    if load_counts:
+        return df_trans_tpm, df_genes_tpm, df_trans_counts, df_genes_counts
+    else:
+        return df_trans_tpm, df_genes_tpm

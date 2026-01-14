@@ -130,18 +130,18 @@ DeepRBP/
 ```
 
 ## Data preparation
-DeepRBP can be applied to TCGA datasets or to your own RNA-seq data.  
+DeepRBP can be applied to TCGA datasets or **to your own RNA-seq data**.  
 Regardless of the data source, the model always expects the same preprocessed input format.
 
 This section explains:
 - what files are required,
 - how to structure your own data,
-- and how to adapt existing RNA-seq datasets.
+- and how to preprocess RNA-seq datasets using the standard DeepRBP pipeline.
 
 ---
 
 ### 📁 Required input format
-DeepRBP expects the following files per dataset:
+DeepRBP expects the following files **per dataset** or **per experimental group**:
 
 - **`RBPs_log2p_tpm.csv`**  
   RBP expression matrix (samples × RBPs), in `log2(TPM + 1)`
@@ -157,36 +157,84 @@ If your data can be converted into this format, **it can be used by DeepRBP**.
 ---
  
 **⚠️ Feature compatibility (important)**
-DeepRBP expects your matrices to match the feature manifest used during training:
+DeepRBP expects your matrices to match the **feature manifest used during training**:
 `DeepRBP_feature_spec.xlsx` (RBPs/genes/transcripts + exact order).
 
-If you are using the pretrained model, you must align your data to this manifest.
-If you want to use a different feature set, you’ll need to retrain the model
-(see `src/deeprbp/training_module/README.md`).
+This file defines:
+- the list of RBPs, genes, and transcripts,
+- and their **exact order**.
+
+If you are using the pretrained model, you **must aligned to this feature specification.
+Using a different feature set requires retraining the model (see `src/deeprbp/training_module/README.md`).
 
 ### Using DeepRBP with your own RNA-seq data
 DeepRBP can be applied to any RNA-seq dataset, including:
-
 - custom cancer cohorts,
 - in-vitro experiments,
-- RBP knockdown datasets.
+- RBP knockdown or perturbation studies.
 
-High-level steps:
-
-1. Quantify expression:
+At a high level, the required steps are:
+1. **Quantify expression**
   - transcript-level TPMs,
   - gene-level TPMs (e.g., Salmon, Kallisto, or equivalent).
 
-2. Build the required matrices:
+2. **Build DeepRBP input matrices**
   - transcript TPM matrix,
   - gene TPM matrix,
   - RBP expression matrix (subset of genes),
   - optional sample metadata.
 
-3. Apply transformations:
-  - log2(TPM + 1) where required.
+3. **Apply standard DeepRBP transformations**
+  - `log2(TPM + 1)` where required.
 
-4. Export using the expected filenames listed above.
+4. **Export files using the expected filenames**
+  - `RBPs_log2p_tpm.csv`
+  - `trans_log2p_tpm.csv`
+  - `gn_tpm.csv`
+  - `phenotype_metadata.csv`
+
+### Standard pipeline: Kallisto → DeepRBP inputs
+If your samples were quantified with **kallisto**, DeepRBP provides a **user-facing preprocessing pipeline**
+that converts `abundance.tsv` files into DeepRBP-ready inputs using the same **preprocessing logic as model training**.
+
+The pipeline expects:
+- one folder per sample under `kallisto_output/`, each containing `abundance.tsv`,
+- a metadata CSV with a `Run` column (sample IDs),
+- the DeepRBP feature **specification file**.
+
+#### Basic execution
+```bash
+preprocess-user-data \
+  --kallisto_output <DATASET_DIR>/kallisto_output \
+  --metadata_csv   <DATASET_DIR>/metadata.csv \
+  --feature_spec   pretrained_model/DeepRBP_feature_spec.xlsx \
+  --output_dir     <DATASET_DIR>/deeprbp_inputs \
+  --group_col tissue_type
+```
+
+This command creates one **output folder per group** (e.g. per tissue or condition), each containing:
+- `RBPs_log2p_tpm.csv`
+- `trans_log2p_tpm.csv`
+- `gn_tpm.csv`
+- `phenotype_metadata.csv`
+
+Optional arguments allow further splitting (e.g. by tumor stage or cell line).
+
+#### Execution on HPC systems (optional)
+For large datasets, the same command can be executed on an HPC cluster using the
+provided SLURM wrapper script, which forwards all command-line arguments to
+`preprocess-user-data`:
+```bash
+sbatch preprocess_datauser.sh \
+  --kallisto_output <DATASET_DIR>/kallisto_output \
+  --metadata_csv   <DATASET_DIR>/metadata.csv \
+  --feature_spec   pretrained_model/DeepRBP_feature_spec.xlsx \
+  --output_dir     <DATASET_DIR>/deeprbp_inputs \
+  --group_col      tissue_type
+```
+
+This is functionally equivalent to direct execution and is recommended for
+large-scale preprocessing.
 
 ## Evaluate the DeepRBP predictor
 You can evaluate the **pretrained DeepRBP predictor** on your processed dataset (same input format as in Data preparation). 
@@ -327,11 +375,3 @@ https://doi.org/10.1101/2024.04.11.589004
 
 ## License
 <!-- TODO: add license text or link to LICENSE file -->
-
-
-
-# QUE EL USUARIO PUEDA VER COMO PREPROCESAR CON EL 
-# EJEMPLO DEL REAL KDS O LA INFO DE MARIA (ESTO HAY Q HACER) PARA VER COMO PUEDEN PRE-
-# PROCESAR LOS DATOS (PERO EN TRAINIG_MODULE SOBRE TODO ES ENSEÑAR LOS PASOS BIEN)
-
-## AQUI METERLE EL EVALUATE MODEL QUE NUNCA METÍ!!!

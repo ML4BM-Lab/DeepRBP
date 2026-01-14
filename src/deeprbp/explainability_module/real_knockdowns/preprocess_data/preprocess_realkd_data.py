@@ -1,6 +1,6 @@
 # src/deeprbp/explainability_module/real_knockdowns/preprocess_data/preprocess_realkd_data.py
 
-# 22-dic esto hay que volver a probarlo porque es nueva version del code y utilizalo para la info nueva de Maria!
+# 22-dic esto hay que volver a probarlo porque es nueva version del code
 import os 
 import pandas as pd
 import argparse

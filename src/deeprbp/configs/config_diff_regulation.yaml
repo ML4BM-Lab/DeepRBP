@@ -1,0 +1,65 @@
+# ============================================================
+# DeepRBP – Differential regulation explainability config
+# ============================================================
+
+# ------------------------------------------------------------------
+# Input data
+# ------------------------------------------------------------------
+# Path to the dataset directory.
+# This path MUST contain the expression matrices expected by DeepRBP
+# (RBPs_log2p_tpm.csv, trans_log2p_tpm.csv, gn_tpm.csv, metadata, etc.)
+test_path_files: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA"
+
+# Column names in metadata
+sample_category: "detailed_category"
+disease_condition: "sample_type"
+
+# NOTE:
+# - select_condition is NOT defined here
+# - Conditions are passed via CLI (--conditions)
+# - This YAML is reused across conditions
+
+# ------------------------------------------------------------------
+# Preprocessing / scaling
+# ------------------------------------------------------------------
+# Directory containing the scaler and auxiliary files
+# used during training (e.g. scaler.joblib, sigma.npy).
+#
+# This MUST correspond to the scaler used to train the predictor
+# checkpoint provided at runtime.
+scaler_dir: "/scratch/jsanchoz/DeepRBP/pretrained_model"
+
+# ------------------------------------------------------------------
+# Explainability configuration
+# ------------------------------------------------------------------
+explanation_method: "DeepLIFT"
+
+# Reference definition for DeepLIFT
+reference_data: "knockout_reference"
+
+# Target of attribution:
+#  - "final": model output after sigmoid and gene scaling
+#  - "logit": pre-sigmoid logits
+target_mode: "final"
+
+# How scores are reduced across samples
+batch_reduction_method: "t-statistic"
+
+# How transcript-level scores are collapsed to gene level
+gene_collapse_method: "max_absolute_value"
+
+# ------------------------------------------------------------------
+# Annotation and mapping
+# ------------------------------------------------------------------
+getBM_path: "/scratch/jsanchoz/DeepRBP/data/annotation/getBM_gencode_v23.csv"
+
+gene_col_name: "Gene_ID"
+trans_col_name: "Transcript_ID"
+
+# ------------------------------------------------------------------
+# Output control
+# ------------------------------------------------------------------
+# IMPORTANT:
+# This value is FORCED to True by the CLI for differential regulation
+# analyses, regardless of what is written here.
+save_per_sample_scores: True

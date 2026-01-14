@@ -1,3 +1,4 @@
+
 # Real knockdowns: validation of DeepRBP explainability using real RBP knockdown RNA-seq data
 This submodule validates **DeepRBP explainability scores** using real RNA-binding protein (RBP) knockdown RNA-seq experiments.
 It tests whether genes and transcripts that respond transcriptionally to an RBP knockdown receive **higher explainability scores** from DeepRBP under control conditions.
@@ -103,16 +104,18 @@ Do **not rename** this file or change column names unless you also update the sc
 Differential expression (DE) analysis is performed **outside the DeepRBP model**, using transcript-level abundance estimates obtained with **Kallisto**.
 This step is used to validate explainability results against real knockdown (KD) RNA-seq experiments.
 
-DE is computed using the voom–limma framework and is executed in batch via a single **SLURM-friendly shell script**.
+Specifically, differential expression is computed with the **voom–limma** framework, applied to **FPKM values estimated from Kallisto pseudo-counts**, and is executed in batch via a single SLURM-friendly 
+shell script (`run_voom-limma_kd.R`).
 
 ### What this step does
 For each real knockdown dataset:
 
 1. Loads transcript-level expression matrices derived from Kallisto
-2. Performs voom normalization and linear modeling with limma
-3. Identifies differentially expressed transcripts
-4. Summarizes DE at the gene level by selecting, for each gene, the transcript with the lowest adjusted p-value
-5. Generates volcano plots for transcript-level DE
+2. Computes transcript-level FPKM values from Kallisto estimated counts
+3. Performs voom normalization and linear modeling with limma
+4. Identifies differentially expressed transcripts
+5. Summarizes DE at the gene level by selecting, for each gene, the transcript with the lowest adjusted p-value
+6. Generates volcano plots for transcript-level DE
 
 ### Significance criteria (as used in the paper)
 By default, transcripts / genes are considered differentially expressed if:
@@ -130,14 +133,13 @@ sh run_limma_batch.sh
 ```
 
 This script:
-
 - loops over all configured knockdown datasets
 - runs transcript-level DE with voom–limma
 - produces gene-level summaries
 - generates volcano plots
 - organizes outputs in a structured results folder
 
-No direct invocation of `run_voom-limma.R` is required.
+No direct invocation of `run_voom-limma_kd.R` is required.
 
 ### Script locations
 - **Batch launcher (recommended entry point)**
@@ -147,7 +149,12 @@ slurm/explainability_module/real_knockdowns/de_limma/run_limma_batch.sh
 
 - **Core DE implementation (called internally)**
 ```bash
-src/deeprbp/explainability_module/real_knockdowns/de_limma/run_voom-limma.R
+src/deeprbp/explainability_module/de_limma/run_voom-limma_kd.R
+```
+
+- **Shared statistical core**
+```bash
+src/deeprbp/explainability_module/de_limma/voom_limma_core.R
 ```
 
 ### Output structure
@@ -362,6 +369,40 @@ run-deeprbp-realkd \
 - Explainability is intentionally restricted to control samples
 - Knockdown samples are used only for prediction evaluation
 - Use scaler_mode=tcga unless you explicitly want to recalibrate the feature space
+
+### Running in batch (HPC / SLURM) (recommended for multiple datasets)
+When analyzing multiple real knockdown datasets, Step 4 is typically executed in batch on an HPC cluster using SLURM job scripts.
+These scripts wrap the run-deeprbp-realkd CLI and ensure reproducible execution across datasets, logging, and resource control.
+
+Two common execution patterns are provided:
+
+#### Single-dataset SLURM job
+For running explainability on a single real knockdown experiment:
+```bash
+sbatch run_realkd_single_dataset.sh
+```
+
+Internally, this script activates the DeepRBP environment and calls:
+```bash
+python -m deeprbp.explainability_module.real_knockdowns.main_real_knockdowns \
+  --config_path config_real_knockdowns.yaml \
+  --processed_data_dir <DATASET>/processed \
+  --output_dir <RESULTS>/<DATASET>
+```
+
+#### Multi-dataset batch SLURM job
+
+For running Step 4 across multiple real knockdown datasets in a single submission:
+```bash
+sbatch run_realkd_all_datasets.sh
+```
+
+This batch script:
+
+- iterates over all the example datasets in this tutorial
+- produces one output folder per dataset
+- captures logs per execution
+- Both scripts are located under: `slurm/explainability_module/real_knockdowns/`
 
 ## Step 5 — Compare explainability scores between DE and non-DE entities
 This final step tests whether differentially expressed (DE) genes or transcripts exhibit higher DeepRBP explainability scores than non-DE ones.

@@ -1,5 +1,3 @@
-# HAY QUE ACTUALIZAR EN CONSECUENCIA TB el preprocess_realkd_data.py!!!!
-
 # src/deeprbp/data_preprocessing/preprocess_data.py
 
 import os
@@ -245,34 +243,48 @@ def generate_model_input_matrices(
         )
     print(f'[generate_model_input_matrices] Generating input matrices for study: {study_name}...')
     df_phenotype_study = df_phenotype[df_phenotype.study == study_name].copy()
-
+    
     if df_phenotype_study.empty:
         print(f"[generate_model_input_matrices] No samples for {study_name}")
         return {}, df_phenotype_study
-
+    
+    has_counts = ("df_counts" in data) and ("df_trans_counts" in data)
+    
     # --- sample intersection (deterministic order)---
+    # --- Expression samples (always required) ---
     samples_expr = sorted(
         set(df_phenotype_study.index)
         & set(data['df_genes'].columns)
         & set(data['df_trans'].columns)
     )
-
-    samples_counts = sorted(
-        set(df_phenotype_study.index)
-        & set(data['df_counts'].columns)
-        & set(data['df_trans_counts'].columns) 
-    )
-
+    
+    # --- Count samples (optional) ---
+    if has_counts:
+        samples_counts = sorted(
+            set(df_phenotype_study.index)
+            & set(data['df_counts'].columns)
+            & set(data['df_trans_counts'].columns) 
+        )
+    else:
+        samples_counts = []
+    
     print(f"  • Expression samples: {len(samples_expr)}")
-    print(f"  • Count samples     : {len(samples_counts)}")
-
+    if has_counts:
+        print(f"  • Count samples     : {len(samples_counts)}")
+    else:
+        print("  • Count samples     : not available")
+    
     # --- Slice samples first (never features yet) ---
     df_genes_raw = data["df_genes"].loc[:, samples_expr]
     df_trans_raw = data["df_trans"].loc[:, samples_expr]
     
-    df_gene_counts = data["df_counts"].loc[:, samples_counts]
-    df_trans_counts = data["df_trans_counts"].loc[:, samples_counts]
-
+    if has_counts:
+        df_gene_counts = data["df_counts"].loc[:, samples_counts]
+        df_trans_counts = data["df_trans_counts"].loc[:, samples_counts]
+    else:
+        df_gene_counts = None
+        df_trans_counts = None
+    
     # --- Build feature spaces (INDEPENDENT) ---
     # RBPs (regulatory input space)
     df_rbp_gene = enforce_feature_order(
@@ -281,7 +293,6 @@ def generate_model_input_matrices(
         name="RBPs",
         fill_missing=False,
     )
-
     # Genes (gene-level space)
     df_genes = enforce_feature_order(
         df_genes_raw,
@@ -289,7 +300,6 @@ def generate_model_input_matrices(
         name="Genes",
         fill_missing=False,
     )
-
     # Transcripts (transcript-level space)
     df_trans = enforce_feature_order(
         df_trans_raw,
@@ -297,31 +307,40 @@ def generate_model_input_matrices(
         name="Transcripts",
         fill_missing=False,
     )
-
+    
     # Final output
     output_data = {
-        "df_rbp_gene": df_rbp_gene,       # (n_RBPs × samples)
-        "df_genes": df_genes,             # (n_genes × samples)
-        "df_trans": df_trans,             # (n_transcripts × samples)
-        "df_counts": df_gene_counts,      # (genes × samples)
-        "df_trans_counts": df_trans_counts,  # (transcripts × samples)
+        "df_rbp_gene": df_rbp_gene, # (n_RBPs × samples)
+        "df_genes": df_genes, # (n_genes × samples)
+        "df_trans": df_trans, # (n_transcripts × samples)
     }
-
+    if has_counts:
+        output_data["df_counts"] = df_gene_counts # (genes × samples)
+        output_data["df_trans_counts"] = df_trans_counts # (transcripts × samples)
     print(f"  • RBPs        : {df_rbp_gene.shape}")
     print(f"  • Genes       : {df_genes.shape}")
     print(f"  • Transcripts : {df_trans.shape}")
-    print(f"  • Gene counts : {df_gene_counts.shape}")
-    print(f"  • Trans counts: {df_trans_counts.shape}")
+    
+    if has_counts:
+        print(f"  • Gene counts : {df_gene_counts.shape}")
+        print(f"  • Trans counts: {df_trans_counts.shape}")
+    else:
+        print("  • Counts      : not generated")
     print()
     return output_data, df_phenotype_study
 
-def transform_expression_data(data: dict, 
-                              from_log2p: bool = True,
-                              epsilon: float = 0.001,
-                              epsilon_counts: float = 1.0,
-                              counts_are_log2p: bool = True) -> dict:
+def transform_expression_data(
+    data: dict, 
+    from_log2p: bool = True,
+    epsilon: float = 0.001,
+    epsilon_counts: float = 1.0,
+    counts_are_log2p: bool = True
+    ) -> dict:
     """
     Transforms expression data (TPM or log2p(TPM)) for RBPs, transcripts, genes, and optionally counts.
+
+     - Expression (TPM): log2p(TPM + ε) → TPM → log2p(TPM + 1)
+     - Counts           : log2p(count + ε_counts) → count (int)
 
     Parameters:
     - data (dict): Dictionary containing expression DataFrames. Expected keys include:
@@ -337,33 +356,44 @@ def transform_expression_data(data: dict,
     """
     print('[transform_expression_data] Starting transformation...')
     data = copy.deepcopy(data)
-    # Define which keys to transform normally (TPM/log2p)
-    expression_keys = [k for k in data.keys() if k != 'df_counts']
-    # Step 1: If from_log2p, convert back to TPM
-    if from_log2p:
-        print('[transform_expression_data] Inverting log2p(TPM + ε) to TPM...')
-        print(f'  • TPM from_log2p: {from_log2p}  (epsilon = {epsilon})')
-        for key in expression_keys:
-            print(f'  ↪️ Inverting {key}')
+
+    # ----------------------------
+    # 1) Expression matrices
+    # ----------------------------
+    expr_keys = ['df_rbp_gene', 'df_trans', 'df_genes']
+
+    for key in expr_keys:
+        if key not in data:
+            continue
+
+        if from_log2p:
+            print(f'  ↪️ Inverting log2p(TPM + ε) for {key}')
+            # convert back to TPM
             data[key] = np.power(2, data[key]) - epsilon
-    # Step 2: Clip negative values (just in case)
-    for key in expression_keys:
-        data[key] = data[key].clip(lower=0)
-    # Step 3: Apply log2p(x + 1) to df_trans y df_rbp_gene
-    for key in ['df_trans', 'df_rbp_gene']:
+            # clip negative values (just in case)
+            data[key] = data[key].clip(lower=0)
+    
+    # Re-apply log2p(x + 1) where required
+    for key in ['df_rbp_gene', 'df_trans']:
         if key in data:
             print(f'  🔁 Applying log2p(x + 1) to {key}')
             data[key] = np.log2(data[key] + 1)
-    # Step 4: Process df_counts if present
-    if 'df_counts' in data:
+
+    # ----------------------------
+    # 2) Count matrices
+    # ----------------------------
+    for key in ['df_counts', 'df_trans_counts']:
+        if key not in data:
+            continue
+
         if counts_are_log2p:
-            print(f'[transform_expression_data] Inverting log2p(COUNTS + {epsilon_counts})...')
-            data['df_counts'] = np.power(2, data['df_counts']) - epsilon_counts
-            data['df_counts'] = data['df_counts'].clip(lower=0)
-        else:
-            print('[transform_expression_data] df_counts is already in raw count scale (no inverse log2p).')
-        print('[transform_expression_data] Rounding and converting df_counts to integers...')
-        data['df_counts'] = data['df_counts'].round().astype(int)
+            print(f'  ↪️ Inverting log2p(count + 1) for {key}')
+            data[key] = np.power(2, data[key]) - epsilon_counts
+            data[key] = data[key].clip(lower=0)
+
+        print(f'  🔢 Rounding and casting {key} to int')
+        data[key] = data[key].round().astype(int)
+         
     print('[transform_expression_data] ✅ Transformation complete.\n')
     return data
 
@@ -379,7 +409,7 @@ def transpose_dataframes(data: dict) -> dict:
     """
     print('[transpose_dataframes] Transposing expression data...')
     data = data.copy()
-    for key in ['df_rbp_gene', 'df_trans', 'df_genes', 'df_counts']:
+    for key in ['df_rbp_gene', 'df_trans', 'df_genes', 'df_counts', 'df_trans_counts']:
         if key in data:
             print(f'  🔁 Transposing {key}')
             data[key] = data[key].T
@@ -402,9 +432,11 @@ def save_processed_data(
     - study_name (str, optional): Name of the study to create a subdirectory (default: None).
     """
     print('[save_processed_data] Saving processed data...')
+    
     # Determine output path
     path = os.path.join(output_dir, study_name) if study_name else output_dir
     os.makedirs(path, exist_ok=True)
+    
     # Mapping of keys to filenames
     save_map = {
         'df_rbp_gene': 'RBPs_log2p_tpm.csv',
@@ -421,6 +453,7 @@ def save_processed_data(
             data[key].to_csv(file_path, mode='a', header=not os.path.exists(file_path))
         else:
             print(f'[save_processed_data] Skipping {key} (not found in data).')
+
     # Save phenotype metadata if provided
     if df_phenotype_study is not None and 'df_rbp_gene' in data:
         path_phenotype = os.path.join(path, 'phenotype_metadata.csv')
@@ -428,6 +461,7 @@ def save_processed_data(
         df_phenotype_study.loc[data['df_rbp_gene'].index].to_csv(
             path_phenotype, mode='a', header=not os.path.exists(path_phenotype)
         )
+
     elif df_phenotype_study is None:
         print('[save_processed_data] Skipping phenotype metadata (not provided).')
     print('[save_processed_data] ✅ Data saving completed.\n')
@@ -477,10 +511,15 @@ def process_data_chunk(
             list_transcripts=list_trans_spec
         )
 
-        if not data_study:
+        if not data_study or data_study['df_genes'].shape[1] == 0:
+            print(
+                f"[process_data_chunk] ℹ️ No {study_name} samples in this chunk, skipping."
+            )
             continue
 
         data_transformed = transform_expression_data(data_study)
+        assert_transformed_data_ok(data_transformed)
+
         data_transformed = transpose_dataframes(data_transformed)
 
         save_processed_data(
@@ -489,6 +528,72 @@ def process_data_chunk(
             output_dir = output_dir, 
             study_name = study_name)
         print('\n')
+
+def assert_transformed_data_ok(data: dict) -> None:
+    """
+    Sanity checks to ensure transformed expression and count matrices
+    are numerically and semantically valid.
+    """
+    # ----------------------------
+    # Counts (genes + transcripts)
+    # ----------------------------
+    for key in ['df_counts', 'df_trans_counts']:
+        if key not in data:
+            continue
+
+        df = data[key]
+
+        # Skip empty matrices (no samples in this chunk)
+        if df.shape[1] == 0:
+            print(f"[assert_transformed_data_ok] ℹ️ Skipping {key} (no samples)")
+            continue
+
+        # No NaNs
+        assert not df.isna().any().any(), (
+            f"[ASSERT FAIL] {key} contains NaN values"
+        )
+
+        # No negatives
+        assert (df.values >= 0).all(), (
+            f"[ASSERT FAIL] {key} contains negative values"
+        )
+
+        # Integer check
+        assert np.issubdtype(df.values.dtype, np.integer), (
+            f"[ASSERT FAIL] {key} is not integer dtype (got {df.values.dtype})"
+        )
+
+        # Upper bound sanity check
+        max_val = df.values.max()
+        assert max_val < 1e9, (
+            f"[ASSERT FAIL] {key} max value too large ({max_val}). "
+            "Counts may not be in raw count scale."
+        )
+
+    # ----------------------------
+    # Expression matrices
+    # ----------------------------
+    for key in ['df_rbp_gene', 'df_trans', 'df_genes']:
+        if key not in data:
+            continue
+
+        df = data[key]
+
+        if df.shape[1] == 0:
+            print(f"[assert_transformed_data_ok] ℹ️ Skipping {key} (no samples)")
+            continue
+
+        # No NaNs
+        assert not df.isna().any().any(), (
+            f"[ASSERT FAIL] {key} contains NaN values"
+        )
+
+        # No negatives
+        assert (df.values >= 0).all(), (
+            f"[ASSERT FAIL] {key} contains negative values"
+        )
+
+    print('[assert_transformed_data_ok] ✅ All sanity checks passed.')
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Preprocess gene and transcript expression data for model input generation.')

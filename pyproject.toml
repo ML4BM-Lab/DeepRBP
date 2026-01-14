@@ -63,8 +63,10 @@ run-deeprbp-evaluator = "deeprbp.training_module.evaluate_predictor:main"
 run-deeprbp-explainer = "deeprbp.explainability_module.main_explainer:main"
 run-postar-validator = "deeprbp.explainability_module.postar_validation.postar_validator:main"
 preprocess-realkd-data = "deeprbp.explainability_module.real_knockdowns.preprocess_data.preprocess_realkd_data:main"
+preprocess-user-data = "deeprbp.data_preprocessing.preprocess_data_user:main"
 run-deeprbp-realkd = "deeprbp.explainability_module.real_knockdowns.main_real_knockdowns:main"
-run-deeprbp-regulation-changes-cancer = "deeprbp.explainability_module.tcga_normal_vs_tumor.main_tcga_compare:main"
+run-deeprbp-differential-regulation-scores = "deeprbp.explainability_module.differential_regulation.compute_scores_per_condition:main"
+run-deeprbp-differential-expression = "deeprbp.explainability_module.differential_regulation.de_expression_conditions:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
