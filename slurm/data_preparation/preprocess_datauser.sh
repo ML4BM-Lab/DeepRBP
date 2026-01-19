@@ -6,7 +6,6 @@
 #SBATCH --mem-per-cpu=30G
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=jsanchoz@unav.es
-#SBATCH -o /scratch/jsanchoz/DeepRBP/output/logs/preprocess_user_data_%j.out
 
 set -euo pipefail
 
@@ -23,14 +22,24 @@ module purge
 module load Miniforge3
 conda activate DeepRBP
 
+python --version
 export PYTHONPATH="/scratch/jsanchoz/DeepRBP/src:${PYTHONPATH:-}"
 export PYTHONUNBUFFERED=1
+export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"
 
 python -c "import deeprbp; print('[OK] deeprbp package found')"
 
 echo ""
-echo "[preprocess-user-data] Command-line arguments:"
-echo "  $@"
+echo "[preprocess-user-data] Arguments:"
+printf ' %q' "$@"; echo
+echo ""
+
+# Quick hint about grouping mode
+if printf '%s\n' "$@" | grep -q -- '--group_col'; then
+  echo "[preprocess-user-data] Mode: group-wise preprocessing (group_col provided)"
+else
+  echo "[preprocess-user-data] Mode: single-dataset preprocessing (no group_col)"
+fi
 echo ""
 
 # -------------------------

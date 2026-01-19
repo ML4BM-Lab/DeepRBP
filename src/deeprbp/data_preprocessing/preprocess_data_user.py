@@ -27,7 +27,7 @@ def parse_args():
     parser.add_argument("--metadata_csv", required=True)
     parser.add_argument("--feature_spec", required=True)
     parser.add_argument("--output_dir", required=True)
-    parser.add_argument("--group_col", default="tissue_type", help="Main column used to group samples")
+    parser.add_argument("--group_col", default=None, help="Optional column used to group samples. If not provided, all samples are processed together.")
     parser.add_argument("--split_by_tumor_stage", action="store_true")
     parser.add_argument("--split_by_cell_line", action="store_true") 
     return parser.parse_args()
@@ -44,11 +44,14 @@ def main():
     metadata["Run"] = metadata["Run"].astype(str)
 
     # 2) Define grouping columns
-    group_cols = [args.group_col]
-    if args.split_by_tumor_stage:
-        group_cols.append("tumor_stage")
-    if args.split_by_cell_line:
-        group_cols.append("cell_line")
+    if args.group_col is None:
+        group_cols = None
+    else:
+        group_cols = [args.group_col]
+        if args.split_by_tumor_stage:
+            group_cols.append("tumor_stage")
+        if args.split_by_cell_line:
+            group_cols.append("cell_line")
 
     print("[preprocess_data_user]")
     print(f"  kallisto_output : {args.kallisto_output}")
@@ -65,20 +68,34 @@ def main():
     print(f"  Transcripts: {len(list_transcripts)}")
 
     # 4) Iterate over groups
-    for group_values, meta_group in metadata.groupby(group_cols, dropna=False):
-        group_name = build_group_name(group_cols, group_values)
-        sample_ids = meta_group["Run"].tolist()
-
+    if group_cols is None:
+        # Single dataset
         process_one_group(
-            sample_ids=sample_ids,
-            group_name=group_name,
+            sample_ids=metadata["Run"].tolist(),
+            group_name="ALL",
             kallisto_output_dir=args.kallisto_output,
             output_dir=args.output_dir,
             list_rbps=list_rbps,
             list_genes=list_genes,
             list_transcripts=list_transcripts,
-            phenotype_df=meta_group,
+            phenotype_df=metadata,
         )
+    else:
+        # Group-wise processing
+        for group_values, meta_group in metadata.groupby(group_cols, dropna=False):
+            group_name = build_group_name(group_cols, group_values)
+            sample_ids = meta_group["Run"].tolist()
+
+            process_one_group(
+                sample_ids=sample_ids,
+                group_name=group_name,
+                kallisto_output_dir=args.kallisto_output,
+                output_dir=args.output_dir,
+                list_rbps=list_rbps,
+                list_genes=list_genes,
+                list_transcripts=list_transcripts,
+                phenotype_df=meta_group,
+            )
 
     # Timing
     elapsed = timeit.default_timer() - start_time
@@ -201,19 +218,3 @@ def process_one_group(
 
 if __name__ == "__main__":
     main()
-
-
-# ### pseudo exec - LA METODOLOGÍA ES CORRECTA JOSEBA TIC
-# # dataset 1
-# import sys
-# sys.argv = [
-#     "preprocess-user-data",  # nombre ficticio del script
-#     "--kallisto_output", "/scratch/jsanchoz/DeepRBP/data/explainability_module/differential_regulation/GSE114564/kallisto_output",
-#     "--metadata_csv", "/scratch/jsanchoz/DeepRBP/data/explainability_module/differential_regulation/GSE114564/kallisto_qc_with_kallisto_qc.csv",
-#     "--feature_spec", "/scratch/jsanchoz/DeepRBP/data/training_module/feature_specs/DeepRBP_feature_spec.xlsx",
-#     "--output_dir", "/scratch/jsanchoz/DeepRBP/data/explainability_module/differential_regulation/GSE114564/processed",
-#     "--group_col", "disease_state",
-# ]
-
-# args = parse_args()
-# ####################

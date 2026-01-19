@@ -1,50 +1,71 @@
 #!/bin/bash
 #SBATCH --partition=general
 #SBATCH --qos=regular
-#SBATCH --job-name=deeprbp_diff_reg_scores
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=30gb
+#SBATCH --mem=200gb
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH -o output/logs/diff_reg_scores_%j.out
-#SBATCH -e output/logs/diff_reg_scores_%j.err
 #SBATCH --mail-type=START,END,FAIL
-#SBATCH --mail-user=you@yourdomain.com
+#SBATCH --mail-user=jsanchoz@unav.es
+#SBATCH -o /scratch/jsanchoz/DeepRBP/output/logs/scores_%x.out
+
+# ============================================================
+# Usage:
+# sbatch run_compute_scores_per_condition.sh \
+#   <DATASET_ID> <CONFIG_PATH> <OUTPUT_DIR> <SELECT_CATEGORY> <CONDITIONS>
+#
+# Example:
+# sbatch run_compute_scores_per_condition.sh \
+#   TCGA \
+#   src/deeprbp/configs/config_diff_regulation.yaml \
+#   /scratch/jsanchoz/DeepRBP/output/diff_reg/TCGA-Liver \
+#   Liver_Hepatocellular_Carcinoma \
+#   Primary_Tumor,Solid_Tissue_Normal
+# ============================================================
 
 set -euo pipefail
 
-echo "########################################"
-echo "Starting job at: $(date)"
-echo "Local time (Europe/Madrid): $(TZ='Europe/Madrid' date '+%Y-%m-%d %H:%M:%S')"
-echo "########################################"
+# ----------------------------
+# Parse arguments
+# ----------------------------
+if [[ $# -ne 5 ]]; then
+  echo "Usage: $0 <DATASET_ID> <CONFIG_PATH> <OUTPUT_DIR> <SELECT_CATEGORY> <CONDITIONS>"
+  exit 1
+fi
+
+DATASET_ID="$1"
+CONFIG_PATH="$2"
+OUTPUT_DIR="$3"
+SELECT_CATEGORY="$4"
+CONDITIONS="$5"
 
 # ----------------------------
-# User configuration
+# Fixed configuration
 # ----------------------------
-CONFIG_PATH="src/deeprbp/configs/config_diff_regulation.yaml"
-CKPT_PATH="/path/to/deeprbp_predictor.ckpt"
-OUTPUT_DIR="/scratch/jsanchoz/DeepRBP/output/diff_reg/Liver"
+CKPT_PATH="/scratch/jsanchoz/DeepRBP/pretrained_model/model.ckpt"
 
-SELECT_CATEGORY="Liver_Hepatocellular_Carcinoma"
-CONDITIONS="Primary_Tumor,Solid_Tissue_Normal"
+echo "########################################"
+echo "Dataset        : ${DATASET_ID}"
+echo "Config         : ${CONFIG_PATH}"
+echo "Output dir     : ${OUTPUT_DIR}"
+echo "Category       : ${SELECT_CATEGORY}"
+echo "Conditions     : ${CONDITIONS}"
+echo "Started at     : $(date)"
+echo "Local time     : $(TZ='Europe/Madrid' date '+%Y-%m-%d %H:%M:%S')"
+echo "########################################"
 
 # ----------------------------
 # Environment setup
 # ----------------------------
 module purge
 module load Miniforge3
-
-source activate /data/jsanchoz/conda-env/DeepRBP
+conda activate DeepRBP
 
 python --version
-conda info --envs
-
-export PYTHONPATH="$(pwd)/src:${PYTHONPATH:-}"
+export PYTHONPATH="/scratch/jsanchoz/DeepRBP/src:${PYTHONPATH:-}"
 export PYTHONUNBUFFERED=1
 
-python -c "import deeprbp; print('DeepRBP import OK')"
-
-mkdir -p output/logs "$OUTPUT_DIR"
+python3.9 -c "import deeprbp; print('DeepRBP import OK')"
 
 # ----------------------------
 # Run
@@ -57,9 +78,8 @@ CMD=(run-deeprbp-differential-regulation-scores
   --conditions "$CONDITIONS"
 )
 
-echo "Running:"
+echo "Running command:"
 printf ' %q' "${CMD[@]}"; echo
-
 "${CMD[@]}"
 
 echo "########################################"

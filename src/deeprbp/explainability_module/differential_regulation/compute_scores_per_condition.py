@@ -8,10 +8,12 @@ from typing import List
 
 from ...data_loading.config_loader import ConfigParser
 from ...training_module.model import PredictorModel
-from ...explainability_module.main_explainer import data_preparation
-
+from ...explainability_module.main_explainer import (
+    data_preparation,
+    run_explainability_pipeline,
+    save_results,
+)
 from .utils_reg import (
-    _load_or_run_explainer,
     _slugify_condition,
     _parse_conditions,
 )
@@ -21,13 +23,13 @@ def parse_args(argv=None):
     p.add_argument("--config_path", required=True, help="YAML configuration for the explainer (loaded by ConfigParser).")
     p.add_argument("--model_ckpt_path", required=True, help="Checkpoint of the trained DeepRBP predictor.")
     p.add_argument("--output_dir", required=True, help="Base output directory. Will create output_dir/explainability_scores/<Condition>/")
-    p.add_argument("--select_category", required=True, 
-     help="Dataset category / tissue identifier. "
-             "This value MUST be present and correctly defined in the input metadata, "
-             "otherwise the dataset cannot be loaded.")
+    p.add_argument("--select_category", default=None,
+      help="Dataset category / tissue identifier. "
+           "If not provided, ALL samples are used (no category filtering).")
     p.add_argument("--conditions", required=True, 
      help="Comma-separated list of condition labels to process "
-             "(e.g. 'Control,Treated'). Each condition MUST exist in the metadata.")
+             "(e.g. 'Control,Treated'). Each condition MUST exist in the metadata."
+             "The column is set in yaml file")
     return p.parse_args(args=argv)
 
 def main(argv=None) -> None:
@@ -53,6 +55,9 @@ def main(argv=None) -> None:
     # ---- Load config ----
     print("[diff_reg / scores] Loading explainer configuration...")
     cfg = ConfigParser(args.config_path)
+
+    if not hasattr(args, "scaler_dir"):
+        args.scaler_dir = cfg.get("scaler_dir")
      
     # ---- Load model ----
     print("[diff_reg / scores] Loading trained DeepRBP predictor...")
@@ -65,6 +70,14 @@ def main(argv=None) -> None:
         cond_slug = _slugify_condition(cond)
         cond_out_dir = os.path.join(scores_root, cond_slug)
         os.makedirs(cond_out_dir, exist_ok=True)
+
+        per_sample_path = os.path.join(cond_out_dir, "df_scores_TxRBP_per_sample.csv")
+        result_table_path = os.path.join(cond_out_dir, "result_table.csv")
+
+        if os.path.exists(per_sample_path) and os.path.exists(result_table_path):
+            print(f"[diff_reg / scores] Found existing explainability outputs for {cond}")
+            print(f"[diff_reg / scores] Skipping condition: {cond}")
+            continue
 
         print("\n" + "-" * 88)
         print(f"[diff_reg / scores] Processing condition: {cond}")
@@ -94,16 +107,25 @@ def main(argv=None) -> None:
         except Exception:
             print("[diff_reg / scores]  • Dataset size information not available.")
 
-        # ---- Run or load explainability ----
-        print("[diff_reg / scores] Running / loading DeepRBP explainability...")
-        res = _load_or_run_explainer(
-            condition_label=cond,
-            cfg=cfg,
-            args_cond=args_cond,
-            dataset=ds_cond,
-            model=model,
-            getBM=getBM,
+        # ---- Run explainability ----
+        print(f"[diff_reg / scores] Running DeepRBP explainability for {cond}...")
+        res = run_explainability_pipeline(
+            cfg,
+            ds_cond,
+            model,
+            getBM,
+            analyze_hidden_layer=False,
         )
+                
+        save_results(
+            path_save_results=cond_out_dir,
+            df_scores_TxRBP=res["df_scores_TxRBP"],
+            df_scores_GxRBP=res["df_scores_GxRBP"],
+            result_table=res["result_table"],
+            df_scores_HLxRBP=res["df_scores_HLxRBP"],
+            df_per_sample=res["df_per_sample"],
+        )
+        print(f"[diff_reg / scores] Saved explainability outputs to:\n  → {cond_out_dir}")
 
         if isinstance(res, dict) and "df_per_sample" in res:
             try:
@@ -116,9 +138,28 @@ def main(argv=None) -> None:
 
     print("\n" + "=" * 88)
     print("[diff_reg / scores] ✅ Done.")
-    print(f"[diff_reg / scores] Manifest saved to:\n  → {run_manifest_path}")
     print("=" * 88 + "\n")
-
 
 if __name__ == "__main__":
     main()
+
+# eteee borrar luego pa
+# from deeprbp.data_loading.config_loader import ConfigParser
+# from deeprbp.training_module.model import PredictorModel
+# from deeprbp.explainability_module.main_explainer import data_preparation
+
+# from deeprbp.explainability_module.differential_regulation.utils_reg import (
+#     _run_explainer,
+#     _slugify_condition,
+#     _parse_conditions,
+# )
+
+# argv = [
+#     "--config_path", "/scratch/jsanchoz/DeepRBP/src/deeprbp/configs/config_diff_regulation.yaml",
+#     "--model_ckpt_path", "/scratch/jsanchoz/DeepRBP/pretrained_model/model.ckpt",
+#     "--output_dir", "/scratch/jsanchoz/DeepRBP/output/diff_reg/TCGA-Liver",
+#     "--select_category", "Liver_Hepatocellular_Carcinoma",
+#     "--conditions", "Primary_Tumor,Solid_Tissue_Normal",
+# ]
+
+# args = parse_args(argv)

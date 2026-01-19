@@ -1,4 +1,3 @@
-
 # Differential regulation analysis
 
 ## Pipeline overview
@@ -24,6 +23,8 @@ combining:
 
 1. Per-condition DeepLIFT explainability scores
 2. Differential expression (DE) analysis of RBPs, transcripts, and genes
+3. differential regulation analysis based on explainability scores, and
+4. feature-level ranking and prioritization.
 
 The goal is to study **regulatory changes between biological conditions**
 (e.g. control vs treatment, disease stages, experimental perturbations),
@@ -126,6 +127,8 @@ bash /scratch/jsanchoz/DeepRBP/slurm/explainability_module/differential_regulati
 ```
 ⚠️ QC is for exploratory assessment only; no samples are filtered at this stage.
 
+---
+
 ### Data preprocessing
 After RNA-seq quantification with **kallisto**, all datasets in this module are
 preprocessed into **DeepRBP-compatible input matrices** following the same
@@ -135,11 +138,23 @@ All downstream explainability and differential regulation analyses
 **assume this standardized DeepRBP input format**.
 
 > ℹ️ A full description of the required input format and preprocessing logic is
-available in the main project README under Data preparation.
+available in the main project README under *Data preparation*.
 
 ---
 
-Starting from `kallisto_output/`, the pipeline generates, per **biological group or condition**, 
+#### Unified preprocessing strategy
+By default, **all samples from a dataset are preprocessed together into a single**
+DeepRBP input dataset, independently of biological condition.
+
+Biological conditions (e.g. disease stage, sample type, tumor status) are
+**not split at preprocessing time**, but are instead defined and selected
+at runtime during explainability and differential regulation analyses
+via metadata columns and CLI arguments.
+This unified strategy is used throughout the TCGA and GEO analyses in this work
+and is the recommended preprocessing mode.
+
+#### Generated files (per dataset)
+Starting from `kallisto_output/`, the preprocessing pipeline generates:
 the following files:
 
 - `RBPs_log2p_tpm.csv` — RBP expression matrix
@@ -153,65 +168,71 @@ follow the DeepRBP feature specification used during training
 
 ---
 
-#### Execution (per dataset)
-The same preprocessing command is used for all user-provided RNA-seq datasets
-quantified with **kallisto**.  
-Datasets are processed **group-wise**, where each group corresponds to a
-subset of samples defined by one or more metadata columns.
+#### Execution
+**Local / interactive execution**
+All samples are processed together into a single dataset.
 
-By default, samples are grouped using a single metadata column specified via
-`--group_col`. Optional flags allow further subdivision of samples by tumor
-stage or cell line when such information is available.
-
-#### GSE114564 — disease stage–aware preprocessing
-Samples are grouped by disease stage to enable condition-aware regulatory
-analysis.
-
-##### Direct execution (interactive or local)
 ```bash
 preprocess-user-data \
-  --kallisto_output /scratch/jsanchoz/DeepRBP/data/explainability_module/differential_regulation/GSE114564/kallisto_output \
-  --metadata_csv   /scratch/jsanchoz/DeepRBP/data/explainability_module/differential_regulation/GSE114564/kallisto_qc_with_kallisto_qc.csv \
-  --feature_spec   /scratch/jsanchoz/DeepRBP/data/training_module/feature_specs/DeepRBP_feature_spec.xlsx \
-  --output_dir     /scratch/jsanchoz/DeepRBP/data/explainability_module/differential_regulation/GSE114564/processed \
-  --group_col      disease_state \
-  > /scratch/jsanchoz/DeepRBP/output/logs/GSE114564_preprocess.log 2>&1
+  --kallisto_output <DATASET>/kallisto_output \
+  --metadata_csv   <DATASET>/metadata.csv \
+  --feature_spec   <PATH>/DeepRBP_feature_spec.xlsx \
+  --output_dir     <DATASET>/processed
 ```
+This is the **recommended execution mode** for standard DeepRBP analyses.
 
-This generates one DeepRBP input folder per stage (e.g. `NL`, `CH`, `LC`, `DN`, `eHCC`,
-`avHCC`).
-
-##### SLURM execution (recommended for HPC)
+**HPC execution (SLURM)**
 The same command can be executed on an HPC cluster using the provided SLURM
-wrapper, which forwards all command-line arguments to `preprocess-user-data`.
+wrapper, which forwards all arguments to preprocess-user-data.
 
 ```bash
-sbatch /scratch/jsanchoz/DeepRBP/slurm/data_preparation/preprocess_datauser.sh \
-  --kallisto_output /scratch/jsanchoz/DeepRBP/data/explainability_module/differential_regulation/GSE114564/kallisto_output \
-  --metadata_csv   /scratch/jsanchoz/DeepRBP/data/explainability_module/differential_regulation/GSE114564/kallisto_qc_with_kallisto_qc.csv \
+sbatch \
+  -o /scratch/jsanchoz/DeepRBP/output/logs/preprocess_<DATASET_ID>.out \
+  /scratch/jsanchoz/DeepRBP/slurm/data_preparation/preprocess_datauser.sh \
+  --kallisto_output /scratch/jsanchoz/DeepRBP/data/explainability_module/differential_regulation/<DATASET_ID>/kallisto_output \
+  --metadata_csv   /scratch/jsanchoz/DeepRBP/data/explainability_module/differential_regulation/<DATASET_ID>/metadata.csv \
   --feature_spec   /scratch/jsanchoz/DeepRBP/data/training_module/feature_specs/DeepRBP_feature_spec.xlsx \
-  --output_dir     /scratch/jsanchoz/DeepRBP/data/explainability_module/differential_regulation/GSE114564/processed \
-  --group_col      disease_state
+  --output_dir     /scratch/jsanchoz/DeepRBP/data/explainability_module/differential_regulation/<DATASET_ID>/processed
 ```
 
-Job output is written to the SLURM log directory
-(e.g. `/scratch/jsanchoz/DeepRBP/output/logs/preprocess_user_data_<JOBID>.out`).
+Job output is written to the specified log file, e.g.:
 
+```swift
+/scratch/jsanchoz/DeepRBP/output/logs/preprocess_GSE114564.out
+```
 
-#### GSE101432 — sample-type / isoform-aware preprocessing
-Samples are grouped by sample type (e.g. normal, tumor, relapse, cell
-line), enabling isoform- and splicing-focused regulatory analyses.
-
+#### Optional: group-wise preprocessing (advanced use)
+For exploratory analyses or specialized use cases, datasets can optionally be
+preprocessed group-wise using one or more metadata columns.
 ```bash
 preprocess-user-data \
-  --kallisto_output GSE101432/kallisto_output \
-  --metadata_csv   GSE101432/metadata.csv \
-  --feature_spec   pretrained_model/DeepRBP_feature_spec.xlsx \
-  --output_dir     GSE101432/processed \
-  --group_col      ? \
+  --kallisto_output <DATASET>/kallisto_output \
+  --metadata_csv   <DATASET>/metadata.csv \
+  --feature_spec   <PATH>/DeepRBP_feature_spec.xlsx \
+  --output_dir     <DATASET>/processed \
+  --group_col      <column_name>
 ```
 
-### Output structure
+Additional optional flags allow further subdivision by tumor stage or cell line
+when such annotations are available.
+
+> ⚠️ Group-wise preprocessing is not required for the standard
+explainability and differential regulation pipeline, and should only be used
+when explicitly needed.
+
+---
+
+#### Output structure
+*Default (recommended)*
+```text
+<DATASET_ID>/processed/
+├── RBPs_log2p_tpm.csv
+├── trans_log2p_tpm.csv
+├── gn_tpm.csv
+└── phenotype_metadata.csv
+```
+
+*Optional group-wise mode*
 ```text
 <DATASET_ID>/processed/
 ├── <GROUP_1>/
@@ -223,8 +244,181 @@ preprocess-user-data \
 │   └── ...
 ```
 
-These folders are used directly by the **DeepRBP explainability and differential regulation analysis pipelines**.
+These outputs are used directly by the DeepRBP explainability and differential
+regulation analysis pipelines.
 
+---
+
+### Evaluation of the pretrained DeepRBP predictor
+Before performing explainability and differential regulation analyses, the
+pretrained DeepRBP predictor is evaluated on each processed dataset as a
+**sanity check**.
+
+This evaluation is **not intended as a model validation step**, as the
+predictor was previously trained and validated on TCGA data. Instead, its
+purpose is to verify that the processed input matrices from each dataset are
+fully compatible with the pretrained model and its associated scaler.
+
+For each dataset, a **single SLURM job** is submitted using a **generic evaluation**
+script (`run_eval_dataset.sh`). By default, the evaluation is performed on the
+complete dataset (ALL samples together), rather than stratifying by
+biological condition, in order to assess overall model behavior and
+generalization prior to explainability analyses.
+
+```bash
+sbatch --job-name=eval_GSE101432 run_eval_dataset.sh \
+  GSE101432 \
+  /scratch/jsanchoz/DeepRBP/data/explainability_module/differential_regulation/GSE101432/processed/ALL \
+  /scratch/jsanchoz/DeepRBP/output/results/eval_pretrained/GSE101432
+
+sbatch --job-name=eval_GSE114564 run_eval_dataset.sh \
+  GSE114564 \
+  /scratch/jsanchoz/DeepRBP/data/explainability_module/differential_regulation/GSE114564/processed/ALL \
+  /scratch/jsanchoz/DeepRBP/output/results/eval_pretrained/GSE114564
+```
+
+The evaluation script is designed to be flexible: if the provided `processed`
+directory contains subfolders corresponding to biological groups, the script
+will automatically iterate over them and run separate evaluations per group;
+otherwise, all samples are evaluated jointly.
+
+All evaluations use the **TCGA scaler bundled with the pretrained model**,
+ensuring full consistency with the original training distribution.
+
+The evaluation computes standard regression metrics (Pearson r, Spearman ρ,
+R², MSE) and optionally generates diagnostic plots, which are used to confirm
+that downstream explainability and differential regulation analyses are
+meaningful and technically sound.
+
+## 1. Per-condition explainability (independent)
+This step computes DeepRBP explainability scores independently for each
+biological condition, treating every condition as a self-contained dataset.
+
+The goal is to characterize **condition-specific regulatory landscapes**
+before any cross-condition comparison is performed.
+
+Specifically, this step:
+
+- loads samples belonging to a single biological condition,
+- applies the pretrained DeepRBP predictor,
+- computes DeepLIFT-based attribution scores,
+- produces condition-specific explainability matrices.
+
+Each condition is therefore processed in isolation.
+No statistical comparison between conditions is performed at this stage.
+
+This design ensures that downstream analyses can clearly separate:
+- *condition-specific regulatory effects*
+from
+- *between-condition regulatory changes.*
+
+### Outputs (per condition)
+For each condition, results are written to a dedicated folder under:
+```text
+<output_dir>/explainability_scores/<Condition>/
+```
+
+Each condition folder contains:
+- `df_scores_TxRBP_per_sample.csv` — transcript × (sample × RBP) attributions
+- `df_scores_TxRBP.csv` — aggregated transcript-level scores
+- `df_scores_GxRBP.csv` — gene-level scores
+- `result_table.csv` — summary statistics used downstream
+- additional cached or auxiliary outputs produced by the explainer
+
+These outputs are designed to be consumed directly by the downstream
+**differential expression and differential regulation** analyses.
+
+### Implementation
+This step is implemented by:
+```bash
+compute_scores_per_condition.py
+```
+
+The script iterates over a user-defined list of biological conditions and
+executes DeepRBP explainability independently for each of them.
+If explainability outputs for a given condition already exist, computation is
+skipped, ensuring full reproducibility and efficient re-runs.
+
+### How to run
+The script can be executed either locally or on an HPC system.
+In all cases, the same arguments and configuration file are used.
+
+#### Local execution (installed command)
+```bash
+run-deeprbp-differential-regulation-scores \
+  --config_path src/deeprbp/configs/config_diff_regulation.yaml \
+  --model_ckpt_path /path/to/deeprbp_predictor.ckpt \
+  --output_dir /path/to/output/diff_reg/Liver \
+  --select_category Liver_Hepatocellular_Carcinoma \
+  --conditions Primary_Tumor,Solid_Tissue_Normal
+```
+
+This mode is recommended for interactive testing and development.
+
+#### HPC execution (SLURM)
+For large datasets, a single SLURM job is submitted per dataset.
+The job automatically iterates over all requested conditions.
+```bash
+sbatch slurm/explainability_module/differential_regulation/run_compute_scores_per_condition.sh
+```
+
+The SLURM wrapper handles environment setup, logging, and resource allocation,
+and forwards dataset-specific arguments to the core script.
+
+### Reference executions (datasets used in this work)
+The same explainability pipeline is applied consistently to TCGA and to all
+external RNA-seq datasets analyzed in this study.
+
+TCGA — Liver hepatocellular carcinoma (main analysis)
+```bash
+sbatch run_compute_scores_per_condition.sh \
+  TCGA \
+  src/deeprbp/configs/config_diff_regulation.yaml \
+  /scratch/jsanchoz/DeepRBP/output/diff_reg/TCGA-Liver \
+  Liver_Hepatocellular_Carcinoma \
+  Primary_Tumor,Solid_Tissue_Normal
+```
+
+
+
+
+GSE114564 — Liver disease progression (MODIFICAR COMO TOQUE!!!!)
+```bash
+sbatch run_compute_scores_per_condition.sh \
+  GSE114564 \
+  src/deeprbp/configs/config_diff_regulation.yaml \
+  /scratch/jsanchoz/DeepRBP/output/diff_reg/GSE114564 \
+  Liver \
+  NL,CH,LC,DN,eHCC,avHCC
+```
+
+GSE101432 — Isoform and sample-type diversity (MODIFICAR COMO TOQUE!!!!)
+```bash
+sbatch run_compute_scores_per_condition.sh \
+  GSE101432 \
+  src/deeprbp/configs/config_diff_regulation.yaml \
+  /scratch/jsanchoz/DeepRBP/output/diff_reg/GSE101432 \
+  Liver \
+  Primary_Tumor,Relapse_Tumor
+```
+
+In all cases, the same pretrained DeepRBP predictor and the bundled TCGA scaler
+are used, ensuring full methodological consistency across datasets.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+################ old version
 ## 1. Per-condition explainability (independent)
 This step:
 - treats each condition independently,
@@ -346,6 +540,30 @@ including:
  The scaler specified in `scaler_dir` must match the scaler used during
 training of the predictor checkpoint, ensuring consistency between model
 inference and downstream analyses.
+
+
+
+
+
+
+
+
+AQUI JOSEBA !!!!!!
+
+######## AQUI JOSEBA PARA TCGA QUEDA MUY CLARO CUALES SON LAS CONDICIONES PERO PARA LOS DATASETS NUEVOS:
+######## TCGA : Primary Tumor vs Normal
+######## GSE101432 : Primary Tumor vs Benign Adjacent
+######## GSE114564: eHCC y avHCC vs LC (liver cirrosis)
+
+luego se podrían comparar en ambos casos el grupo de los tumores con el grupo de "normal" de cada estudio. 
+
+######## VALE JOSEBA , YA HAY ALGO QUE HAS HECHO RARO EN LOS DATASETS NUEVOS Q NO LO HICISTE PARA TCGA Y ES QUE HAS SEPARADO POR GRUPOS (CONDICIONES)
+######## TENIAS QUE HABER DEJADO TODO JUNTO Y QUE SEA LUEGO EL METADATA EL QUE SE ENCARGUE. IGUAL PUEDES SIMPLEMENTE METER UN BOOL Q POR DEFECTO ES FALSE, 
+######## PERO Q SI LE DAS TRUE TE GUARDA TODO JUNTITO, DE TAL FORMA QUE NO PETE TODO EL CODE Q HEMOS HECHO ANTERIOR PARA COMPROBAR COSAS Y TAL. DOCUMENTALO.
+
+######## PRIMERO INTENTAR REPRODUCIR TODO CON TCGA 
+
+
 
 ## 2. Between-condition differential expression (limma-voom)
 This section computes between-condition differential expression (DE) using a

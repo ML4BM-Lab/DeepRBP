@@ -12,7 +12,8 @@ test_path_files: "/scratch/jsanchoz/DeepRBP/data/training_module/processed/TCGA"
 
 # Column names in metadata
 sample_category: "detailed_category"
-disease_condition: "sample_type"
+disease_condition: "sample_type" # This is the column use for the selected 
+# CLI condtions
 
 # NOTE:
 # - select_condition is NOT defined here
