@@ -1,40 +1,41 @@
 # DeepRBP
 ## Inferring RBP–gene regulatory links from bulk RNA-seq via deep learning and model attributions
 
-**DeepRBP** is a deep learning–based framework designed to infer regulatory relationships between RNA-binding proteins (RBPs) and genes/transcripts from RNA-seq data.  
-It combines a predictor model for transcript abundance with explainability methods to produce interpretable RBP–gene and RBP–transcript scores.
+**DeepRBP** is a deep learning–based framework designed to prioritize regulatory relationships between RNA-binding proteins (RBPs) and genes/transcripts from RNA-seq data.  
+It combines:
+- a **prediction module** that estimates transcript abundance from gene and RBP expression, and
+- an **explainability module** that computes interpretable RBP–transcript and RBP–gene scores.
 
-## 📄 Publication
-**DeepRBP: A novel deep neural network for inferring splicing regulation**  
-https://doi.org/10.1101/2024.04.11.589004 
+---
 
 ## Table of Contents
 - [Overview](#overview)
 - [Installation](#installation)
-- [Quick start: using a pretrained DeepRBP model](#quick-start-using-a-pretrained-deeprbp-model)
-  - [Download the pretrained model](#download-the-pretrained-model)
-  - [Recommended local layout](#recommended-local-layout)
-- [Data preparation](#data-preparation)
-  - [Required input format](#required-input-format)
+- [Quick start: use the pretrained DeepRBP model](#quick-start-use-the-pretrained-deeprbp-model)
+  - [1. Download the pretrained model bundle](#1-download-the-pretrained-model-bundle)
+  - [2. Recommended local layout](#2-recommended-local-layout)
+  - [3. Do I need data preparation or training?](#3-do-i-need-data-preparation-or-training)
+- [Run the pretrained DeepRBP predictor on your data](#run-the-pretrained-deeprbp-predictor-on-your-data)
+  - [Required input files](#required-input-files)
   - [Feature compatibility](#feature-compatibility)
+  - [Step 1. Run the pretrained predictor](#step-1-run-the-pretrained-predictor)
+  - [Step 2. Run the explainer](#step-2-run-the-explainer)
+  - [Expected outputs](#expected-outputs)
+- [Data preparation](#data-preparation)
+  - [When this section is needed](#when-this-section-is-needed)
   - [Using DeepRBP with your own RNA-seq data](#using-deeprbp-with-your-own-rna-seq-data)
-- [Evaluate the DeepRBP predictor](#evaluate-the-deeprbp-predictor)
-- [Running the DeepRBP explainer](#running-the-deeprbp-explainer)
+  - [Standard pipeline: kallisto → DeepRBP inputs](#standard-pipeline-kallisto--deeprbp-inputs)
+- [Training a model from scratch (advanced)](#training-a-model-from-scratch-advanced)
+- [Additional module-specific documentation](#additional-module-specific-documentation)
 - [Citation](#citation)
 - [License](#license)
+
+---
 
 ## Overview
 Alternative splicing is a key regulatory mechanism in many biological processes and diseases, particularly cancer. RNA-binding proteins (RBPs) play a central role in this regulation, but experimentally identifying RBP–target interactions (e.g. via CLIP-based assays) is costly and limited in scope.
 
-**DeepRBP** provides a computational alternative to prioritize putative RBP–gene and RBP–transcript regulatory relationships from RNA-seq data.
-
-DeepRBP consists of two main components:
-
-### Prediction module
-A deep neural network that predicts transcript abundance from gene and RBP expression.
-
-### Explainability module
-Attribution methods (e.g., DeepLIFT) are used to compute interpretable scores that quantify the contribution of each RBP to each gene or transcript.
+**DeepRBP** provides a computational alternative to prioritize putative RBP–gene and RBP–transcript regulatory relationships from bulk RNA-seq data.
 
 This repository provides:
 - the full DeepRBP pipeline,
@@ -42,9 +43,17 @@ This repository provides:
 - a pretrained model,
 - and tools to compute explainability scores.
 
-This README focuses on using a pretrained model to compute explainability scores, which is the recommended entry point for most users.
+For most users, the recommended workflow is:
+
+1. **Download the pretrained model**
+2. **Prepare your data in the expected input format**
+3. **Run the predictor evaluator** to check compatibility and performance
+4. **Run the explainer** to obtain TxRBP and GxRBP scores
+
+---
 
 ## Installation
+
 ### Requirements
 - Python ≥ 3.9  
 - Linux or macOS  
@@ -60,49 +69,48 @@ conda activate DeepRBP
 pip install -e .
 ```
 
-## Quick start: using a pretrained DeepRBP model
-We provide a **pretrained DeepRBP predictor** hosted on Hugging Face.
+## Quick start: use the pretrained DeepRBP model
+We provide a pretrained DeepRBP predictor hosted on Hugging Face.
 
-🔗 **Model repository**  
+🔗 **Model repository**
 https://huggingface.co/ML4BM-Lab/DeepRBP
 
-The pretrained model consists of three required files:
-- `model.ckpt` — trained DeepRBP predictor checkpoint  
-- `scaler.joblib` — fitted input scaler  
-- `sigma.npy` — output scaling parameter  
+The pretrained model consists of four required files:
+- `model.ckpt` — trained DeepRBP predictor checkpoint
+- `scaler.joblib` — fitted input scaler
+- `sigma.npy` — output scaling parameter
 - `DeepRBP_feature_spec.xlsx` — feature manifest (RBPs/genes/transcripts + exact order)
 
-⚠️ Important  
-All four files are required for correct inference and explainability.  
+⚠️ Important
+All four files are required for correct inference and explainability.
 Treat them as a single bundle and keep them together.
 
-### Download the pretrained model
+1. **Download the pretrained model bundle**
 
-#### Option A (recommended): download from Hugging Face using Git LFS
+**Option A (recommended): download from Hugging Face using Git LFS**
 The model checkpoint is stored using **Git Large File Storage (Git LFS)**.
 
-##### 1. Install and initialize Git LFS (one-time setup)
+**Install and initialize Git LFS**
 ```bash
 git lfs install
 ```
 
-If git lfs is not available, install it first:
+If `git lfs` is not available, install it first:
 - **macOS**: `brew install git-lfs`
-- **Ubuntu/Debian**: sudo apt install git-lfs
+- **Ubuntu/Debian**: `sudo apt install git-lfs`
 
-##### 2. Clone the pretrained model repository
+**Clone the pretrained model repository**
 ```bash
 git clone https://huggingface.co/ML4BM-Lab/DeepRBP pretrained_model
 ```
 
-This will download all required files automatically (including DeepRBP_feature_spec.xlsx).
+This downloads all required files automatically.
 
-**Note**:
-If the repository is private, you may be prompted for credentials. Use your Hugging Face username and an access token (not your password).
-Tokens can be created at: `https://huggingface.co/settings/tokens`
+If the repository is private, Hugging Face may ask for credentials.
+Use your Hugging Face username and an access token (not your password).
 
-#### Option B: manual download from the Hugging Face website
-If you prefer not to use Git LFS, you can download the files manually:
+**Option B: manual download**
+If you prefer not to use Git LFS:
 
 1. Open: `https://huggingface.co/ML4BM-Lab/DeepRBP`
 2. Download:
@@ -110,62 +118,230 @@ If you prefer not to use Git LFS, you can download the files manually:
   - `scaler.joblib`
   - `sigma.npy`
   - `DeepRBP_feature_spec.xlsx`
-3. Place them in a local directory (see layout below).
+3. Place them together in a local folder.
 
-Suggested project structure
+---
 
-We recommend organizing your project as follows:
-
+2. **Recommended local layout**
 ```text
 DeepRBP/
 ├── pretrained_model/
 │   ├── model.ckpt
 │   ├── scaler.joblib
-│   └── sigma.npy
+│   ├── sigma.npy
+│   └── DeepRBP_feature_spec.xlsx
 ├── data/
-│   └── feature_specs/
-│       └── DeepRBP_feature_spec.xlsx
-├── output/      # predictions and explainability results
+│   ├── my_dataset/
+│   │   ├── RBPs_log2p_tpm.csv
+│   │   ├── trans_log2p_tpm.csv
+│   │   ├── gn_tpm.csv
+│   │   └── phenotype_metadata.csv      # optional
+│   └── annotations/
+│       └── getBM.csv                   # required for some workflows
+├── output/
 └── src/
 ```
 
-## Data preparation
-DeepRBP can be applied to TCGA datasets or **to your own RNA-seq data**.  
-Regardless of the data source, the model always expects the same preprocessed input format.
-
-This section explains:
-- what files are required,
-- how to structure your own data,
-- and how to preprocess RNA-seq datasets using the standard DeepRBP pipeline.
-
 ---
 
-### 📁 Required input format
-DeepRBP expects the following files **per dataset** or **per experimental group**:
+3. **Do I need data preparation or training?**
+Use this rule of thumb:
 
-- **`RBPs_log2p_tpm.csv`**  
-  RBP expression matrix (samples × RBPs), in `log2(TPM + 1)`
-- **`trans_log2p_tpm.csv`**  
-  Transcript expression matrix (samples × transcripts), in `log2(TPM + 1)`
-- **`gn_tpm.csv`**  
-  Gene expression matrix (samples × genes), in TPM
-- **`phenotype_metadata.csv`** (optional)  
-  Sample metadata (e.g. tissue, condition, or tumor type)
+- If you already have:
+  - `RBPs_log2p_tpm.csv`
+  - `trans_log2p_tpm.csv`
+  - `gn_tpm.csv`
+  - optional `phenotype_metadata.csv`
 
-If your data can be converted into this format, **it can be used by DeepRBP**.
-
+and they are aligned to `DeepRBP_feature_spec.xlsx`, you can run **the pretrained model directly**.
+- If you do not yet have these files, go to [Data preparation](#data-preparation).
+- If you want to change the feature set (RBPs/genes/transcripts) or train a new model, go to [Training a model from scratch (advanced)](#training-a-model-from-scratch-advanced).
 ---
- 
-**⚠️ Feature compatibility (important)**
-DeepRBP expects your matrices to match the **feature manifest used during training**:
-`DeepRBP_feature_spec.xlsx` (RBPs/genes/transcripts + exact order).
+
+## Run the pretrained DeepRBP predictor on your data
+This is the recommended entry point for most users.
+
+If your dataset is already formatted as DeepRBP expects, you do not need to retrain the model.
+
+The recommended workflow is:
+
+1. **Run the pretrained DeepRBP predictor first**  
+   This verifies that your matrices are compatible with the pretrained model and provides standard performance metrics.
+
+2. **Run the DeepRBP explainer second**  
+   This produces transcript-level and gene-level attribution scores.
+
+## Required input files
+DeepRBP expects the following files per dataset or per experimental group:
+
+- **RBPs_log2p_tpm.csv**
+RBP expression matrix (samples × RBPs), in log2(TPM + 1)
+
+- **trans_log2p_tpm.csv**
+Transcript expression matrix (samples × transcripts), in log2(TPM + 1)
+
+- **gn_tpm.csv**
+Gene expression matrix (samples × genes), in TPM
+
+- **phenotype_metadata.csv** (*optional*)
+Sample metadata (e.g. tissue, condition, or tumor type)
+
+If your data can be converted into this format, it can be used by DeepRBP.
+
+## Feature compatibility
+DeepRBP expects your matrices to match the feature manifest used during training:
+```text
+DeepRBP_feature_spec.xlsx
+```
 
 This file defines:
 - the list of RBPs, genes, and transcripts,
 - and their **exact order**.
 
-If you are using the pretrained model, you **must aligned to this feature specification.
-Using a different feature set requires retraining the model (see `src/deeprbp/training_module/README.md`).
+⚠️ If you are using the pretrained model, your input matrices **must be aligned** to this feature specification.
+
+If you want to use a different feature set, you must preprocess accordingly and train a new model.
+
+---
+
+### Step 1. Run the pretrained predictor
+You can run the pretrained `DeepRBP predictor` on your processed dataset. This is the recommended first step for a new dataset.
+
+It is useful to:
+- verify that your inputs are compatible with the pretrained model,
+- generate transcript-level predictions,
+- obtain standard metrics (Spearman/Pearson/R²/MSE).
+
+**Minimal predictor config (YAML)**
+```yaml
+# src/deeprbp/configs/config_model_eval.yaml
+test_path_files: "data/my_dataset"
+
+getBM_path: "data/annotations/getBM.csv"
+gene_col_name: "Gene_ID"
+trans_col_name: "Transcript_ID"
+sample_category: "detailed_category"   # optional; remove if not needed
+cuda: True
+val_batch_size: 256
+plot_results: True
+seed: 42
+
+# IMPORTANT: use the scaler bundled with the pretrained model
+scaler_dir: "pretrained_model"
+```
+
+**Run locally**
+```bash
+run-deeprbp-evaluator \
+  --config_path src/deeprbp/configs/config_model_eval.yaml \
+  --model_checkpoint pretrained_model/model.ckpt \
+  --output_dir output/results/eval_pretrained \
+  --num_workers 4 \
+  --verbose 1
+```
+
+This command runs the pretrained DeepRBP predictor on your dataset and reports standard performance metrics.
+
+**Run on HPC / SLURM**
+```bash
+sbatch slurm/training_module/run_evaluate_predictor.sh
+```
+
+⚠️ **Bundled scaler (recommended)**
+If you use `pretrained_model/model.ckpt`, always evaluate with the bundled `pretrained_model/scaler.joblib`.
+Do not refit a new scaler when using the pretrained checkpoint.
+
+---
+
+### Step 2. Run the explainer
+Once predictor compatibility has been confirmed, you can compute attribution scores with the DeepRBP explainer.
+
+DeepRBP computes:
+- **TxRBP scores**: transcript × RBP scores
+- **GxRBP scores**: gene × RBP scores obtained by collapsing transcript scores to genes
+
+By default, the explainer uses `DeepLIFT`.
+
+**Minimal explainer config (single-run mode)**
+Use this when:
+- your dataset has no TCGA-like categories, or
+- you do not provide `phenotype_metadata.csv`, or
+- you simply want one run over all samples.
+
+```yaml 
+# src/deeprbp/configs/config_model_explain.yaml
+test_path_files: "data/my_dataset"
+getBM_path: "data/annotations/getBM.csv"
+gene_col_name: "Gene_ID"
+trans_col_name: "Transcript_ID"
+explanation_method: "DeepLIFT"
+reference_data: "knockout_reference"
+batch_reduction_method: "t-statistic"
+gene_collapse_method: "max_absolute_value"
+save_per_sample_scores: false
+```
+
+**Run locally**
+```bash
+run-deeprbp-explainer \
+  --config_path src/deeprbp/configs/config_model_explain.yaml \
+  --model_ckpt_path pretrained_model/model.ckpt \
+  --scaler_dir pretrained_model \
+  --output_dir output/results/explainer_all_samples
+```
+
+**Optional: hidden-layer attributions**
+You can also compute attributions to the last hidden layer (HL × RBP) by adding:
+
+```bash
+run-deeprbp-explainer \
+  --config_path src/deeprbp/configs/config_model_explain.yaml \
+  --model_ckpt_path pretrained_model/model.ckpt \
+  --scaler_dir pretrained_model \
+  --output_dir output/results/explainer_all_samples \
+  --analyze_hidden_layer
+```
+
+**Run on HPC / SLURM**
+```bash
+cd slurm/explainability_module
+
+# Standard run
+sbatch run_explainer.sh
+
+# Hidden-layer attributions
+ANALYZE_HL=true sbatch run_explainer.sh
+```
+
+### Expected outputs
+**Predictor**
+Typical outputs include:
+- performance metrics,
+- plots (if enabled),
+ -prediction diagnostics.
+
+**Explainer**
+Single-run mode typically produces:
+```bash
+<output_dir>/
+  df_scores_TxRBP.csv
+  df_scores_GxRBP.csv
+  result_table.csv
+  df_scores_TxRBP_per_sample.csv   # only if save_per_sample_scores: true
+  df_scores_HLxRBP.csv             # only with --analyze_hidden_layer
+```
+
+---
+
+## Data preparation
+### When this section is needed
+Use this section only if you do not yet have DeepRBP-compatible input files:
+- `RBPs_log2p_tpm.csv`
+- `trans_log2p_tpm.csv`
+- `gn_tpm.csv`
+- optional `phenotype_metadata.csv`
+
+This section explains how to convert raw RNA-seq quantifications into the format expected by the pretrained model and the explainer.
 
 ### Using DeepRBP with your own RNA-seq data
 DeepRBP can be applied to any RNA-seq dataset, including:
@@ -176,16 +352,16 @@ DeepRBP can be applied to any RNA-seq dataset, including:
 At a high level, the required steps are:
 1. **Quantify expression**
   - transcript-level TPMs,
-  - gene-level TPMs (e.g., Salmon, Kallisto, or equivalent).
+  - gene-level TPMs (e.g. Salmon, Kallisto, or equivalent)
 
 2. **Build DeepRBP input matrices**
   - transcript TPM matrix,
   - gene TPM matrix,
   - RBP expression matrix (subset of genes),
-  - optional sample metadata.
+  - optional sample metadata
 
 3. **Apply standard DeepRBP transformations**
-  - `log2(TPM + 1)` where required.
+  - `log2(TPM + 1)` where required
 
 4. **Export files using the expected filenames**
   - `RBPs_log2p_tpm.csv`
@@ -193,14 +369,13 @@ At a high level, the required steps are:
   - `gn_tpm.csv`
   - `phenotype_metadata.csv`
 
-### Standard pipeline: Kallisto → DeepRBP inputs
-If your samples were quantified with **kallisto**, DeepRBP provides a **user-facing preprocessing pipeline**
-that converts `abundance.tsv` files into DeepRBP-ready inputs using the same **preprocessing logic as model training**.
+### Standard pipeline: kallisto → DeepRBP inputs
+If your samples were quantified with kallisto, DeepRBP provides a preprocessing pipeline that converts abundance.tsv files into DeepRBP-ready inputs using the same preprocessing logic as model training.
 
 The pipeline expects:
-- one folder per sample under `kallisto_output/`, each containing `abundance.tsv`,
-- a metadata CSV with a `Run` column (sample IDs),
-- the DeepRBP feature **specification file**.
+- one folder per sample under kallisto_output/, each containing abundance.tsv,
+- a metadata CSV with a Run column (sample IDs),
+- the DeepRBP feature specification file.
 
 #### Basic execution
 ```bash
@@ -212,7 +387,7 @@ preprocess-user-data \
   --group_col tissue_type
 ```
 
-This command creates one **output folder per group** (e.g. per tissue or condition), each containing:
+This command creates one output folder per group (e.g. per tissue or condition), each containing:
 - `RBPs_log2p_tpm.csv`
 - `trans_log2p_tpm.csv`
 - `gn_tpm.csv`
@@ -221,9 +396,6 @@ This command creates one **output folder per group** (e.g. per tissue or conditi
 Optional arguments allow further splitting (e.g. by tumor stage or cell line).
 
 #### Execution on HPC systems (optional)
-For large datasets, the same command can be executed on an HPC cluster using the
-provided SLURM wrapper script, which forwards all command-line arguments to
-`preprocess-user-data`:
 ```bash
 sbatch preprocess_datauser.sh \
   --kallisto_output <DATASET_DIR>/kallisto_output \
@@ -233,145 +405,47 @@ sbatch preprocess_datauser.sh \
   --group_col      tissue_type
 ```
 
-This is functionally equivalent to direct execution and is recommended for
-large-scale preprocessing.
-
-## Evaluate the DeepRBP predictor
-You can evaluate the **pretrained DeepRBP predictor** on your processed dataset (same input format as in Data preparation). 
-This is useful to sanity-check that your matrices are compatible and to obtain standard performance metrics (Spearman/Pearson/R²/MSE).
-
-### Minimal evaluation config (YAML)
-
-```bash
-# src/deeprbp/configs/config_model_eval.yaml
-test_path_files: "data/my_dataset"   # folder containing RBPs_log2p_tpm.csv, trans_log2p_tpm.csv, gn_tpm.csv, phenotype_metadata.csv (optional)
-
-getBM_path: "data/annotations/getBM.csv"
-gene_col_name: "Gene_ID"
-trans_col_name: "Transcript_ID"
-sample_category: "detailed_category" # you can remove this
-cuda: True
-val_batch_size: 256
-plot_results: True
-seed: 42
-
-# IMPORTANT: use the bundled scaler from the pretrained model folder
-scaler_dir: "pretrained_model"
-# scaler_mode defaults to "tcga" (recommended). Do not refit a new scaler when using the pretrained checkpoint.
-```
-
-### Run locally
-```bash
-run-deeprbp-evaluator \
-  --config_path src/deeprbp/configs/config_model_eval.yaml \
-  --model_checkpoint pretrained_model/model.ckpt \
-  --output_dir output/results/eval_pretrained \
-  --num_workers 4 \
-  --verbose 1
-```
-
-### Run on HPC/SLURM
-```bash
-sbatch slurm/training_module/run_evaluate_predictor.sh
-```
-
-**⚠️ Bundled scaler (recommended)**: If you use `pretrained_model/model.ckpt`, always evaluate with the bundled `pretrained_model/scaler.joblib` (set `scaler_dir: pretrained_model`). 
-Only refit a scaler if you trained your own predictor from scratch (see `src/deeprbp/training_module/README.md`).
+This is functionally equivalent to direct execution and is recommended for large-scale preprocessing.
 
 ---
 
-## Running the DeepRBP explainer
-DeepRBP computes attribution scores at the **transcript level** (TxRBP) for each sample, which can be seen as a 3D tensor
-(**transcripts × RBPs × samples**). Positive values indicate that an RBP contributes to **increasing** the predicted transcript
-abundance, while negative values indicate a contribution to **decreasing** it.
+## Training a model from scratch (advanced)
+Most users do **not** need to train a model.
 
-To obtain a single, cohort-level score per transcript–RBP pair, DeepRBP collapses per-sample attributions using a
-**t-statistic** reduction (configurable via `batch_reduction_method`), yielding a 2D matrix (**transcripts × RBPs**).
+Training from scratch is only needed if you want to:
+- reproduce the full training workflow,
+- train on a large cohort such as TCGA,
+- change the feature specification,
+- or optimize a new architecture.
 
-Gene-level scores (GxRBP) are derived by collapsing transcript scores to genes using `getBM.csv` (Transcript_ID → Gene_ID).
-With `gene_collapse_method: max_absolute_value`, DeepRBP selects, for each (gene, RBP), the transcript with the largest
-absolute TxRBP score and keeps its sign. The selected representative transcript per gene–RBP is reported in `result_table.csv`.
+For that workflow, see:
+```bash
+src/deeprbp/training_module/README.md
+```
 
-DeepRBP computes these attributions from a trained predictor checkpoint and a compatible input dataset
-(same format as in **Data preparation**: `RBPs_log2p_tpm.csv`, `trans_log2p_tpm.csv`, `gn_tpm.csv`, and optional `phenotype_metadata.csv`).
+That documentation covers:
+- TCGA download,
+- feature specification,
+- preprocessing for training,
+- train/test splits,
+- predictor training,
+- and optional hyperparameter optimization.
 
-By default, DeepRBP can compute attributions with **DeepLIFT**: DeepLIFT (Shrikumar, Greenside, and Kundaje, 2017)
-*Learning important features through propagating activation differences*, ICML (PMLR), pp. 3145–3153.
+---
 
-The repository also includes optional validation workflows (e.g., POSTAR and real knockdowns), documented here:
+## Additional module-specific documentation
+
+The repository also includes additional documentation for specialized workflows:
+- `src/deeprbp/training_module/README.md`
 - `src/deeprbp/explainability_module/README.md`
 - `src/deeprbp/explainability_module/postar_validation/README.md`
 - `src/deeprbp/explainability_module/real_knockdowns/README.md`
 - `src/deeprbp/explainability_module/complex_analysis/README.md`
 
-If you want to reproduce the **TCGA** experiments reported in our paper (tumor-type/category runs, filters, POSTAR validation, etc.),
-please follow the internal documentation in `src/deeprbp/explainability_module/README.md`.
-
-### Single-run mode (recommended for custom datasets)
-If your dataset has **no TCGA-like categories** or you do **not** provide `phenotype_metadata.csv`, DeepRBP runs in **single-run mode** (all samples, no filtering).
-
-#### Minimal YAML (no metadata / no categories)
-```yaml
-# src/deeprbp/configs/config_model_explain.yaml
-test_path_files: "data/my_dataset"         # folder with RBPs_log2p_tpm.csv, trans_log2p_tpm.csv, gn_tpm.csv (phenotype_metadata.csv optional)
-getBM_path: "data/annotations/getBM.csv"
-gene_col_name: "Gene_ID"
-trans_col_name: "Transcript_ID"
-explanation_method: "DeepLIFT"
-reference_data: "knockout_reference"
-batch_reduction_method: "t-statistic"
-gene_collapse_method: "max_absolute_value"
-save_per_sample_scores: false   # optional: if True, also saves TxRBP per sample (Tx × RBP × Samples)
-```
-
-#### Option 1: Run locally (CLI)
-```bash
-run-deeprbp-explainer \
-  --config_path src/deeprbp/configs/config_model_explain.yaml \
-  --model_ckpt_path pretrained_model/model.ckpt \
-  --scaler_dir pretrained_model \
-  --output_dir output/results/explainer_all_samples
-```
-
-##### Optional: hidden-layer attributions (DeepLIFT only)
-You can also compute attributions to the last hidden layer (HL × RBP) by adding:
-```bash
-  --analyze_hidden_layer
-```
-
-#### Option 2: Submit a job on HPC (SLURM)
-We provide a SLURM script that can toggle hidden-layer analysis via an environment variable.
-
-```bash
-cd slurm/explainability_module
-
-# Without hidden layer (default):
-sbatch run_explainer.sh
-
-# With hidden layer:
-ANALYZE_HL=true sbatch run_explainer.sh
-```
-
-The script builds the command and adds --analyze_hidden_layer only when ANALYZE_HL=true.
-Remember: hidden-layer attributions require explanation_method: "DeepLIFT".
-
-#### Outputs
-Single-run mode (all samples):
-```text
-<output_dir>/
-  df_scores_TxRBP.csv
-  df_scores_GxRBP.csv
-  result_table.csv
-  df_scores_TxRBP_per_sample.csv   # only if save_per_sample_scores: true
-  df_scores_HLxRBP.csv             # only with --analyze_hidden_layer
-```
+If you want to reproduce the **TCGA experiments reported in the manuscript**, including tumor-type/category runs and downstream validations, please follow the module-specific documentation in: `src/deeprbp/explainability_module/README.md`
 
 ## Citation
-<!-- TODO: add BibTeX / preferred citation format -->
 If you use DeepRBP in your work, please cite:
 
 DeepRBP: A novel deep neural network for inferring splicing regulation
 https://doi.org/10.1101/2024.04.11.589004
-
-## License
-<!-- TODO: add license text or link to LICENSE file -->
