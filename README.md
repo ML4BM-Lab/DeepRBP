@@ -204,6 +204,23 @@ If you want to use a different feature set, you must preprocess accordingly and 
 
 ---
 
+### Annotation mapping (`getBM.csv`)
+
+Some evaluation and downstream utilities require a frozen gene/transcript annotation mapping file:
+
+```text
+data/annotations/getBM.csv
+```
+
+For pretrained-model compatibility, this file must match the annotation reference used to build DeepRBP_feature_spec.xlsx: GENCODE v23 / Ensembl 81 / GRCh38.p3.
+
+The recommended way to obtain it is from the pretrained model bundle:
+
+git clone https://huggingface.co/ML4BM-Lab/DeepRBP pretrained_model
+
+mkdir -p data/annotations
+cp pretrained_model/getBM.csv data/annotations/getBM.csv
+
 ### Step 1. Run the pretrained predictor
 You can run the pretrained `DeepRBP predictor` on your processed dataset. This is the recommended first step for a new dataset.
 
