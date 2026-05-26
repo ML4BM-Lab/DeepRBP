@@ -8,7 +8,12 @@ import lightning as L
 from ..data_loading.config_loader import ConfigParser
 from ..data_preparation.data_module import DeepRBPDataModule
 from .model import PredictorModel
-from .evaluation import evaluate_and_visualize, evaluate_and_visualize_metrics_by_category
+from .evaluation import (
+    evaluate_and_visualize,
+    evaluate_and_visualize_metrics_by_category,
+    generate_predictions,
+    save_prediction_outputs,
+)
 from ..util.utils import (
     print_if_main,
     setup_output_directory,
@@ -58,8 +63,25 @@ def main():
 
     print_if_main("\n[evaluate_predictor] 🧪 Running trainer.test(...) ...")
     trainer.test(model, dm)
-
+    
+    print_if_main("\n[evaluate_predictor] 💾 Saving full-test prediction matrices...")
+    predictions, true_values = generate_predictions(
+        trainer=trainer,
+        model=model,
+        dataloader=dm.predict_dataloader(mode="test"),
+    )
+    
+    save_prediction_outputs(
+        predictions=predictions,
+        true_values=true_values,
+        test_data=dm.test_data,
+        getBM=dm.getBM.copy(),
+        output_dir=output_dir,
+        set_name="test",
+    )
+    
     print_if_main("\n[evaluate_predictor] 📊 Computing detailed metrics/plots (test split)...")
+        
     if dm.sample_category is None:
         evaluate_and_visualize(
             trainer=trainer,
