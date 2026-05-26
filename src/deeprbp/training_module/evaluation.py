@@ -25,6 +25,92 @@ def generate_predictions(trainer, model, dataloader):
         true_values.append(labels.detach().cpu().numpy())
     return np.concatenate(predictions), np.concatenate(true_values)
 
+def save_prediction_outputs(
+    predictions: np.ndarray,
+    true_values: np.ndarray,
+    test_data: Dict[str, pd.DataFrame],
+    getBM: pd.DataFrame,
+    output_dir: str,
+    set_name: str = "test",
+) -> None:
+    """
+    Save full-split prediction matrices and companion data needed for downstream analyses.
+
+    Saved matrices:
+    - predicted transcript abundance in log2(TPM + 1)
+    - true transcript abundance in log2(TPM + 1)
+    - gene expression in TPM
+    - sample metadata
+    - transcript-to-gene mapping used by the evaluator
+    """
+    isoform_df = test_data["isoform_df"]
+    gene_df = test_data["gene_df"]
+    metadata_df = test_data["metadata_df"]
+
+    if predictions.shape != isoform_df.shape:
+        raise ValueError(
+            f"Prediction shape {predictions.shape} does not match isoform_df shape {isoform_df.shape}"
+        )
+
+    if true_values.shape != isoform_df.shape:
+        raise ValueError(
+            f"True-value shape {true_values.shape} does not match isoform_df shape {isoform_df.shape}"
+        )
+
+    predictions_dir = os.path.join(output_dir, "prediction_matrices", set_name)
+    os.makedirs(predictions_dir, exist_ok=True)
+
+    transcript_ids = isoform_df.columns.tolist()
+    sample_ids = isoform_df.index.tolist()
+
+    pred_df = pd.DataFrame(
+        predictions,
+        index=sample_ids,
+        columns=transcript_ids,
+    )
+
+    true_df = pd.DataFrame(
+        true_values,
+        index=sample_ids,
+        columns=transcript_ids,
+    )
+
+    mapping_df = (
+        getBM
+        .drop_duplicates(subset=["Transcript_ID"])
+        .set_index("Transcript_ID")
+        .reindex(transcript_ids)
+        .reset_index()
+    )
+
+    pred_df.to_csv(
+        os.path.join(predictions_dir, "pred_trans_log2p_tpm.csv.gz"),
+        compression="gzip",
+    )
+
+    true_df.to_csv(
+        os.path.join(predictions_dir, "true_trans_log2p_tpm.csv.gz"),
+        compression="gzip",
+    )
+
+    gene_df.to_csv(
+        os.path.join(predictions_dir, "gene_tpm.csv.gz"),
+        compression="gzip",
+    )
+
+    metadata_df.to_csv(
+        os.path.join(predictions_dir, "metadata.csv"),
+    )
+
+    mapping_df.to_csv(
+        os.path.join(predictions_dir, "transcript_to_gene_mapping.csv"),
+        index=False,
+    )
+
+    print_if_main(
+        f"[save_prediction_outputs] Saved prediction matrices to: {predictions_dir}"
+    )
+
 def calculate_general_metrics(true_values, predictions):  
     """
     Calculates general metrics like Spearman Correlation, MSE, and Pearson Correlation between flattened model 
