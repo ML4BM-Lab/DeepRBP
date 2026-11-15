@@ -50,19 +50,36 @@ voom_limma_core <- function(
 
   # Ensure same sample order
   samples <- colnames(counts_matrix)
-  metadata <- metadata[samples, , drop = FALSE]
+  metadata <- metadata[match(samples, rownames(metadata)), , drop = FALSE]
+
+  # ------------------------------
+  # HARD sanity checks (fail fast)
+  # ------------------------------
+  stopifnot(
+    is.matrix(counts_matrix),
+    is.numeric(counts_matrix),
+    ncol(counts_matrix) == nrow(metadata)
+  )
 
   # ------------------------------
   # Design matrix
   # ------------------------------
-  group <- factor(metadata[[condition_col]], levels = c(condition_a, condition_b))
+  # Sanitize condition names for R
+  cond_a_safe <- make.names(condition_a)
+  cond_b_safe <- make.names(condition_b)
+
+  group <- factor(
+    make.names(metadata[[condition_col]]),
+    levels = c(cond_a_safe, cond_b_safe)
+  )
+
   design <- model.matrix(~ 0 + group)
-  colnames(design) <- c(condition_a, condition_b)
+  colnames(design) <- c(cond_a_safe, cond_b_safe)
 
   # Contrast: B - A
   contrast <- makeContrasts(
-    contrasts = paste0(condition_b, "-", condition_a),
-    levels = design
+  contrasts = paste0(cond_b_safe, "-", cond_a_safe),
+  levels = design
   )
 
   # ------------------------------

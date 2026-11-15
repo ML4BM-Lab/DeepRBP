@@ -457,3 +457,295 @@ def analyze_transcript_to_gene_ratios(
     # 4. Plot histograms
     output_path = os.path.join(output_dir, f"histogram_ratio_{category}.png")
     plot_transcript_to_gene_ratio_distributions(pred_ratios, label_ratios, output_path)
+
+# ============================================================
+# Isoform-usage evaluation
+# Reconstructed for PLOS manuscript reproducibility
+# ============================================================
+
+
+def calculate_isoform_jsd(
+    pred_df: pd.DataFrame,
+    true_df: pd.DataFrame,
+    genes_df: pd.DataFrame,
+    mapping: pd.DataFrame,
+    *,
+    input_scale: str = "log2p1",
+    min_mean_expr: float = 5.0,
+    min_sample_expr: float = 5.0,
+) -> dict:
+    """Compare observed and predicted isoform distributions per gene/sample.
+
+    Inputs: transcript abundances in log2(TPM+1) (or TPM if input_scale='tpm'),
+    observed gene TPM, and a Transcript_ID/Gene_ID annotation mapping.
+    Only genes with >=2 modelled transcripts and mean gene TPM > min_mean_expr
+    are considered. Individual gene/sample pairs require gene TPM strictly
+    > min_sample_expr. Each transcript distribution is normalized separately.
+
+    Returns a dictionary with `pairs` (sample_id, Gene_ID, js_divergence,
+    js_distance), `n_eligible_genes`, `n_candidate_pairs`, `n_invalid_pairs`.
+    Jensen-Shannon divergence uses log base 2, and distance = sqrt(divergence).
+    Invalid/nonfinite transcript distributions and zero-sum distributions are
+    excluded and counted; nonfinite gene TPM is ignored for gene means and
+    does not qualify for the per-sample threshold. No figures/files are made.
+    """
+    from scipy.spatial.distance import jensenshannon
+
+    if input_scale not in ("log2p1", "tpm"):
+        raise ValueError("input_scale must be 'log2p1' or 'tpm'")
+    if not isinstance(pred_df, pd.DataFrame) or not isinstance(true_df, pd.DataFrame):
+        raise TypeError("pred_df and true_df must be pandas DataFrames")
+    if not pred_df.index.equals(true_df.index) or not pred_df.columns.equals(true_df.columns):
+        raise ValueError("Prediction and observation sample/transcript axes differ")
+    if not pred_df.index.equals(genes_df.index):
+        raise ValueError("Gene TPM sample index differs from transcript matrices")
+    if (not pred_df.index.is_unique or not pred_df.columns.is_unique
+            or not genes_df.columns.is_unique or not genes_df.index.is_unique):
+        raise ValueError("Duplicate sample, transcript or gene identifiers")
+    if not {"Transcript_ID", "Gene_ID"}.issubset(mapping.columns):
+        raise ValueError("mapping must contain Transcript_ID and Gene_ID")
+    if mapping["Transcript_ID"].isna().any() or mapping["Transcript_ID"].duplicated().any():
+        raise ValueError("Missing/duplicate Transcript_ID in annotation mapping")
+    if not pred_df.columns.isin(mapping["Transcript_ID"]).all():
+        raise ValueError("Unmapped modelled transcript")
+    aligned_mapping = mapping.set_index("Transcript_ID").loc[pred_df.columns]
+    if aligned_mapping["Gene_ID"].isna().any():
+        raise ValueError("Missing Gene_ID for a modelled transcript")
+    if not aligned_mapping["Gene_ID"].isin(genes_df.columns).all():
+        raise ValueError("Mapped gene is absent from gene TPM matrix")
+
+    # The original filtering function uses a strict > mean-TPM criterion.
+    clean_genes = genes_df.where(np.isfinite(genes_df))
+    filtered = filter_low_expressed_genes(clean_genes, min_mean_expr)
+    transcript_groups = aligned_mapping.groupby("Gene_ID", sort=False).indices
+    eligible = [g for g in filtered.columns if len(transcript_groups.get(g, ())) >= 2]
+    if input_scale == "log2p1":
+        with np.errstate(over="ignore", invalid="ignore"):
+            pred_tpm = np.maximum(np.exp2(pred_df.to_numpy(dtype=float)) - 1, 0)
+            true_tpm = np.maximum(np.exp2(true_df.to_numpy(dtype=float)) - 1, 0)
+    else:
+        pred_tpm = np.maximum(pred_df.to_numpy(dtype=float), 0)
+        true_tpm = np.maximum(true_df.to_numpy(dtype=float), 0)
+
+    parts = []
+    candidate_pairs = 0
+    for gene_id in eligible:
+        indices = transcript_groups[gene_id]
+        sample_pos = np.flatnonzero(filtered[gene_id].to_numpy() > min_sample_expr)
+        candidate_pairs += len(sample_pos)
+        if not len(sample_pos):
+            continue
+        p = pred_tpm[np.ix_(sample_pos, indices)]
+        q = true_tpm[np.ix_(sample_pos, indices)]
+        # Do not treat any NaN/Inf transcript as zero or partially sum it.
+        finite = np.isfinite(p).all(axis=1) & np.isfinite(q).all(axis=1)
+        p_sum, q_sum = p.sum(axis=1), q.sum(axis=1)
+        finite &= np.isfinite(p_sum) & np.isfinite(q_sum) & (p_sum > 0) & (q_sum > 0)
+        if not finite.any():
+            continue
+        with np.errstate(divide="ignore", invalid="ignore"):
+            p = p[finite] / p_sum[finite, None]
+            q = q[finite] / q_sum[finite, None]
+            # scipy.spatial.distance.jensenshannon returns the DISTANCE.
+            distances = jensenshannon(p, q, base=2, axis=1)
+        keep = np.isfinite(distances)
+        if keep.any():
+            parts.append(pd.DataFrame({
+                "sample_id": pred_df.index.to_numpy()[sample_pos[finite][keep]],
+                "Gene_ID": gene_id,
+                "js_divergence": distances[keep] ** 2,
+                "js_distance": distances[keep],
+            }))
+
+    columns = ["sample_id", "Gene_ID", "js_divergence", "js_distance"]
+    pairs = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(columns=columns)
+    return {
+        "pairs": pairs,
+        "n_eligible_genes": len(eligible),
+        "n_candidate_pairs": candidate_pairs,
+        "n_invalid_pairs": candidate_pairs - len(pairs),
+    }
+
+
+def calculate_isoform_usage_sum(
+    pred_df: pd.DataFrame,
+    genes_df: pd.DataFrame,
+    mapping: pd.DataFrame,
+    *,
+    input_scale: str = "log2p1",
+    min_mean_expr: float = 5.0,
+) -> dict:
+    """Predicted summed transcript TPM / observed gene TPM per gene/sample.
+
+    Select genes with observed mean gene TPM > min_mean_expr. Retain
+    gene/sample observations whose observed gene TPM is positive, including
+    those <= 5 TPM. Do NOT normalize predicted isoforms beforehand. Reuse
+    the existing filter, log-to-TPM aggregation, and finite-ratio functions.
+
+    Invalid/nonfinite ratios (including zero denominators) and transcript
+    groups containing NaN/Inf are excluded; valid zero ratios are retained.
+    Return `pairs` (sample_id, Gene_ID, ratio) plus gene/pair counts.
+    """
+    if input_scale not in ("log2p1", "tpm"):
+        raise ValueError("input_scale must be 'log2p1' or 'tpm'")
+    if not isinstance(pred_df, pd.DataFrame) or not isinstance(genes_df, pd.DataFrame):
+        raise TypeError("pred_df and genes_df must be pandas DataFrames")
+    if not pred_df.index.equals(genes_df.index):
+        raise ValueError("Gene TPM sample index differs from transcript predictions")
+    if (not pred_df.index.is_unique or not pred_df.columns.is_unique
+            or not genes_df.index.is_unique or not genes_df.columns.is_unique):
+        raise ValueError("Duplicate sample, transcript or gene identifiers")
+    if not {"Transcript_ID", "Gene_ID"}.issubset(mapping.columns):
+        raise ValueError("mapping must contain Transcript_ID and Gene_ID")
+    if mapping["Transcript_ID"].isna().any() or mapping["Transcript_ID"].duplicated().any():
+        raise ValueError("Missing/duplicate Transcript_ID in annotation mapping")
+    if not pred_df.columns.isin(mapping["Transcript_ID"]).all():
+        raise ValueError("Unmapped modelled transcript")
+    aligned_mapping = mapping.set_index("Transcript_ID").loc[pred_df.columns].reset_index()
+    if aligned_mapping["Gene_ID"].isna().any():
+        raise ValueError("Missing Gene_ID for a modelled transcript")
+    if not aligned_mapping["Gene_ID"].isin(genes_df.columns).all():
+        raise ValueError("Mapped gene is absent from gene TPM matrix")
+
+    clean_genes = genes_df.where(np.isfinite(genes_df))
+    filtered = filter_low_expressed_genes(clean_genes, min_mean_expr)
+    # The historical aggregator requires every retained gene to be modelled.
+    # Unmodelled gene-expression columns cannot have a predicted isoform sum.
+    filtered = filtered.loc[:, filtered.columns.isin(aligned_mapping["Gene_ID"])]
+    # Preserve historical aggregate_transcripts_to_genes() conversion route,
+    # while clamping negative transcript TPM as in the reconstructed baseline.
+    if input_scale == "log2p1":
+        pred_log = pred_df.clip(lower=0)
+    else:
+        with np.errstate(invalid="ignore", divide="ignore"):
+            pred_log = np.log2(1.0 + pred_df.clip(lower=0))
+    predicted_by_gene = aggregate_transcripts_to_genes(pred_log, aligned_mapping, filtered)
+
+    # Pandas groupby.sum() silently skips NaN; avoid turning a partially
+    # nonfinite transcript distribution into an apparently valid gene sum.
+    invalid_transcripts = pd.DataFrame(
+        ~np.isfinite(pred_log.to_numpy(dtype=float)),
+        index=pred_df.index,
+        columns=aligned_mapping["Gene_ID"].to_numpy(),
+    )
+    invalid_gene_pairs = invalid_transcripts.T.groupby(level=0).any().T
+    predicted_by_gene = predicted_by_gene.mask(invalid_gene_pairs.loc[:, filtered.columns])
+
+    positive_genes = filtered.where(filtered > 0)
+    # The historical function owns the numeric ratio calculation and its
+    # finite-value filtering; reconstruct identifiers from the same mask.
+    values = calculate_ratios(predicted_by_gene, positive_genes)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        valid = np.isfinite(predicted_by_gene.to_numpy() / positive_genes.to_numpy())
+    sample_pos, gene_pos = np.nonzero(valid)
+    if len(values) != len(sample_pos):
+        raise RuntimeError("Mismatch with historical calculate_ratios() ordering")
+    pairs = pd.DataFrame({
+        "sample_id": pred_df.index.to_numpy()[sample_pos],
+        "Gene_ID": filtered.columns.to_numpy()[gene_pos],
+        "ratio": values,
+    })
+    candidate_pairs = len(pred_df) * len(filtered.columns)
+    return {
+        "pairs": pairs,
+        "n_eligible_genes": len(filtered.columns),
+        "n_candidate_pairs": candidate_pairs,
+        "n_invalid_pairs": candidate_pairs - len(pairs),
+    }
+
+
+def evaluate_isoform_usage_by_category(
+    pred_df: pd.DataFrame,
+    true_df: pd.DataFrame,
+    genes_df: pd.DataFrame,
+    metadata_df: pd.DataFrame,
+    mapping: pd.DataFrame,
+    *,
+    category_col: str = "detailed_category",
+    input_scale: str = "log2p1",
+    min_mean_expr: float = 5.0,
+    min_sample_expr: float = 5.0,
+) -> dict:
+    """Compute per-category JSD and predicted isoform usage sums.
+
+    Matrices and metadata must have identical sample indices in identical
+    order; transcript predictions/labels must have identical column order.
+    Mapping is aligned explicitly by Transcript_ID, independent of its row
+    order. No paths, checkpoints, figures or output files are involved.
+
+    Returns `jsd_by_category` and `sum_by_category` summary DataFrames,
+    `jsd_pairs` and `sum_pairs` detailed DataFrames, and `pooled` global
+    summaries (population SD, ddof=0). The JSD summaries contain distance
+    statistics for comparison with the reconstructed PLOS Table S9; the
+    divergence is separately reported to avoid conflating the two metrics.
+    """
+    if not (pred_df.index.equals(true_df.index)
+            and pred_df.index.equals(genes_df.index)
+            and pred_df.index.equals(metadata_df.index)):
+        raise ValueError("Sample index/order is not identical across input matrices")
+    if not pred_df.columns.equals(true_df.columns):
+        raise ValueError("Transcript column/order differs between predictions and labels")
+    if category_col not in metadata_df.columns:
+        raise ValueError(f"Missing category column: {category_col}")
+    if metadata_df[category_col].isna().any():
+        raise ValueError("Missing category labels")
+    if not pred_df.index.is_unique or not pred_df.columns.is_unique:
+        raise ValueError("Duplicate sample or transcript identifiers")
+
+    jsd_results, sum_results, jsd_parts, sum_parts = [], [], [], []
+    for category in sorted(metadata_df[category_col].unique()):
+        mask = metadata_df[category_col].eq(category)
+        p, q, g = pred_df.loc[mask], true_df.loc[mask], genes_df.loc[mask]
+        js = calculate_isoform_jsd(
+            p, q, g, mapping, input_scale=input_scale,
+            min_mean_expr=min_mean_expr, min_sample_expr=min_sample_expr,
+        )
+        sm = calculate_isoform_usage_sum(
+            p, g, mapping, input_scale=input_scale,
+            min_mean_expr=min_mean_expr,
+        )
+        j, r = js["pairs"], sm["pairs"]
+        jsd_results.append({
+            "category": category,
+            "n_samples": int(mask.sum()),
+            "n_eligible_genes": js["n_eligible_genes"],
+            "n_candidate_pairs": js["n_candidate_pairs"],
+            "n_invalid_pairs": js["n_invalid_pairs"],
+            "n_jsd": len(j),
+            "jsd_mean": j["js_distance"].mean(),
+            "jsd_sd": j["js_distance"].std(ddof=0),
+            "js_divergence_mean": j["js_divergence"].mean(),
+            "js_divergence_sd": j["js_divergence"].std(ddof=0),
+        })
+        sum_results.append({
+            "category": category,
+            "n_samples": int(mask.sum()),
+            "n_genes": sm["n_eligible_genes"],
+            "n_valid_pairs": len(r),
+            "n_invalid_pairs": sm["n_invalid_pairs"],
+            "ratio_mean": r["ratio"].mean(),
+            "ratio_sd": r["ratio"].std(ddof=0),
+        })
+        jsd_parts.append(j.assign(category=category))
+        sum_parts.append(r.assign(category=category))
+
+    j_all = pd.concat(jsd_parts, ignore_index=True)
+    r_all = pd.concat(sum_parts, ignore_index=True)
+    pooled = pd.DataFrame([{
+        "n_categories": len(jsd_results),
+        "n_jsd": len(j_all),
+        "jsd_mean": j_all["js_distance"].mean(),
+        "jsd_sd": j_all["js_distance"].std(ddof=0),
+        "js_divergence_mean": j_all["js_divergence"].mean(),
+        "js_divergence_sd": j_all["js_divergence"].std(ddof=0),
+        "n_valid_pairs": len(r_all),
+        "ratio_mean": r_all["ratio"].mean(),
+        "ratio_sd": r_all["ratio"].std(ddof=0),
+    }])
+    return {
+        "jsd_by_category": pd.DataFrame(jsd_results),
+        "sum_by_category": pd.DataFrame(sum_results),
+        "jsd_pairs": j_all,
+        "sum_pairs": r_all,
+        "pooled": pooled,
+    }
